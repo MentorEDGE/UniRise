@@ -79,7 +79,7 @@ export default function GrantWizard() {
   const [fileError, setFileError] = useState<string | null>(null);
 
   const existing = useQuery({ queryKey: ["grant", id], queryFn: () => api.grant(Number(id)), enabled: editing });
-  const people = useQuery({ queryKey: ["researchers", "all"], queryFn: () => api.researchers() });
+  const people = useQuery({ queryKey: ["directory"], queryFn: api.directory });
   const depts = useQuery({ queryKey: ["departments"], queryFn: api.departments });
   const deptName = (rid: number) => depts.data?.find((d) => d.id === rid)?.name ?? "";
 

@@ -1,4 +1,7 @@
-import type { Award, Grant, MeetingLog, Milestone, OrgUnit, PubAuthor, Publication, Relationship, Researcher, SeedProposal, SeedWindow, Suggestion } from "@/lib/types";
+import type {
+  AccessLogEntry, Appointment, ApiKeyRow, Award, AuditEntry, ClassificationScheme, Dispute, Grant, HarvestRun, MeetingLog, Milestone, OrgUnit, Period, Project,
+  PubAuthor, Publication, Relationship, Researcher, RoleGrant, SavedReport, SeedProposal, SeedWindow, Suggestion, Tenant, TenantSettings, Webhook,
+} from "@/lib/types";
 
 // Org tree: department ids 1-5 are kept so researcher.departmentId still points at them.
 export const orgUnits: OrgUnit[] = [
@@ -32,6 +35,10 @@ export const faculty: Researcher[] = names.map(([name, title, departmentId], i) 
   orcid: i % 4 === 3 ? undefined : `0000-000${(i % 3) + 1}-${String(1000 + i * 37).padStart(4, "0")}-${String(2000 + i * 11).padStart(3, "0").slice(0, 3)}${i % 5 === 0 ? "X" : "1"}`,
   employeeId: `EMP${1001 + i}`,
   scopusId: i % 3 === 2 ? undefined : String(57200000000 + i * 7919),
+  status: i === 2 ? "left" : "active",
+  leftOn: i === 2 ? daysFromNow(-30) : undefined,
+  orcidVerified: i % 4 === 0,
+  publicProfile: [0, 3, 6].includes(i),
 }));
 
 const venues = ["Nature Communications", "IEEE Access", "Journal of Cleaner Production", "PLOS ONE", "Physical Review B", "Expert Systems with Applications", "ACM Computing Surveys", "Scientific Reports"];
@@ -78,7 +85,7 @@ export const suggestions: Suggestion[] = publications
 
 // PhD scholars: [name, departmentId, milestones done, days until the next milestone is due (negative = overdue)]
 const scholarSeed = [
-  ["Aditi Kapoor", 1, 3, 20], ["Karthik Reddy", 1, 2, -18], ["Sneha Joshi", 2, 4, 60], ["Farhan Ali", 3, 1, -40],
+  ["Aditi Kapoor", 1, 3, 20], ["Karthik Reddy", 1, 2, -18], ["Sneha Joshi", 2, 4, 60], ["Farhan Ali", 3, 1, -40], ["Ritu Sen", 1, 2, 9],
 ] as const;
 
 export const scholars: Researcher[] = scholarSeed.map(([name, departmentId], i) => ({
@@ -87,6 +94,7 @@ export const scholars: Researcher[] = scholarSeed.map(([name, departmentId], i) 
   title: "PhD Scholar",
   kind: "scholar",
   rollNo: `RS24${101 + i}`,
+  status: "active",
   departmentId,
   email: name.toLowerCase().replace(/ /g, ".") + "@university.example",
 }));
@@ -107,6 +115,9 @@ export const relationships: Relationship[] = [
   { id: 2, mentorId: 2, menteeId: scholars[1].id, type: "primary" },
   { id: 3, mentorId: 4, menteeId: scholars[2].id, type: "primary" },
   { id: 4, mentorId: 7, menteeId: scholars[3].id, type: "primary" },
+  { id: 5, mentorId: 3, menteeId: scholars[4].id, type: "primary", validFrom: daysFromNow(-420) }, // Dr. Meera Iyer has left and there is no backup
+  { id: 6, mentorId: 5, menteeId: scholars[2].id, type: "backup" },
+  { id: 7, mentorId: 6, menteeId: scholars[2].id, type: "co" },
 ];
 
 export const meetings: MeetingLog[] = [
@@ -115,6 +126,7 @@ export const meetings: MeetingLog[] = [
   { id: 3, scholarId: scholars[1].id, mentorId: 2, heldOn: daysFromNow(-70), notes: "Proposal defence date still to be fixed; draft not yet shared." },
   { id: 4, scholarId: scholars[2].id, mentorId: 4, heldOn: daysFromNow(-8), notes: "Lab results on track; second review scheduled." },
   { id: 5, scholarId: scholars[3].id, mentorId: 7, heldOn: daysFromNow(-95), notes: "Coursework exam still pending." },
+  { id: 6, scholarId: scholars[4].id, mentorId: 3, heldOn: daysFromNow(-50), notes: "Agreed the progress review 1 timeline." },
 ];
 
 /* ---- Richer publication records: categories, outside authors, student publications, a few entries awaiting review ---- */
@@ -140,6 +152,21 @@ publications.forEach((p, i) => {
   if (i % 13 === 12) { p.entryStatus = "draft"; p.state = "unverified"; p.source = "manual"; }
 });
 
+publications.forEach((p, i) => {
+  if (p.type === "journal-article" || p.type === "conference-paper") {
+    p.oaStatus = (["gold", "green", "hybrid", "closed"] as const)[i % 4];
+    p.funderMandate = p.projectRef ? (p.oaStatus === "closed" ? "non-compliant" : "compliant") : "not-applicable";
+    if (p.oaStatus === "green") p.repositoryUrl = `https://repository.university.example/handle/123456789/${1000 + i}`;
+  }
+  p.version = 1;
+});
+// Probable duplicates for the merge screen: same DOI in different case, and a preprint of a published paper.
+const base5 = publications[4];
+publications.push(
+  { ...structuredClone(base5), id: 49, doi: base5.doi?.toUpperCase(), source: "openalex", state: "suggested", entryStatus: undefined, version: 1 },
+  { ...structuredClone(publications[9]), id: 50, type: "preprint", venue: "arXiv", doi: undefined, source: "openalex", state: "suggested", entryStatus: undefined, year: publications[9].year - 1, version: 1 },
+);
+
 /* ---- External grants ---- */
 const inv = (id: number, role: "PI" | "Co-PI" | "Collaborator", isLead: boolean, sharePct: number) => {
   const r = researchers.find((x) => x.id === id)!;
@@ -163,4 +190,101 @@ export const seedProposals: SeedProposal[] = [
   { id: 3, appliedOn: daysFromNow(-12), category: "Student seed money", title: "Open dataset of regional crop disease images", abstract: "Collect and label 5,000 images for model training.", windowLabel: "Q4 2026", status: "submitted", investigators: [seedInv(13, true), seedInv(2, false)], ownerId: 13 },
   { id: 4, appliedOn: daysFromNow(-3), category: "Faculty seed money", title: "Corrosion study of coated alloys", abstract: "Preliminary tests ahead of an industry proposal.", windowLabel: "Q4 2026", status: "draft", investigators: [seedInv(7, true)], ownerId: 7 },
   { id: 5, appliedOn: daysFromNow(-150), category: "Faculty seed money", title: "Behavioural survey on UPI adoption", abstract: "Pilot survey of 300 small merchants.", windowLabel: "Q3 2026", status: "rejected", investigators: [seedInv(9, true)], ownerId: 9, reviewComment: "Overlaps with an existing funded project." },
+];
+
+
+/* ===================== Added for the remaining RMS-doc features ===================== */
+const unit = (id: number) => orgUnits.find((u) => u.id === id)!;
+void unit;
+
+/** One primary appointment per person, plus a transfer and two joint appointments (PRD R29). */
+export const appointments: Appointment[] = [
+  ...researchers.map((r, i): Appointment => ({ id: i + 1, researcherId: r.id, unitId: r.departmentId, designation: r.title, fte: 1, validFrom: r.kind === "scholar" ? "2024-07-01" : "2015-07-01" })),
+];
+// Dr. Arjun Menon (8) moved from Computer Science to Mechanical Engineering on 2022-01-01.
+appointments[7] = { ...appointments[7], unitId: 1, validTo: "2021-12-31" };
+appointments.push({ id: 100, researcherId: 8, unitId: 3, designation: "Associate Professor", fte: 1, validFrom: "2022-01-01" });
+// Dr. Vikram Shah (2) has a joint appointment in Physics; Dr. Imran Qureshi (12) in Computer Science.
+appointments.push({ id: 101, researcherId: 2, unitId: 5, designation: "Adjunct", fte: 0.25, validFrom: "2022-01-01" });
+appointments.push({ id: 102, researcherId: 12, unitId: 1, designation: "Visiting", fte: 0.25, validFrom: "2023-01-01" });
+
+export const roleGrants: RoleGrant[] = [
+  { id: 1, holder: "Research Office Admin", role: "RESEARCH_ADMIN", validFrom: "2024-01-01", grantedBy: "Platform operator", kind: "direct" },
+  { id: 2, holder: "Pro-VC (Research)", role: "EXECUTIVE", scopeUnitId: 10, validFrom: "2024-06-01", grantedBy: "Research Office Admin", kind: "direct" },
+  { id: 3, researcherId: 4, holder: "Dr. Rohan Mehta", role: "DEAN", scopeUnitId: 11, validFrom: "2024-08-01", grantedBy: "Research Office Admin", kind: "direct" },
+  { id: 4, researcherId: 7, holder: "Dr. Priya Desai", role: "HOD", scopeUnitId: 3, validFrom: "2023-07-01", validTo: daysFromNow(10), grantedBy: "Research Office Admin", kind: "direct", note: "Ends soon: confirm or renew" },
+  { id: 5, researcherId: 8, holder: "Dr. Arjun Menon", role: "HOD", scopeUnitId: 3, validFrom: daysFromNow(-5), validTo: daysFromNow(25), grantedBy: "Dr. Priya Desai", kind: "acting", note: "Acting HoD while Dr. Desai is on leave" },
+  { id: 6, holder: "IT Administrator", role: "IT_ADMIN", validFrom: "2024-01-01", grantedBy: "Platform operator", kind: "direct" },
+  { id: 7, holder: "External examiner (A. Fischer)", role: "GUEST", validFrom: daysFromNow(-3), validTo: daysFromNow(11), grantedBy: "Research Office Admin", kind: "direct", note: "University-wide publications report only" },
+  { id: 8, holder: "Registrar (read-only)", role: "VIEWER", validFrom: "2023-01-01", validTo: daysFromNow(-20), grantedBy: "Research Office Admin", kind: "direct", note: "Expired, still listed for access review" },
+];
+
+export const auditLog: AuditEntry[] = [
+  { id: 1, at: daysFromNow(-9) + "T10:12:00", actor: "ananya.rao@university.example", action: "Confirmed authorship", entity: "publication", entityId: 14 },
+  { id: 2, at: daysFromNow(-6) + "T15:40:00", actor: "admin@university.example", action: "Approved publication", entity: "publication", entityId: 11 },
+  { id: 3, at: daysFromNow(-4) + "T09:05:00", actor: "admin@university.example", action: "Exported report", entity: "report", entityId: "pub-university" },
+  { id: 4, at: daysFromNow(-2) + "T17:30:00", actor: "admin@university.example", action: "Granted acting role", entity: "role-grant", entityId: 5, detail: "Dr. Arjun Menon as HoD, Mechanical Engineering" },
+];
+export const accessLog: AccessLogEntry[] = [
+  { id: 1, at: daysFromNow(-7) + "T11:02:00", actor: "provc.research@university.example", role: "EXECUTIVE", action: "drill-down", targetName: "Dr. Rohan Mehta", targetId: 4, note: "Opened a named profile; confidential data excluded" },
+  { id: 2, at: daysFromNow(-3) + "T14:20:00", actor: "Platform support (R. Kumar)", role: "PLATFORM_ADMIN", action: "support-access", note: "Break-glass: investigating a failed CSV import. Expires after 2 hours." },
+];
+
+export const disputes: Dispute[] = [
+  { id: 1, publicationId: 14, publicationTitle: publications[13].title, researcherId: 2, researcherName: "Dr. Vikram Shah", reason: "This paper was written by a namesake in another institution. I was never an author.", raisedOn: daysFromNow(-6), status: "open" },
+];
+
+export const periods: Period[] = [
+  { id: 1, label: "FY 2024-25", startsOn: "2024-04-01", endsOn: "2025-03-31", closedAt: "2025-04-12", closedBy: "Research Office Admin" },
+  { id: 2, label: "FY 2025-26", startsOn: "2025-04-01", endsOn: "2026-03-31" },
+  { id: 3, label: "FY 2026-27", startsOn: "2026-04-01", endsOn: "2027-03-31" },
+];
+
+export const tenantSettings: TenantSettings = {
+  name: "Demo University", logoText: "DU", accent: "#6d28d9", currency: "INR", fiscalYearStartMonth: 4, locale: "en-IN",
+  publicProfilesEnabled: true, hodValidation: false, escalationDays: 30,
+  sso: { provider: "microsoft", clientId: "demo-university-rms", domain: "university.example", status: "configured" },
+};
+
+export const classificationSchemes: ClassificationScheme[] = [
+  { id: 1, code: "journal-quality", name: "Journal quality lists", terms: [
+    { code: "UGC-CARE-I", label: "UGC-CARE Group I", validFrom: "2019-01-01", validTo: "2024-06-30" },
+    { code: "SCOPUS", label: "Scopus indexed", validFrom: "2015-01-01" },
+    { code: "WOS", label: "Web of Science indexed", validFrom: "2015-01-01" },
+  ] },
+  { id: 2, code: "grant-types", name: "Grant types", terms: [
+    { code: "RES", label: "Research", validFrom: "2015-01-01" },
+    { code: "CONS", label: "Consultancy", validFrom: "2015-01-01" },
+    { code: "ERF", label: "ERF related", validFrom: "2020-01-01" },
+  ] },
+];
+
+export const apiKeys: ApiKeyRow[] = [
+  { id: 1, name: "HR sync (nightly)", prefix: "rms_a41f", createdOn: daysFromNow(-120), lastUsed: daysFromNow(-1) },
+  { id: 2, name: "Old finance export", prefix: "rms_9c07", createdOn: daysFromNow(-400), revokedOn: daysFromNow(-60) },
+];
+export const webhooks: Webhook[] = [{ id: 1, url: "https://erp.university.example/hooks/rms", events: ["publication.approved", "grant.sanctioned"], active: true }];
+
+export const harvestRuns: HarvestRun[] = [
+  { id: 1, at: daysFromNow(-1) + "T02:00:00", source: "ORCID", researchers: 8, found: 31, newSuggestions: 4, status: "ok" },
+  { id: 2, at: daysFromNow(-1) + "T02:12:00", source: "OpenAlex", researchers: 12, found: 58, newSuggestions: 6, status: "ok" },
+  { id: 3, at: daysFromNow(-2) + "T02:03:00", source: "Crossref", researchers: 12, found: 0, newSuggestions: 0, status: "failed", note: "Crossref returned HTTP 503; retried with backoff and gave up after 3 attempts" },
+];
+
+const months = (base: number) => Array.from({ length: 6 }, (_, i) => { const d = new Date(); d.setMonth(d.getMonth() - (5 - i)); return { month: d.toISOString().slice(0, 7), count: Math.round(base * (0.85 + i * 0.03)) }; });
+export const tenants: Tenant[] = [
+  { id: 1, name: "Demo University", status: "active", plan: "Standard", createdOn: "2025-02-01", activeResearchers: months(1180) },
+  { id: 2, name: "Sandbox College", status: "sandbox", plan: "Sandbox", createdOn: daysFromNow(-20), activeResearchers: months(14) },
+  { id: 3, name: "Pilot Institute of Technology", status: "pilot", plan: "Pilot", createdOn: daysFromNow(-70), activeResearchers: months(240) },
+  { id: 4, name: "Former Customer University", status: "suspended", plan: "Standard", createdOn: "2024-03-10", activeResearchers: months(430) },
+];
+
+export const projects: Project[] = [
+  { id: 1, title: "AI for public health", leadId: 1, status: "active", awardIds: [1, 6], grantIds: [1], publicationIds: [1, 7, 13], summary: "Surveillance models and edge deployment for district health data.", sensitivity: "internal" },
+  { id: 2, title: "Water and soil sensing", leadId: 4, status: "active", awardIds: [2], grantIds: [2], publicationIds: [2, 8], summary: "Bio-sensors for water quality and low-cost soil probes.", sensitivity: "internal" },
+  { id: 3, title: "Industry chassis programme", leadId: 7, status: "active", awardIds: [3], grantIds: [3], publicationIds: [3], summary: "Industry-funded work under NDA: budget and partner details are restricted.", sensitivity: "confidential" },
+];
+
+export const savedReports: SavedReport[] = [
+  { id: 1, name: "Publications 2023-2025", slug: "pub-university", params: { from: "2023-01-01", to: "2025-12-31" }, ownerId: 0, createdOn: daysFromNow(-30) },
 ];

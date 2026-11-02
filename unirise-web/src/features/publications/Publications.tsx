@@ -40,7 +40,7 @@ export default function Publications() {
 
   const list = useQuery({ queryKey: ["publications", filters], queryFn: () => api.publications(filters), placeholderData: (p) => p });
   const depts = useQuery({ queryKey: ["departments"], queryFn: api.departments });
-  const researchers = useQuery({ queryKey: ["researchers", "all"], queryFn: () => api.researchers() });
+  const researchers = useQuery({ queryKey: ["directory"], queryFn: api.directory });
   const nameOf = (id: number) => researchers.data?.find((r) => r.id === id)?.name ?? `#${id}`;
 
   const del = useMutation({

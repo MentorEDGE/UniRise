@@ -30,7 +30,13 @@ export function RequireAuth({ roles, children }: { roles?: Role[]; children: Rea
   return <>{children}</>;
 }
 
-export const roleSets: Record<"overview" | "claimants", Role[]> = {
+export const roleSets: Record<"overview" | "claimants" | "research" | "accessAdmin" | "reviewers", Role[]> = {
+  /** Everyone who sees research content. IT admin, guest and platform operator do not (PRD R3). */
+  research: ["RESEARCH_ADMIN", "EXECUTIVE", "DEAN", "HOD", "SUPERVISOR", "RESEARCHER", "VIEWER"],
+  /** Roles and access, audit and access logs, SSO status. */
+  accessAdmin: ["RESEARCH_ADMIN", "IT_ADMIN"],
+  /** People who can validate, merge and resolve. */
+  reviewers: ["RESEARCH_ADMIN", "HOD", "DEAN"],
   /** People, Reports and Units: whole-tenant or unit-level views. */
   overview: ["RESEARCH_ADMIN", "EXECUTIVE", "DEAN", "HOD", "VIEWER"],
   /** Review queue and editing own work. */
@@ -40,5 +46,6 @@ export const roleSets: Record<"overview" | "claimants", Role[]> = {
 export const can = {
   edit: (r?: Role) => !!r && roleSets.claimants.includes(r),
   admin: (r?: Role) => r === "RESEARCH_ADMIN",
+  accessAdmin: (r?: Role) => r === "RESEARCH_ADMIN" || r === "IT_ADMIN",
   review: (r?: Role) => r === "RESEARCH_ADMIN" || r === "HOD" || r === "DEAN",
 };

@@ -94,7 +94,7 @@ export default function PublicationForm() {
   const [pdfError, setPdfError] = useState<string | null>(null);
 
   const existing = useQuery({ queryKey: ["publication", id], queryFn: () => api.publication(Number(id)), enabled: editing });
-  const researchers = useQuery({ queryKey: ["researchers", "all"], queryFn: () => api.researchers() });
+  const researchers = useQuery({ queryKey: ["directory"], queryFn: api.directory });
   const depts = useQuery({ queryKey: ["departments"], queryFn: api.departments });
 
   const form = useForm<Values>({
@@ -111,7 +111,7 @@ export default function PublicationForm() {
     if (!p) return;
     const fromIds = p.authorIds.map((rid): PubAuthor => {
       const r = researchers.data?.find((x) => x.id === rid);
-      return { kind: r?.kind === "scholar" ? "internal-student" : "internal-faculty", researcherId: rid, name: r?.name ?? `#${rid}`, institution: "Demo University", department: r ? deptName(r.departmentId) : "", email: r?.email ?? "" };
+      return { kind: r?.kind === "scholar" ? "internal-student" : "internal-faculty", researcherId: rid, name: r?.name ?? `#${rid}`, institution: "Demo University", department: r ? deptName(r.departmentId) : "", email: "" };
     });
     form.reset({
       type: p.type, category: p.category ?? "", doi: p.doi ?? "", title: p.title, venue: p.venue, issn: p.issn ?? "", month: p.month ?? 1, year: p.year,
@@ -282,7 +282,7 @@ export default function PublicationForm() {
                           form.setValue(`authors.${i}.name`, r?.name ?? "");
                           form.setValue(`authors.${i}.institution`, r ? "Demo University" : "");
                           form.setValue(`authors.${i}.department`, r ? deptName(r.departmentId) : "");
-                          form.setValue(`authors.${i}.email`, r?.email ?? "");
+                          form.setValue(`authors.${i}.email`, "");
                         }}><option value="">Select…</option>{people(kind).map((r) => <option key={r.id} value={r.id}>{r.name}{r.employeeId ? ` (${r.employeeId})` : r.rollNo ? ` (${r.rollNo})` : ""}</option>)}</Select>}
                       </Field>
                     ) : (

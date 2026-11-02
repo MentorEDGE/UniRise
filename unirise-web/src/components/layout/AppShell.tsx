@@ -1,6 +1,6 @@
 import { NavLink, Outlet, useNavigate } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
-import { Award, BarChart3, BookOpen, CheckSquare, Coins, GraduationCap, Home, LayoutDashboard, LogOut, Network, Settings, Sprout, UserRoundSearch, Users, UsersRound } from "lucide-react";
+import { Award, BarChart3, BookOpen, CheckSquare, Coins, FolderKanban, GitMerge, GraduationCap, Home, LayoutDashboard, LogOut, Network, Server, Settings, ShieldCheck, Sprout, UserCog, UserRoundSearch, Users, UsersRound } from "lucide-react";
 import { Logo } from "./Logo";
 import { ThemeToggle } from "./ThemeToggle";
 import { Button } from "@/components/ui/button";
@@ -15,16 +15,21 @@ const items: Item[] = [
   { to: "/my-progress", label: "My progress", icon: GraduationCap, roles: ["RESEARCHER"], show: (u) => !!u.isScholar },
   { to: "/mentees", label: "My mentees", icon: UsersRound, roles: ["SUPERVISOR"] },
   { to: "/units", label: "Units", icon: LayoutDashboard, roles: roleSets.overview },
-  { to: "/publications", label: "Publications", icon: BookOpen },
+  { to: "/publications", label: "Publications", icon: BookOpen, roles: roleSets.research },
   { to: "/people", label: "People", icon: Users, roles: roleSets.overview },
-  { to: "/grants", label: "Grants", icon: Coins },
-  { to: "/seed-money", label: "Seed money", icon: Sprout },
-  { to: "/awards", label: "Awards", icon: Award },
-  { to: "/lookup", label: "Find researcher", icon: UserRoundSearch },
+  { to: "/grants", label: "Grants", icon: Coins, roles: roleSets.research },
+  { to: "/seed-money", label: "Seed money", icon: Sprout, roles: roleSets.research },
+  { to: "/awards", label: "Awards", icon: Award, roles: roleSets.research },
+  { to: "/projects", label: "Projects", icon: FolderKanban, roles: roleSets.research },
+  { to: "/lookup", label: "Find researcher", icon: UserRoundSearch, roles: roleSets.research },
   { to: "/reports", label: "Reports", icon: BarChart3, roles: roleSets.overview },
   { to: "/review", label: "Review", icon: CheckSquare, roles: roleSets.claimants, badge: true },
+  { to: "/supervision", label: "Supervision", icon: UserCog, roles: ["RESEARCH_ADMIN", "HOD", "DEAN"] },
+  { to: "/duplicates", label: "Duplicates", icon: GitMerge, roles: roleSets.reviewers },
   { to: "/organisation", label: "Organisation", icon: Network, roles: ["RESEARCH_ADMIN"] },
-  { to: "/settings", label: "Settings", icon: Settings, roles: ["RESEARCH_ADMIN"] },
+  { to: "/access", label: "Roles and access", icon: ShieldCheck, roles: roleSets.accessAdmin },
+  { to: "/platform", label: "Platform", icon: Server, roles: ["PLATFORM_ADMIN"] },
+  { to: "/settings", label: "Settings", icon: Settings, roles: roleSets.accessAdmin },
 ];
 
 export function AppShell() {

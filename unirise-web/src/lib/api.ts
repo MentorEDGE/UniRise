@@ -1,49 +1,23 @@
 import { HttpError, http, qs } from "./http";
 import { db, demoUsers } from "@/mock/store";
+import { SESSION_KEY, canSee, logAccess, mockUser, scopeIds, scopeResearchers, subtree, today, wait } from "@/mock/helpers";
+import * as extPeople from "@/mock/ext/people";
+import * as extProgress from "@/mock/ext/progress";
+import * as extQuality from "@/mock/ext/quality";
+import * as extAccess from "@/mock/ext/access";
+import * as extTenant from "@/mock/ext/tenant";
+import * as extReporting from "@/mock/ext/reporting";
 import { stageNames } from "@/mock/seed";
 import type {
   Award, Department, DepartmentRow, EntryStatus, Grant, GrantStatus, LookupResult, MenteeDetail, MenteeRow, Milestone, MilestoneView, OrgUnit,
   OrgUnitType, Page, Publication, PublicationFilters, ReportParams, ReportTable, Researcher, ReviewAction, SeedProposal, SeedWindow, Suggestion,
-  Summary, TopResearcher, UnitRollup, UnitRow, User, YearCount,
+  Summary, TopResearcher, UnitRollup, UnitRow, User, YearCount, DirectoryEntry,
 } from "./types";
 import { DOI_RE } from "./utils";
 
 export const USE_MOCK = import.meta.env.VITE_USE_MOCK !== "false";
-const wait = <T,>(v: T, ms = 220) => new Promise<T>((r) => setTimeout(() => r(v), ms));
-
-const SESSION_KEY = "rms-demo-session"; // demo only; real auth uses a HttpOnly cookie
-const mockUser = (): User | null => {
-  const k = sessionStorage.getItem(SESSION_KEY);
-  return k ? demoUsers[k] ?? null : null;
-};
-
 function paginate<T>(rows: T[], page: number, size: number): Page<T> {
   return { items: rows.slice(page * size, page * size + size), total: rows.length, page, size };
-}
-
-/** Org units under (and including) rootId. */
-function subtree(rootId: number): Set<number> {
-  const ids = new Set([rootId]);
-  for (let grew = true; grew; ) {
-    grew = false;
-    for (const x of db.orgUnits) if (x.parentId !== undefined && ids.has(x.parentId) && !ids.has(x.id)) { ids.add(x.id); grew = true; }
-  }
-  return ids;
-}
-
-/** Researcher ids the user may see; null = everyone in the tenant. Dean/HoD: their org subtree. Supervisor: self and mentees. */
-function scopeIds(u: User | null): Set<number> | null {
-  if (u && (u.role === "DEAN" || u.role === "HOD")) {
-    const units = subtree(u.scopeUnitId!);
-    return new Set(db.researchers.filter((r) => units.has(r.departmentId)).map((r) => r.id));
-  }
-  if (u?.role === "SUPERVISOR") return new Set([u.researcherId!, ...db.relationships.filter((x) => x.mentorId === u.researcherId).map((x) => x.menteeId)]);
-  return null;
-}
-
-function scopeResearchers(u: User | null) {
-  const ids = scopeIds(u);
-  return ids ? db.researchers.filter((r) => ids.has(r.id)) : db.researchers;
 }
 
 const departmentsOf = () => db.orgUnits.filter((x) => x.type === "department");
@@ -52,7 +26,6 @@ const visibleUnits = (u: User | null) => {
   return db.orgUnits;
 };
 
-const today = () => new Date().toISOString().slice(0, 10);
 const reviewStatus: Record<ReviewAction, EntryStatus> = { approve: "approved", rework: "rework", revision_required: "revision_required", reject: "rejected" };
 const grantReviewStatus: Record<ReviewAction, GrantStatus> = { approve: "sanctioned", rework: "rework", revision_required: "rework", reject: "rejected" };
 const instituteOf = (deptId: number) => {
@@ -137,12 +110,12 @@ const withStatus = (m: Milestone): MilestoneView => ({ ...m, status: m.completed
 const milestonesOf = (scholarId: number) => db.milestones.filter((m) => m.scholarId === scholarId).sort((a, b) => a.id - b.id).map(withStatus);
 const currentOf = (ms: MilestoneView[]) => ms.find((m) => m.status !== "done");
 
-/** A plain researcher or scholar sees only themselves; everyone else is limited by scope. */
-function canSee(u: User | null, id: number) {
-  if (!u) return false;
-  if (u.role === "RESEARCHER") return u.researcherId === id;
-  const ids = scopeIds(u);
-  return !ids || ids.has(id);
+/** Suggestions a user may act on: their own (researcher, supervisor) or all of them (research admin). */
+function suggestionsFor(u: User | null) {
+  if (!u) return [];
+  if (u.role === "RESEARCH_ADMIN") return db.suggestions;
+  if (u.role === "RESEARCHER" || u.role === "SUPERVISOR") return db.suggestions.filter((s) => s.researcherId === u.researcherId);
+  return [];
 }
 
 const withCounts = (rs: Researcher[]): Researcher[] =>
@@ -166,7 +139,7 @@ const mock = {
       researchers: rs.length,
       publications: db.publications.filter((p) => p.state === "verified" && p.authorIds.some((a) => ids.has(a))).length,
       awards: db.awards.filter((a) => ids.has(a.researcherId)).length,
-      pendingReview: db.suggestions.length,
+      pendingReview: suggestionsFor(mockUser()).length,
     });
   },
   byYear: (): Promise<YearCount[]> => {
@@ -276,10 +249,16 @@ const mock = {
     return wait(rs);
   },
   researcher: (id: number) => {
+    const u = mockUser();
     const r = withCounts(db.researchers).find((x) => x.id === id);
     if (!r) throw new HttpError(404);
+    if (!canSee(u, id)) throw new HttpError(403);
+    // A named drill-down by an executive or dean is recorded (PRD R27); confidential data is never part of a profile.
+    if (u && (u.role === "EXECUTIVE" || u.role === "DEAN") && u.researcherId !== id) logAccess({ action: "drill-down", targetName: r.name, targetId: id, note: "Opened a named profile; confidential data excluded" });
     return wait(r);
   },
+  /** Names only (part of the public scholarly record): used by author pickers and name lookups, never email or IDs. */
+  directory: (): Promise<DirectoryEntry[]> => wait(db.researchers.map((r) => ({ id: r.id, name: r.name, title: r.title, departmentId: r.departmentId, kind: r.kind, employeeId: r.employeeId, rollNo: r.rollNo }))),
   saveResearcher: (r: Omit<Researcher, "id"> & { id?: number }) => {
     if (r.id) { db.researchers = db.researchers.map((x) => (x.id === r.id ? { ...x, ...r } as Researcher : x)); return wait(r as Researcher); }
     const n = { ...r, id: db.nextId.researcher++ } as Researcher; db.researchers.push(n); return wait(n);
@@ -399,11 +378,7 @@ const mock = {
   },
   deleteAward: (id: number) => { db.awards = db.awards.filter((a) => a.id !== id); return wait(undefined); },
 
-  suggestions: (): Promise<Suggestion[]> => {
-    const u = mockUser();
-    const own = u?.role === "RESEARCHER" || u?.role === "SUPERVISOR";
-    return wait(db.suggestions.filter((s) => !own || s.researcherId === u?.researcherId));
-  },
+  suggestions: (): Promise<Suggestion[]> => wait(suggestionsFor(mockUser())),
   decide: (id: number, decision: "confirm" | "reject") => {
     const s = db.suggestions.find((x) => x.id === id);
     if (s && decision === "confirm") {
@@ -436,6 +411,7 @@ const real: typeof mock = {
   unitRollup: (unitId) => http(`/reports/units/${unitId}`),
   researchers: async (departmentId, q) => (await http<Page<Researcher>>(`/researchers${qs({ departmentId, q, size: 200 })}`)).items,
   researcher: (id) => http(`/researchers/${id}`),
+  directory: () => http("/researchers/directory"), // planned endpoint: names only
   saveResearcher: (r) => (r.id ? http(`/researchers/${r.id}`, { method: "PUT", body: JSON.stringify(r) }) : http("/researchers", { method: "POST", body: JSON.stringify(r) })),
   publications: (f) => http(`/publications${qs({ ...f, type: f.type, state: f.state })}`),
   publication: (id) => http(`/publications/${id}`),
@@ -462,4 +438,12 @@ const real: typeof mock = {
   decide: (id, decision) => http(`/claims/${id}/${decision}`, { method: "POST" }), // planned endpoint
 };
 
-export const api = USE_MOCK ? mock : real;
+/**
+ * Feature slices (mock/ext/*) add and override calls. Each exports a `mock` and a matching `real`
+ * object, so the sample-data mode and the server mode stay in step.
+ */
+const extMock = { ...extPeople.mock, ...extProgress.mock, ...extQuality.mock, ...extAccess.mock, ...extTenant.mock, ...extReporting.mock };
+const extReal = { ...extPeople.real, ...extProgress.real, ...extQuality.real, ...extAccess.real, ...extTenant.real, ...extReporting.real };
+type Ext = typeof extMock;
+type Api = Omit<typeof mock, keyof Ext> & Ext;
+export const api: Api = (USE_MOCK ? { ...mock, ...extMock } : { ...real, ...extReal }) as Api;

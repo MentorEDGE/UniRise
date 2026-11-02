@@ -42,7 +42,7 @@ export default function SeedMoneyForm() {
   const { toast } = useToast();
   const { user } = useAuth();
   const existing = useQuery({ queryKey: ["seed-proposal", id], queryFn: () => api.seedProposal(Number(id)), enabled: editing });
-  const people = useQuery({ queryKey: ["researchers", "all"], queryFn: () => api.researchers() });
+  const people = useQuery({ queryKey: ["directory"], queryFn: api.directory });
   const depts = useQuery({ queryKey: ["departments"], queryFn: api.departments });
   const me = people.data?.find((r) => r.id === user?.researcherId);
 

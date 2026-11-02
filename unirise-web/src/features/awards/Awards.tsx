@@ -32,7 +32,7 @@ type Values = z.infer<typeof schema>;
 function AwardDialog({ open, onClose, initial }: { open: boolean; onClose: () => void; initial?: Award }) {
   const qc = useQueryClient();
   const { toast } = useToast();
-  const people = useQuery({ queryKey: ["researchers", "all"], queryFn: () => api.researchers() });
+  const people = useQuery({ queryKey: ["directory"], queryFn: api.directory });
   const y = new Date().getFullYear();
   const form = useForm<Values>({
     resolver: zodResolver(schema) as never,
@@ -68,7 +68,7 @@ export default function Awards() {
   const qc = useQueryClient();
   const { toast } = useToast();
   const awards = useQuery({ queryKey: ["awards"], queryFn: api.awards });
-  const people = useQuery({ queryKey: ["researchers", "all"], queryFn: () => api.researchers() });
+  const people = useQuery({ queryKey: ["directory"], queryFn: api.directory });
   const [editing, setEditing] = useState<Award | undefined>();
   const [open, setOpen] = useState(false);
   const [del, setDel] = useState<number | null>(null);

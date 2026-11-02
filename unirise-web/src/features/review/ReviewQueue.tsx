@@ -15,7 +15,7 @@ export default function ReviewQueue() {
   const qc = useQueryClient();
   const { toast } = useToast();
   const list = useQuery({ queryKey: ["suggestions"], queryFn: api.suggestions });
-  const people = useQuery({ queryKey: ["researchers", "all"], queryFn: () => api.researchers() });
+  const people = useQuery({ queryKey: ["directory"], queryFn: api.directory });
   const [skipped, setSkipped] = useState<number[]>([]);
 
   const queue = (list.data ?? []).filter((s) => !skipped.includes(s.id));
