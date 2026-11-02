@@ -1,4 +1,4 @@
-import { defineConfig } from "vite";
+import { defineConfig } from "vitest/config";
 import react from "@vitejs/plugin-react";
 import path from "node:path";
 
@@ -13,6 +13,7 @@ export default defineConfig({
       "/api": { target: process.env.RMS_API_URL ?? "http://localhost:8080", changeOrigin: true },
     },
   },
+  test: { environment: "jsdom", include: ["src/**/*.test.ts", "src/**/*.test.tsx"], setupFiles: ["src/test/setup.ts"] },
   build: {
     sourcemap: false,
     rollupOptions: {

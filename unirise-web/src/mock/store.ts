@@ -8,7 +8,7 @@ import type {
 } from "@/lib/types";
 
 // In-memory sample data so the UI runs without a backend (VITE_USE_MOCK=true).
-export const db = {
+const fresh = () => ({
   orgUnits: structuredClone(orgUnits) as OrgUnit[],
   researchers: structuredClone(researchers) as Researcher[],
   publications: structuredClone(publications) as Publication[],
@@ -40,7 +40,10 @@ export const db = {
     orgUnit: 100, researcher: 100, publication: 1000, award: 100, grant: 100, seed: 100, milestone: 1000, meeting: 1000, relationship: 1000, appointment: 1000,
     grantRole: 1000, audit: 1000, access: 1000, dispute: 1000, period: 100, scheme: 100, apiKey: 100, webhook: 100, harvest: 100, tenant: 100, project: 100, saved: 100, suggestion: 100,
   },
-};
+});
+export const db = fresh();
+/** Restores the sample data; tests call this between cases. */
+export function resetDb() { Object.assign(db, fresh()); }
 void daysFromNow;
 
 const institution = "Demo University";
