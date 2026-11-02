@@ -38,6 +38,7 @@ export function AppShell() {
   const nav = useNavigate();
   const visible = items.filter((i) => !i.roles || (user && i.roles.includes(user.role) && (!i.show || i.show(user))));
   const tenant = useTenantSettings();
+  const operator = user?.role === "PLATFORM_ADMIN";
   const { data: summary } = useQuery({ queryKey: ["summary"], queryFn: api.summary, enabled: !!user && roleSets.research.includes(user.role) });
   const pending = summary?.pendingReview ?? 0;
 
@@ -69,8 +70,8 @@ export function AppShell() {
       <header className="sticky top-0 z-40 flex h-16 w-full items-center gap-4 border-b border-border/70 bg-background/85 px-4 backdrop-blur supports-[backdrop-filter]:bg-background/70 md:px-8">
         <NavLink to="/" aria-label="UniRise home"><Logo /></NavLink>
         <span className="ml-2 hidden items-center gap-2 rounded-full border border-border py-1 pl-1 pr-3 text-xs font-medium text-muted-foreground md:inline-flex">
-          <span className="grid h-6 min-w-6 place-items-center rounded-full bg-primary px-1.5 text-[10px] font-bold text-primary-foreground" aria-hidden>{tenant.data?.logoText || initials(user?.institution ?? "")}</span>
-          {tenant.data?.name ?? user?.institution}
+          <span className="grid h-6 min-w-6 place-items-center rounded-full bg-primary px-1.5 text-[10px] font-bold text-primary-foreground" aria-hidden>{operator ? "RP" : tenant.data?.logoText || initials(user?.institution ?? "")}</span>
+          {operator ? user?.institution : tenant.data?.name ?? user?.institution}
         </span>
         <div className="ml-auto flex items-center gap-3">
           <ThemeToggle />

@@ -23,4 +23,10 @@ describe("who can see which person", () => {
     signInAs("scholar");
     expect((await api.summary()).pendingReview).toBeLessThan(admin);
   });
+  it("Home and Units agree on how many researchers there are (people who left are not counted)", async () => {
+    signInAs("admin");
+    const home = (await api.summary()).researchers;
+    const units = (await call(() => api.unitRollup(10))).totals.researchers;
+    expect(home).toBe(units);
+  });
 });

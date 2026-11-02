@@ -136,7 +136,7 @@ const mock = {
     const ids = new Set(rs.map((r) => r.id));
     return wait({
       departments: new Set(rs.map((r) => r.departmentId)).size,
-      researchers: rs.length,
+      researchers: rs.filter((r) => r.status !== "left").length, // people who left keep their outputs but no longer count as staff
       publications: db.publications.filter((p) => p.state === "verified" && p.authorIds.some((a) => ids.has(a))).length,
       awards: db.awards.filter((a) => ids.has(a.researcherId)).length,
       pendingReview: suggestionsFor(mockUser()).length,
