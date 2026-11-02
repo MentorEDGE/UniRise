@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { Pencil, Plus, Trash2 } from "lucide-react";
+import { FileUp, MoveRight, Pencil, Plus, Trash2 } from "lucide-react";
 import { api } from "@/lib/api";
 import { HttpError } from "@/lib/http";
 import type { OrgUnit, OrgUnitType } from "@/lib/types";
@@ -9,8 +9,10 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input, Select } from "@/components/ui/form";
-import { Skeleton } from "@/components/ui/feedback";
-import { ConfirmDialog } from "@/components/ui/dialog";
+import { ErrorBanner, Skeleton } from "@/components/ui/feedback";
+import { ConfirmDialog, Dialog } from "@/components/ui/dialog";
+import { Field } from "@/components/ui/form";
+import { ImportDialog } from "@/features/people/ImportDialog";
 import { useToast } from "@/components/ui/toast";
 
 const childType: Record<OrgUnitType, OrgUnitType | null> = { institution: "school", school: "department", department: "group", group: null };
@@ -20,7 +22,43 @@ function flatten(units: OrgUnit[], parentId?: number, depth = 0): { unit: OrgUni
   return units.filter((u) => u.parentId === parentId).flatMap((u) => [{ unit: u, depth }, ...flatten(units, u.id, depth + 1)]);
 }
 
-// shortcut: no move/re-parent yet; add it when the API supports changing parent_id.
+/** The parent type each unit type must sit under (R23). */
+const parentType: Record<OrgUnitType, OrgUnitType | null> = { institution: null, school: "institution", department: "school", group: "department" };
+
+function MoveDialog({ unit, units, onClose }: { unit: OrgUnit | null; units: OrgUnit[]; onClose: () => void }) {
+  const qc = useQueryClient();
+  const { toast } = useToast();
+  const [target, setTarget] = useState<number | "">("");
+  const [touched, setTouched] = useState(false);
+  const wanted = unit ? parentType[unit.type] : null;
+  const options = flatten(units, undefined).filter((r) => r.unit.type === wanted && r.unit.id !== unit?.parentId);
+  const move = useMutation({
+    mutationFn: () => api.moveOrgUnit({ id: unit!.id, newParentId: target as number }),
+    onSuccess: () => {
+      for (const k of ["org-units", "departments", "summary", "researchers"]) qc.invalidateQueries({ queryKey: [k] });
+      toast({ tone: "ok", message: `${unit!.name} moved. Reports now roll it up under its new parent.` });
+      close();
+    },
+    onError: (e) => toast({ tone: "error", message: e instanceof HttpError && e.status === 409 ? "A unit can't be moved under itself or one of its own children." : e instanceof HttpError && e.status === 400 ? "That parent isn't allowed for this kind of unit." : "Couldn't move the unit. Try again." }),
+  });
+  const close = () => { setTarget(""); setTouched(false); onClose(); };
+  const error = touched && target === "" ? "Choose the new parent" : undefined;
+  return (
+    <Dialog open={unit !== null} onClose={close} title={`Move ${unit?.name ?? "unit"}`}
+      description={wanted ? `A ${unit?.type} sits under a ${wanted}. Its people and child units move with it, and reports roll up under the new parent from now on.` : undefined}>
+      <form className="space-y-4" noValidate onSubmit={(e) => { e.preventDefault(); setTouched(true); if (target !== "") move.mutate(); }}>
+        <Field label={`New ${wanted ?? "parent"}`} error={error} hint={options.length === 0 ? `There is no other ${wanted} to move it to.` : undefined}>
+          {(a) => <Select {...a} value={target} onChange={(e) => setTarget(e.target.value ? Number(e.target.value) : "")}>
+            <option value="">Select…</option>
+            {options.map((r) => <option key={r.unit.id} value={r.unit.id}>{r.unit.name}</option>)}
+          </Select>}
+        </Field>
+        <div className="flex justify-end gap-3 pt-2"><Button variant="secondary" onClick={close}>Cancel</Button><Button type="submit" loading={move.isPending} disabled={options.length === 0}>Move</Button></div>
+      </form>
+    </Dialog>
+  );
+}
+
 export default function Organisation() {
   const qc = useQueryClient();
   const { toast } = useToast();
@@ -29,6 +67,8 @@ export default function Organisation() {
   const [parentId, setParentId] = useState<number | "">("");
   const [renaming, setRenaming] = useState<{ id: number; name: string } | null>(null);
   const [del, setDel] = useState<OrgUnit | null>(null);
+  const [moving, setMoving] = useState<OrgUnit | null>(null);
+  const [importing, setImporting] = useState(false);
   const invalidate = () => { qc.invalidateQueries({ queryKey: ["org-units"] }); qc.invalidateQueries({ queryKey: ["departments"] }); qc.invalidateQueries({ queryKey: ["summary"] }); };
 
   const rows = flatten(units.data ?? [], undefined);
@@ -50,7 +90,9 @@ export default function Organisation() {
 
   return (
     <div className="max-w-3xl">
-      <PageHeader eyebrow="Directory" title="Organisation" description="Institution, schools, departments and research groups. Reports roll up this tree. A unit can be deleted once nothing sits under it." />
+      <PageHeader eyebrow="Directory" title="Organisation" description="Institution, schools, departments and research groups. Reports roll up this tree. A unit can be deleted once nothing sits under it."
+        actions={<Button variant="secondary" onClick={() => setImporting(true)}><FileUp /> Import CSV</Button>} />
+      {units.isError && <div className="mb-4"><ErrorBanner error={units.error} onRetry={() => units.refetch()} /></div>}
       <Card><CardHeader><CardTitle>Add unit</CardTitle><CardDescription>Choose where it goes; its type follows from the parent.</CardDescription></CardHeader>
         <CardContent>
           <form className="grid gap-3 sm:grid-cols-[1fr_2fr_auto]" onSubmit={(e) => { e.preventDefault(); if (name.trim() && parent && type) create.mutate(); }}>
@@ -75,11 +117,14 @@ export default function Organisation() {
             ) : (<>
               <span className="flex-1 font-medium">{unit.name}</span>
               <Badge className="border-violet-200 bg-violet-50 capitalize text-violet-700 dark:border-white/10 dark:bg-white/5 dark:text-violet-300">{unit.type}</Badge>
+              {unit.type !== "institution" && <Button variant="ghost" size="icon" aria-label={`Move ${unit.name}`} onClick={() => setMoving(unit)}><MoveRight /></Button>}
               <Button variant="ghost" size="icon" aria-label={`Rename ${unit.name}`} onClick={() => setRenaming({ id: unit.id, name: unit.name })}><Pencil /></Button>
               {unit.type !== "institution" && <Button variant="ghost" size="icon" aria-label={`Delete ${unit.name}`} onClick={() => setDel(unit)}><Trash2 /></Button>}
             </>)}
           </li>))}
       </ul></Card>
+      <MoveDialog unit={moving} units={units.data ?? []} onClose={() => setMoving(null)} />
+      <ImportDialog kind="org-units" open={importing} onClose={() => setImporting(false)} />
       <ConfirmDialog open={del !== null} onClose={() => setDel(null)} onConfirm={() => del && remove.mutate(del.id)} loading={remove.isPending}
         title={`Delete ${del?.name ?? "unit"}?`} description="This is only possible when no people or child units belong to it." />
     </div>

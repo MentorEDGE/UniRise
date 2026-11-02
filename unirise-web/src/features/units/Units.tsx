@@ -1,8 +1,11 @@
 import { useState } from "react";
-import { useQuery } from "@tanstack/react-query";
-import { AlertTriangle, Award, BookOpen, GraduationCap, Users, Wallet } from "lucide-react";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { AlertTriangle, Award, BookOpen, GraduationCap, Lock, Users, Wallet } from "lucide-react";
 import { api } from "@/lib/api";
-import { useAuth } from "@/app/auth";
+import { useAuth, can } from "@/app/auth";
+import { Button } from "@/components/ui/button";
+import { ConfirmDialog } from "@/components/ui/dialog";
+import { useToast } from "@/components/ui/toast";
 import { formatDate, formatMoney, formatNumber } from "@/lib/utils";
 import type { OrgUnit } from "@/lib/types";
 import { PageHeader } from "@/components/layout/PageHeader";
@@ -17,14 +20,25 @@ function depthOf(u: OrgUnit, all: OrgUnit[]): number {
   return p ? 1 + depthOf(p, all) : 0;
 }
 
-// shortcut: no period selector or snapshots yet; figures are live and labelled "as of" (period close is Phase 3).
+// Figures are live ("as of today") until a period is closed; a closed period shows its frozen snapshot (PRD R28).
 export default function Units() {
   const { user } = useAuth();
+  const qc = useQueryClient();
+  const { toast } = useToast();
+  const [periodId, setPeriodId] = useState<number | undefined>(undefined);
+  const [closing, setClosing] = useState(false);
+  const periods = useQuery({ queryKey: ["periods"], queryFn: api.periods });
+  const period = periods.data?.find((x) => x.id === periodId);
   const units = useQuery({ queryKey: ["org-units"], queryFn: api.orgUnits });
   const [picked, setPicked] = useState<number | null>(null);
   const root = units.data?.find((u) => u.id === user?.scopeUnitId) ?? units.data?.find((u) => u.parentId === undefined);
   const unitId = picked ?? root?.id;
-  const roll = useQuery({ queryKey: ["unit-rollup", unitId], queryFn: () => api.unitRollup(unitId!), enabled: unitId !== undefined });
+  const roll = useQuery({ queryKey: ["unit-rollup", unitId, periodId], queryFn: () => api.unitRollup(unitId!, periodId), enabled: unitId !== undefined });
+  const close = useMutation({
+    mutationFn: () => api.closePeriod(periodId!),
+    onSuccess: () => { qc.invalidateQueries({ queryKey: ["periods"] }); qc.invalidateQueries({ queryKey: ["unit-rollup"] }); setClosing(false); toast({ tone: "ok", message: "Period closed. The figures are now frozen." }); },
+    onError: () => { setClosing(false); toast({ tone: "error", message: "Couldn't close the period. It may already be closed." }); },
+  });
 
   const options = (units.data ?? []).filter((u) => u.type !== "group");
   const t = roll.data?.totals;
@@ -40,13 +54,25 @@ export default function Units() {
   return (
     <div>
       <PageHeader eyebrow="Overview" title="Units" description="Output, funding and scholar progress for a part of the university. Totals count each publication once."
-        actions={
+        actions={<>
+          <Select aria-label="Period" className="min-w-44" value={periodId ?? ""} onChange={(e) => setPeriodId(e.target.value ? Number(e.target.value) : undefined)}>
+            <option value="">All time (live)</option>
+            {periods.data?.map((x) => <option key={x.id} value={x.id}>{x.label}{x.closedAt ? " (closed)" : ""}</option>)}
+          </Select>
           <Select aria-label="Unit" className="min-w-56" value={unitId ?? ""} onChange={(e) => setPicked(Number(e.target.value))}>
             {options.map((u) => <option key={u.id} value={u.id}>{"— ".repeat(depthOf(u, units.data ?? []))}{u.name}</option>)}
-          </Select>} />
+          </Select></>} />
 
       {roll.isError && <ErrorBanner error={roll.error} onRetry={() => roll.refetch()} />}
-      {roll.data && <p className="mb-4 text-sm text-muted-foreground">Live figures as of {formatDate(roll.data.asOf)}. No confidential notes are included.</p>}
+      {roll.data && (
+        <p className="mb-4 flex flex-wrap items-center gap-x-3 gap-y-2 text-sm text-muted-foreground">
+          {roll.data.closed
+            ? <span className="inline-flex items-center gap-1.5 font-medium text-foreground"><Lock className="size-4" aria-hidden />{roll.data.periodLabel}: snapshot taken {formatDate(roll.data.takenAt ?? roll.data.asOf)}. These figures no longer change.</span>
+            : <span>{roll.data.periodLabel ? `${roll.data.periodLabel}: ` : ""}Live figures as of {formatDate(roll.data.asOf)}. No confidential notes are included.</span>}
+          {period && !period.closedAt && can.admin(user?.role) && <Button size="sm" variant="secondary" onClick={() => setClosing(true)}><Lock /> Close this period</Button>}
+        </p>)}
+      <ConfirmDialog open={closing} onClose={() => setClosing(false)} onConfirm={() => close.mutate()} loading={close.isPending} confirmLabel="Close period"
+        title={`Close ${period?.label ?? "this period"}?`} description="This freezes the reported figures for every unit so submitted numbers stop changing. It can't be reopened." />
 
       <div className="grid grid-cols-2 gap-4 lg:grid-cols-5">
         {tiles.map((x) => (

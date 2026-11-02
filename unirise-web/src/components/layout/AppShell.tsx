@@ -5,6 +5,7 @@ import { Logo } from "./Logo";
 import { ThemeToggle } from "./ThemeToggle";
 import { Button } from "@/components/ui/button";
 import { useAuth, roleSets } from "@/app/auth";
+import { useTenantSettings } from "@/app/tenant";
 import { api } from "@/lib/api";
 import type { Role, User } from "@/lib/types";
 import { cn, initials } from "@/lib/utils";
@@ -23,11 +24,11 @@ const items: Item[] = [
   { to: "/projects", label: "Projects", icon: FolderKanban, roles: roleSets.research },
   { to: "/lookup", label: "Find researcher", icon: UserRoundSearch, roles: roleSets.research },
   { to: "/reports", label: "Reports", icon: BarChart3, roles: roleSets.overview },
-  { to: "/review", label: "Review", icon: CheckSquare, roles: roleSets.claimants, badge: true },
+  { to: "/review", label: "Review", icon: CheckSquare, roles: [...roleSets.claimants, "HOD", "DEAN"], badge: true },
   { to: "/supervision", label: "Supervision", icon: UserCog, roles: ["RESEARCH_ADMIN", "HOD", "DEAN"] },
   { to: "/duplicates", label: "Duplicates", icon: GitMerge, roles: roleSets.reviewers },
   { to: "/organisation", label: "Organisation", icon: Network, roles: ["RESEARCH_ADMIN"] },
-  { to: "/access", label: "Roles and access", icon: ShieldCheck, roles: roleSets.accessAdmin },
+  { to: "/access", label: "Roles and access", icon: ShieldCheck, roles: [...roleSets.accessAdmin, "HOD", "DEAN"] },
   { to: "/platform", label: "Platform", icon: Server, roles: ["PLATFORM_ADMIN"] },
   { to: "/settings", label: "Settings", icon: Settings, roles: roleSets.accessAdmin },
 ];
@@ -36,7 +37,8 @@ export function AppShell() {
   const { user, signOut } = useAuth();
   const nav = useNavigate();
   const visible = items.filter((i) => !i.roles || (user && i.roles.includes(user.role) && (!i.show || i.show(user))));
-  const { data: summary } = useQuery({ queryKey: ["summary"], queryFn: api.summary });
+  const tenant = useTenantSettings();
+  const { data: summary } = useQuery({ queryKey: ["summary"], queryFn: api.summary, enabled: !!user && roleSets.research.includes(user.role) });
   const pending = summary?.pendingReview ?? 0;
 
   const link = (i: Item, mobile = false) => (
@@ -66,7 +68,10 @@ export function AppShell() {
       <a href="#main" className="sr-only focus:not-sr-only focus:absolute focus:left-4 focus:top-4 focus:z-[70] focus:rounded-lg focus:bg-primary focus:px-4 focus:py-2 focus:text-primary-foreground">Skip to content</a>
       <header className="sticky top-0 z-40 flex h-16 w-full items-center gap-4 border-b border-border/70 bg-background/85 px-4 backdrop-blur supports-[backdrop-filter]:bg-background/70 md:px-8">
         <NavLink to="/" aria-label="UniRise home"><Logo /></NavLink>
-        <span className="ml-2 hidden rounded-full border border-border px-3 py-1 text-xs font-medium text-muted-foreground md:inline">{user?.institution}</span>
+        <span className="ml-2 hidden items-center gap-2 rounded-full border border-border py-1 pl-1 pr-3 text-xs font-medium text-muted-foreground md:inline-flex">
+          <span className="grid h-6 min-w-6 place-items-center rounded-full bg-primary px-1.5 text-[10px] font-bold text-primary-foreground" aria-hidden>{tenant.data?.logoText || initials(user?.institution ?? "")}</span>
+          {tenant.data?.name ?? user?.institution}
+        </span>
         <div className="ml-auto flex items-center gap-3">
           <ThemeToggle />
           <div className="hidden items-center gap-3 md:flex">

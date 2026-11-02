@@ -2,6 +2,7 @@ import { lazy, Suspense } from "react";
 import { Link, Navigate, Route, Routes } from "react-router-dom";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { ThemeProvider } from "./theme";
+import { TenantTheme } from "./tenant";
 import { AuthProvider, RequireAuth, roleSets, useAuth } from "./auth";
 import { ToastProvider } from "@/components/ui/toast";
 import { AppShell } from "@/components/layout/AppShell";
@@ -75,6 +76,7 @@ export default function App() {
     <ThemeProvider>
       <QueryClientProvider client={queryClient}>
         <AuthProvider>
+          <TenantTheme />
           <ToastProvider>
             <Suspense fallback={<div className="p-10"><Skeleton className="h-10 w-64" /></div>}>
               <Routes>
@@ -99,13 +101,13 @@ export default function App() {
                   <Route path="seed-money/:id" element={<RequireAuth roles={R}><SeedMoneyForm /></RequireAuth>} />
                   <Route path="lookup" element={<RequireAuth roles={R}><Lookup /></RequireAuth>} />
                   <Route path="awards" element={<RequireAuth roles={R}><Awards /></RequireAuth>} />
-                  <Route path="review" element={<RequireAuth roles={roleSets.claimants}><Review /></RequireAuth>} />
+                  <Route path="review" element={<RequireAuth roles={[...roleSets.claimants, "HOD", "DEAN"]}><Review /></RequireAuth>} />
                   <Route path="reports" element={<RequireAuth roles={roleSets.overview}><ReportList /></RequireAuth>} />
                   <Route path="reports/:slug" element={<RequireAuth roles={roleSets.overview}><ReportView /></RequireAuth>} />
                   <Route path="settings" element={<RequireAuth roles={roleSets.accessAdmin}><Settings /></RequireAuth>} />
                   <Route path="duplicates" element={<RequireAuth roles={roleSets.reviewers}><Duplicates /></RequireAuth>} />
                   <Route path="supervision" element={<RequireAuth roles={["RESEARCH_ADMIN", "HOD", "DEAN"]}><Supervision /></RequireAuth>} />
-                  <Route path="access" element={<RequireAuth roles={roleSets.accessAdmin}><AccessAdmin /></RequireAuth>} />
+                  <Route path="access" element={<RequireAuth roles={[...roleSets.accessAdmin, "HOD", "DEAN"]}><AccessAdmin /></RequireAuth>} />
                   <Route path="platform" element={<RequireAuth roles={["PLATFORM_ADMIN"]}><Platform /></RequireAuth>} />
                   <Route path="projects" element={<RequireAuth roles={R}><Projects /></RequireAuth>} />
                   <Route path="projects/:id" element={<RequireAuth roles={R}><ProjectDetail /></RequireAuth>} />

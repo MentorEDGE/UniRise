@@ -1,16 +1,24 @@
+import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
+import { CheckCheck } from "lucide-react";
 import { api } from "@/lib/api";
 import { formatDate } from "@/lib/utils";
+import type { MilestoneView } from "@/lib/types";
 import { PageHeader } from "@/components/layout/PageHeader";
+import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { MilestoneBadge } from "@/components/ui/badge";
 import { EmptyState, ErrorBanner, Skeleton } from "@/components/ui/feedback";
 import { MilestoneTimeline } from "./MilestoneTimeline";
+import { MarkDoneDialog } from "./MilestoneDialogs";
+import { RemindersCard } from "./RemindersCard";
 
 export default function MyProgress() {
   const q = useQuery({ queryKey: ["milestones", "mine"], queryFn: () => api.milestones() });
+  const [finishing, setFinishing] = useState<MilestoneView>();
   const next = q.data?.find((m) => m.status !== "done");
   const done = q.data?.filter((m) => m.status === "done").length ?? 0;
+  const latestFeedback = q.data?.filter((m) => m.feedback).sort((a, b) => (b.approvedOn ?? "").localeCompare(a.approvedOn ?? ""))[0];
 
   return (
     <div className="max-w-3xl">
@@ -31,11 +39,24 @@ export default function MyProgress() {
                 <p className="text-sm text-muted-foreground">Due {formatDate(next.dueDate)}</p>
               </div>
               <MilestoneBadge status={next.status} />
+              <Button onClick={() => setFinishing(next)}><CheckCheck aria-hidden />Mark as done</Button>
             </CardContent>
           )}
         </Card>
-        <Card className="overflow-hidden"><MilestoneTimeline milestones={q.data} /></Card>
+        {latestFeedback && (
+          <Card className="mb-6 border-violet-200 bg-secondary/60">
+            <CardHeader><CardTitle>Latest feedback</CardTitle><CardDescription>{latestFeedback.stage}{latestFeedback.approvedBy ? ` · ${latestFeedback.approvedBy}` : ""}{latestFeedback.approvedOn ? `, ${formatDate(latestFeedback.approvedOn)}` : ""}</CardDescription></CardHeader>
+            <CardContent className="pt-3 text-sm">{latestFeedback.feedback}</CardContent>
+          </Card>
+        )}
+        <Card className="mb-6 overflow-hidden">
+          <MilestoneTimeline milestones={q.data} actions={(m) => m.status !== "done" && (
+            <Button size="sm" variant="secondary" aria-label={`Mark ${m.stage} as done`} onClick={() => setFinishing(m)}>Mark as done</Button>
+          )} />
+        </Card>
+        <RemindersCard title="Your reminders" description="What you and your supervisor are being reminded about." />
       </>)}
+      <MarkDoneDialog milestone={finishing} onClose={() => setFinishing(undefined)} />
     </div>
   );
 }

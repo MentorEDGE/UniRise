@@ -1,1 +1,16 @@
-/* Print styles for report pages. */
+/* Print and "Save as PDF" view for report pages: just the report, on A4, with readable tables. */
+@media print {
+  @page { size: A4; margin: 14mm; }
+  header, aside, nav, dialog, [role="status"], .no-print, button, a[href^="#"], .sr-only { display: none !important; }
+  body { background: #fff !important; color: #000 !important; }
+  main { padding: 0 !important; }
+  .surface-card { box-shadow: none !important; border: 1px solid #bbb !important; background: #fff !important; break-inside: avoid; }
+  table { width: 100%; border-collapse: collapse; font-size: 11px; }
+  th, td { border: 1px solid #bbb; padding: 4px 6px; text-align: left; color: #000 !important; }
+  thead { background: #eee !important; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+  tr { break-inside: avoid; }
+  h1, h2, h3 { color: #000 !important; }
+  .eyebrow { color: #444 !important; }
+  .overflow-x-auto, .overflow-hidden { overflow: visible !important; }
+  .dark body, html.dark body { background: #fff !important; }
+}

@@ -24,3 +24,15 @@ export const grantReports: ReportDef[] = [
   { slug: "grant-sanctioned", title: "Sanctioned grant details", text: "Sanctioned grants with agency, date, amount and duration." },
   { slug: "grant-employee", title: "Employee ID wise", text: "Grants and applied amounts per investigator." },
 ];
+
+export const templateReports: ReportDef[] = [
+  { slug: "annual-faculty", title: "Annual faculty report", text: "One faculty member's publications, grants, awards, seed money and supervision for a period. Printable." },
+  { slug: "accreditation-summary", title: "Accreditation and ranking summary", text: "Output, funding, scholars by stage and department counts. Sample format until the first customer agrees theirs." },
+];
+
+export const analyticsReports: ReportDef[] = [
+  { slug: "collab-network", title: "Collaboration across departments", text: "Co-authored publications between departments and partner institutions. No individuals named." },
+  { slug: "trends", title: "Trends year over year", text: "Publications and new funding by year, with the change on the year before." },
+  { slug: "benchmark", title: "Department benchmark", text: "Publications per faculty member in each department against the median department." },
+  { slug: "oa-compliance", title: "Open-access and funder-mandate compliance", text: "How many publications are open access and whether funder mandates are met." },
+];

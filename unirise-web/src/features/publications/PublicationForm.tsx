@@ -1,10 +1,10 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Link, useNavigate, useParams } from "react-router-dom";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useFieldArray, useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
-import { DownloadCloud, FileText, Plus, Trash2 } from "lucide-react";
+import { AlertTriangle, DownloadCloud, FileText, Flag, GitMerge, LockOpen, Plus, RefreshCw, Trash2 } from "lucide-react";
 import { api } from "@/lib/api";
 import { HttpError } from "@/lib/http";
 import { useAuth, can } from "@/app/auth";
@@ -18,6 +18,7 @@ import { SourceChip, StatusBadge, VerificationBadge } from "@/components/ui/badg
 import { ReviewBar } from "@/components/ui/review-bar";
 import { ErrorBanner, Skeleton } from "@/components/ui/feedback";
 import { useToast } from "@/components/ui/toast";
+import { DisputeDialog } from "./DisputeDialog";
 
 const TYPES: { value: PublicationType; label: string; venueLabel: string }[] = [
   { value: "journal-article", label: "Journal article", venueLabel: "Journal name" },
@@ -60,6 +61,10 @@ const authorSchema = z.object({
   if ((a.kind === "ex-faculty" || a.kind === "ex-student") && !a.endDate) ctx.addIssue({ code: "custom", path: ["endDate"], message: "Enter the termination or course-completion date" });
 });
 
+const isHttps = (v: string) => { try { return new URL(v).protocol === "https:"; } catch { return false; } };
+const OA_OPTIONS = [{ value: "gold", label: "Gold (open in the journal)" }, { value: "green", label: "Green (open in a repository)" }, { value: "hybrid", label: "Hybrid" }, { value: "closed", label: "Closed" }] as const;
+const MANDATE_OPTIONS = [{ value: "compliant", label: "Compliant" }, { value: "non-compliant", label: "Not compliant" }, { value: "not-applicable", label: "Not applicable" }] as const;
+
 const schema = z.object({
   type: z.enum(["journal-article", "conference-paper", "book-chapter", "book", "technical-report", "preprint", "patent"]),
   category: z.string().optional(),
@@ -71,6 +76,9 @@ const schema = z.object({
   year: z.coerce.number().int().min(1900, "Enter a valid year").max(new Date().getFullYear() + 1, "Year is in the future"),
   projectRef: z.boolean(),
   projectDetails: z.string().trim().optional(),
+  oaStatus: z.enum(["", "gold", "green", "hybrid", "closed"]),
+  funderMandate: z.enum(["", "compliant", "non-compliant", "not-applicable"]),
+  repositoryUrl: z.string().trim().refine((v) => v === "" || isHttps(v), "Use a full https:// link").optional(),
   authors: z.array(authorSchema).min(1, "Add at least one author"),
 }).superRefine((v, ctx) => {
   if (v.projectRef && !v.projectDetails) ctx.addIssue({ code: "custom", path: ["projectDetails"], message: "Name the project" });
@@ -92,6 +100,11 @@ export default function PublicationForm() {
   const [doiError, setDoiError] = useState<{ msg: string; existing?: number } | null>(null);
   const [pdf, setPdf] = useState<{ name: string } | null>(null);
   const [pdfError, setPdfError] = useState<string | null>(null);
+  const [disputing, setDisputing] = useState(false);
+  /** The version the form was loaded at; sent with every save so a concurrent edit is detected, not overwritten. */
+  const [loadedVersion, setLoadedVersion] = useState<number | undefined>();
+  const [versionConflict, setVersionConflict] = useState(false);
+  const loaded = useRef(false);
 
   const existing = useQuery({ queryKey: ["publication", id], queryFn: () => api.publication(Number(id)), enabled: editing });
   const researchers = useQuery({ queryKey: ["directory"], queryFn: api.directory });
@@ -99,27 +112,45 @@ export default function PublicationForm() {
 
   const form = useForm<Values>({
     resolver: zodResolver(schema) as never,
-    defaultValues: { type: "journal-article", category: "", doi: "", title: "", venue: "", issn: "", month: new Date().getMonth() + 1, year: new Date().getFullYear(), projectRef: false, projectDetails: "", authors: [blankAuthor()] },
+    defaultValues: { type: "journal-article", category: "", doi: "", title: "", venue: "", issn: "", month: new Date().getMonth() + 1, year: new Date().getFullYear(), projectRef: false, projectDetails: "", oaStatus: "", funderMandate: "", repositoryUrl: "", authors: [blankAuthor()] },
   });
   const authors = useFieldArray({ control: form.control, name: "authors" });
   const type = form.watch("type");
   const projectRef = form.watch("projectRef");
   const deptName = (id: number) => depts.data?.find((d) => d.id === id)?.name ?? "";
 
-  useEffect(() => {
-    const p = existing.data;
-    if (!p) return;
+  const apply = (p: Publication) => {
     const fromIds = p.authorIds.map((rid): PubAuthor => {
       const r = researchers.data?.find((x) => x.id === rid);
       return { kind: r?.kind === "scholar" ? "internal-student" : "internal-faculty", researcherId: rid, name: r?.name ?? `#${rid}`, institution: "Demo University", department: r ? deptName(r.departmentId) : "", email: "" };
     });
     form.reset({
       type: p.type, category: p.category ?? "", doi: p.doi ?? "", title: p.title, venue: p.venue, issn: p.issn ?? "", month: p.month ?? 1, year: p.year,
-      projectRef: !!p.projectRef, projectDetails: p.projectDetails ?? "", authors: (p.authors?.length ? p.authors : fromIds).length ? (p.authors?.length ? p.authors : fromIds) : [blankAuthor()],
+      projectRef: !!p.projectRef, projectDetails: p.projectDetails ?? "", oaStatus: p.oaStatus ?? "", funderMandate: p.funderMandate ?? "", repositoryUrl: p.repositoryUrl ?? "",
+      authors: (p.authors?.length ? p.authors : fromIds).length ? (p.authors?.length ? p.authors : fromIds) : [blankAuthor()],
     });
     setPdf(p.pdfName ? { name: p.pdfName } : null);
+    setLoadedVersion(p.version);
+    setVersionConflict(false);
+  };
+  // Fill the form once. Later refetches must never overwrite what the user is typing; "Reload latest" does it on purpose.
+  useEffect(() => {
+    const p = existing.data;
+    if (!p || loaded.current || !researchers.data || !depts.data) return;
+    loaded.current = true;
+    apply(p);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [existing.data, researchers.data, depts.data]);
+
+  const reloadLatest = async () => {
+    const r = await existing.refetch();
+    if (r.data) apply(r.data);
+  };
+  const changedElsewhere = versionConflict || (existing.data?.version !== undefined && loadedVersion !== undefined && existing.data.version !== loadedVersion);
+
+  const myDisputes = useQuery({ queryKey: ["disputes"], queryFn: api.disputes, enabled: editing && !!user?.researcherId });
+  const iAmAuthor = !!user?.researcherId && !!existing.data?.authorIds.includes(user.researcherId);
+  const myDispute = myDisputes.data?.filter((d) => d.publicationId === Number(id) && d.researcherId === user?.researcherId).sort((a, b) => b.id - a.id)[0];
 
   const importDoi = useMutation({
     mutationFn: () => api.importDoi(normaliseDoi(doiInput)),
@@ -144,6 +175,8 @@ export default function PublicationForm() {
         authors: v.authors, authorIds: v.authors.flatMap((a) => (a.researcherId ? [a.researcherId] : [])),
         studentPublication: v.authors.some((a) => a.kind === "internal-student" || a.kind === "ex-student"),
         pdfName: pdf?.name, entryStatus: status, id: editing ? Number(id) : undefined,
+        oaStatus: v.oaStatus || undefined, funderMandate: v.funderMandate || undefined, repositoryUrl: v.repositoryUrl || undefined,
+        expectedVersion: editing ? loadedVersion : undefined,
       }),
     onSuccess: (_p, { status }) => {
       qc.invalidateQueries({ queryKey: ["publications"] });
@@ -152,7 +185,9 @@ export default function PublicationForm() {
       nav("/publications");
     },
     onError: (e) => {
-      if (e instanceof HttpError && e.status === 409) form.setError("doi", { message: "A publication with this DOI already exists." });
+      if (e instanceof HttpError && e.status === 409 && (e as unknown as { reason?: string }).reason === "version") setVersionConflict(true); // keep the typed values on screen
+      else if (e instanceof HttpError && e.status === 409 && (e as unknown as { reason?: string }).reason === "merged") toast({ tone: "error", message: "This record was merged into another one and can no longer be edited." });
+      else if (e instanceof HttpError && e.status === 409) form.setError("doi", { message: "A publication with this DOI already exists." });
       else toast({ tone: "error", message: "Couldn't save. Try again." });
     },
   });
@@ -178,7 +213,8 @@ export default function PublicationForm() {
 
   if (!can.edit(user?.role) && !editing) return <ErrorBanner error={new HttpError(403)} />;
   if (editing && existing.isError) return <ErrorBanner error={existing.error} onRetry={() => existing.refetch()} />;
-  const readOnly = !can.edit(user?.role) || !editable(existing.data);
+  const merged = existing.data?.mergedInto;
+  const readOnly = !can.edit(user?.role) || !editable(existing.data) || merged !== undefined;
   const showForm = editing || mode === "manual";
   const errors = form.formState.errors;
   const meta = TYPES.find((t) => t.value === type)!;
@@ -194,6 +230,34 @@ export default function PublicationForm() {
           <VerificationBadge state={existing.data.state} /><SourceChip source={existing.data.source} />
           {existing.data.entryStatus && <StatusBadge status={existing.data.entryStatus} />}
           {existing.data.reviewComment && <span className="text-sm text-muted-foreground">Reviewer: {existing.data.reviewComment}</span>}
+        </div>
+      )}
+
+      {merged !== undefined && (
+        <div role="status" className="mb-4 flex items-center gap-3 rounded-xl border bg-secondary/60 p-4 text-sm">
+          <GitMerge className="size-5 shrink-0 text-primary" aria-hidden />
+          <span>This record was merged into <Link className="font-semibold text-primary hover:underline" to={`/publications/${merged}`}>record #{merged}</Link> and no longer counts anywhere.</span>
+        </div>
+      )}
+
+      {changedElsewhere && !readOnly && (
+        <div role="alert" className="mb-4 flex flex-wrap items-center gap-3 rounded-xl border border-warning/40 bg-warning/10 p-4 text-sm">
+          <AlertTriangle className="size-5 shrink-0 text-warning" aria-hidden />
+          <span className="flex-1"><strong>This record changed since you opened it.</strong> Your changes are still in the form below and have not been saved. Reload the latest version, then re-apply what you need.</span>
+          <Button size="sm" variant="secondary" onClick={reloadLatest}><RefreshCw /> Reload latest</Button>
+        </div>
+      )}
+
+      {editing && iAmAuthor && merged === undefined && (
+        <div className="mb-4 flex flex-wrap items-center gap-3 text-sm">
+          {myDispute ? (
+            <span className="inline-flex items-center gap-2">
+              <Flag className="size-4 text-primary" aria-hidden />
+              Your authorship dispute: <strong>{myDispute.status === "open" ? "Open, waiting for a reviewer" : myDispute.status === "upheld" ? "Upheld" : "Dismissed"}</strong>
+              {myDispute.resolution && <span className="text-muted-foreground">Reviewer: {myDispute.resolution}</span>}
+            </span>
+          ) : null}
+          {myDispute?.status !== "open" && <Button size="sm" variant="secondary" onClick={() => setDisputing(true)}><Flag /> Dispute my authorship</Button>}
         </div>
       )}
 
@@ -250,6 +314,21 @@ export default function PublicationForm() {
                 <Field label="ISSN" error={errors.issn?.message} hint="Without a hyphen or space">{(a) => <Input {...a} {...form.register("issn")} placeholder="20452322" disabled={readOnly} />}</Field>
               )}
             </div>
+
+            <fieldset className="space-y-3">
+              <legend className="flex items-center gap-2 text-sm font-semibold"><LockOpen className="size-4 text-primary" aria-hidden />Open access</legend>
+              <div className="grid gap-5 sm:grid-cols-2">
+                <Field label="Open-access status">
+                  {(a) => <Select {...a} {...form.register("oaStatus")} disabled={readOnly}><option value="">Not recorded</option>{OA_OPTIONS.map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}</Select>}
+                </Field>
+                <Field label="Funder mandate">
+                  {(a) => <Select {...a} {...form.register("funderMandate")} disabled={readOnly}><option value="">Not recorded</option>{MANDATE_OPTIONS.map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}</Select>}
+                </Field>
+              </div>
+              <Field label="Repository link" error={errors.repositoryUrl?.message} hint="Where the open copy is kept. https links only.">
+                {(a) => <Input {...a} type="url" inputMode="url" {...form.register("repositoryUrl")} placeholder="https://repository.example.edu/handle/123" disabled={readOnly} />}
+              </Field>
+            </fieldset>
 
             <div className="grid gap-5 sm:grid-cols-2">
               <label className="flex items-center gap-3 text-sm font-medium">
@@ -322,6 +401,8 @@ export default function PublicationForm() {
           </form>
         </CardContent></Card>
       ))}
+
+      {editing && existing.data && <DisputeDialog open={disputing} onClose={() => setDisputing(false)} publicationId={existing.data.id} title={existing.data.title} />}
     </div>
   );
 }

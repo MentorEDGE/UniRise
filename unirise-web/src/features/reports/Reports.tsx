@@ -1,11 +1,15 @@
 import { useState } from "react";
-import { Link, useParams } from "react-router-dom";
-import { useQuery } from "@tanstack/react-query";
-import { BarChart3, Building2, Download, Printer, Trophy, TrendingUp } from "lucide-react";
+import { Link, useParams, useSearchParams } from "react-router-dom";
+import { lazy, Suspense } from "react";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { BarChart3, Building2, Download, Play, Printer, Trash2, Trophy, TrendingUp } from "lucide-react";
 import { Bar, BarChart, CartesianGrid, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
 import { api } from "@/lib/api";
-import { downloadCsv, formatMoney } from "@/lib/utils";
-import { grantReports, publicationReports } from "@/lib/reportDefs";
+import { formatMoney } from "@/lib/utils";
+import { analyticsReports, grantReports, publicationReports, templateReports } from "@/lib/reportDefs";
+import { isExtReport } from "@/mock/ext/reporting";
+import { ExportDialog } from "./ExportDialog";
+import { SaveReportButton } from "./SaveReportButton";
 import { PageHeader } from "@/components/layout/PageHeader";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -13,6 +17,8 @@ import { Field, Input, Select } from "@/components/ui/form";
 import { ErrorBanner, Skeleton } from "@/components/ui/feedback";
 import { Table, TBody, TD, TH, THead, TR } from "@/components/ui/table";
 import { useToast } from "@/components/ui/toast";
+
+const ExtReportView = lazy(() => import("./ExtReportView"));
 
 const catalogue = [
   { slug: "summary", title: "Institution summary", icon: BarChart3, text: "Totals for departments, researchers, publications and awards.", counts: "verified publications only" },
@@ -24,7 +30,7 @@ const catalogue = [
 export function ReportList() {
   return (
     <div>
-      <PageHeader eyebrow="Reporting" title="Reports" description="Built-in reports. Annual faculty and accreditation templates will appear here." />
+      <PageHeader eyebrow="Reporting" title="Reports" description="Core reports, templates, analytics and the publication and grant catalogue. Save a report with its filters to run it again." />
       <div className="grid gap-6 sm:grid-cols-2">
         {catalogue.map((r) => (
           <Link key={r.slug} to={`/reports/${r.slug}`} className="rounded-2xl">
@@ -36,13 +42,43 @@ export function ReportList() {
           </Link>
         ))}
       </div>
-      {([["Publication reports", publicationReports], ["Grant reports", grantReports]] as const).map(([heading, defs]) => (
+      <SavedReports />
+      {([["Templates", templateReports], ["Analytics", analyticsReports], ["Publication reports", publicationReports], ["Grant reports", grantReports]] as const).map(([heading, defs]) => (
         <section key={heading} className="mt-10" aria-labelledby={heading}>
           <h2 id={heading} className="mb-3 text-xl font-semibold tracking-tight">{heading}</h2>
           <ul className="grid gap-3 sm:grid-cols-2">{defs.map((d) => (
             <li key={d.slug}><Link to={`/reports/${d.slug}`} className="block rounded-2xl"><Card hover className="h-full px-6 py-5"><p className="font-semibold">{d.title}</p><p className="mt-1 text-sm text-muted-foreground">{d.text}</p></Card></Link></li>))}</ul>
         </section>))}
     </div>
+  );
+}
+
+function SavedReports() {
+  const qc = useQueryClient();
+  const { toast } = useToast();
+  const list = useQuery({ queryKey: ["saved-reports"], queryFn: api.savedReports });
+  const del = useMutation({
+    mutationFn: (id: number) => api.deleteSavedReport(id),
+    onSuccess: () => { qc.invalidateQueries({ queryKey: ["saved-reports"] }); toast({ tone: "ok", message: "Saved report deleted." }); },
+    onError: () => toast({ tone: "error", message: "You can only delete reports you saved yourself." }),
+  });
+  const link = (r: { slug: string; params: { from?: string; to?: string; basis?: string; researcherId?: number } }) => {
+    const u = new URLSearchParams();
+    Object.entries(r.params).forEach(([k, v]) => v !== undefined && v !== "" && u.set(k, String(v)));
+    const q = u.toString();
+    return `/reports/${r.slug}${q ? `?${q}` : ""}`;
+  };
+  if (list.isLoading || !list.data?.length) return null;
+  return (
+    <section className="mt-10" aria-labelledby="saved-h">
+      <h2 id="saved-h" className="mb-3 text-xl font-semibold tracking-tight">Saved reports</h2>
+      <Card className="overflow-hidden"><ul className="divide-y">{list.data.map((r) => (
+        <li key={r.id} className="flex flex-wrap items-center gap-3 px-6 py-3">
+          <div className="min-w-0 flex-1"><p className="font-medium">{r.name}</p><p className="text-xs text-muted-foreground">{r.slug}{r.ownerId === 0 ? " · shared sample" : ""} · saved {r.createdOn}</p></div>
+          <Link to={link(r)} className="inline-flex h-8 items-center gap-1.5 rounded-xl border px-3 text-xs font-semibold hover:bg-secondary/60"><Play className="size-3.5" aria-hidden />Run</Link>
+          {r.ownerId !== 0 && <Button size="sm" variant="ghost" aria-label={`Delete saved report ${r.name}`} onClick={() => del.mutate(r.id)}><Trash2 /></Button>}
+        </li>))}</ul></Card>
+    </section>
   );
 }
 
@@ -124,15 +160,18 @@ function CoreReportView() {
 
 export function ReportView() {
   const { slug } = useParams();
+  if (isExtReport(slug)) return <Suspense fallback={<Skeleton className="h-72 w-full" />}><ExtReportView slug={slug} /></Suspense>;
   return /^(pub|grant)-/.test(slug ?? "") ? <TableReport slug={slug!} /> : <CoreReportView />;
 }
 
 function TableReport({ slug }: { slug: string }) {
   const def = [...publicationReports, ...grantReports].find((r) => r.slug === slug);
   const isGrant = slug.startsWith("grant-");
-  const [from, setFrom] = useState("");
-  const [to, setTo] = useState("");
-  const [basis, setBasis] = useState<"applied" | "entered" | "sanctioned">("applied");
+  const [sp] = useSearchParams();
+  const [from, setFrom] = useState(sp.get("from") ?? "");
+  const [to, setTo] = useState(sp.get("to") ?? "");
+  const [basis, setBasis] = useState<"applied" | "entered" | "sanctioned">((sp.get("basis") as "applied" | "entered" | "sanctioned") ?? "applied");
+  const [exportFormat, setExportFormat] = useState<"csv" | "pdf" | null>(null);
   const q = useQuery({
     queryKey: ["report", slug, from, to, basis],
     queryFn: () => api.report(slug, { from: from || undefined, to: to || undefined, basis: isGrant ? basis : undefined }),
@@ -146,9 +185,11 @@ function TableReport({ slug }: { slug: string }) {
     <div>
       <PageHeader eyebrow={isGrant ? "Grant report" : "Publication report"} title={def.title}
         description={`${def.text} ${isGrant ? "Grants you are allowed to see." : "Counts verified publications only."}`}
-        actions={<><Button variant="secondary" onClick={() => window.print()}><Printer /> Print / PDF</Button>
-          <Button disabled={!q.data} onClick={() => q.data && downloadCsv(`${slug}.csv`, q.data.columns, q.data.rows)}><Download /> Export CSV</Button></>} />
-      <Card className="mb-4 p-4"><div className="grid gap-3 sm:grid-cols-3">
+        actions={<div className="no-print flex flex-wrap gap-3">
+          <SaveReportButton slug={slug} params={{ from: from || undefined, to: to || undefined, basis: isGrant ? basis : undefined }} defaultName={def.title} />
+          <Button variant="secondary" disabled={!q.data} onClick={() => setExportFormat("pdf")}><Printer /> Print / PDF</Button>
+          <Button disabled={!q.data} onClick={() => setExportFormat("csv")}><Download /> Export CSV</Button></div>} />
+      <Card className="no-print mb-4 p-4"><div className="grid gap-3 sm:grid-cols-3">
         <Field label={isGrant ? "From date" : "From year"}>{(a) => <Input {...a} type="date" value={from} max={to || undefined} onChange={(e) => setFrom(e.target.value)} />}</Field>
         <Field label={isGrant ? "To date" : "To year"}>{(a) => <Input {...a} type="date" value={to} min={from || undefined} onChange={(e) => setTo(e.target.value)} />}</Field>
         {useBasis && <Field label="Date basis">{(a) => <Select {...a} value={basis} onChange={(e) => setBasis(e.target.value as typeof basis)}><option value="applied">Applied date</option><option value="entered">Entry date</option><option value="sanctioned">Sanction date</option></Select>}</Field>}
@@ -160,6 +201,7 @@ function TableReport({ slug }: { slug: string }) {
           <THead><tr>{q.data.columns.map((c) => <TH key={c} className={money(c) ? "text-right" : undefined}>{c}</TH>)}</tr></THead>
           <TBody>{q.data.rows.map((r, i) => <TR key={i}>{r.map((v, j) => <TD key={j} className={money(q.data!.columns[j]) ? "text-right" : undefined}>{money(q.data!.columns[j]) && typeof v === "number" ? formatMoney(v) : v}</TD>)}</TR>)}</TBody>
         </Table></Card>))}
+      {exportFormat && q.data && <ExportDialog open onClose={() => setExportFormat(null)} slug={slug} params={{ from: from || undefined, to: to || undefined, basis: isGrant ? basis : undefined }} format={exportFormat} columns={q.data.columns} rows={q.data.rows} />}
     </div>
   );
 }
