@@ -54,6 +54,8 @@ Planned additions:
 - `period(id, institution_id, label, starts_on, ends_on, closed_at)` and `period_snapshot(period_id, org_unit_id, metric, value, payload jsonb)`
 - `tenant_settings(institution_id, currency, locale, fiscal_year_start)`; `currency` on `award`; `sensitivity` (public|internal|confidential) on activity records; `version` integer on editable records (optimistic locking)
 - `institution` gains `status[sandbox|pilot|active|suspended|closed]` and `plan`; `access_log(id, institution_id, actor, action, target_person_id, at)` for named drill-downs and platform support access (Phase 2); `usage_counter(institution_id, month, active_researchers)` for metering
+- Entry modules (PRD R37–R41): `publication` gains `category`, `pub_month`, `issn`, `project_ref`, `project_details`, `student_publication`, `entry_status[draft|submitted|approved|rework|revision_required|rejected]`; `publication_author(publication_id, researcher_id?, kind[internal_faculty|internal_student|external|ex_faculty|ex_student], name, institution, department, email, end_date, continent)`; `grant(id, institution_id, unit, type, source, status[draft|submitted|sanctioned|rework|rejected], utn, title, description, call_title, agency, agency_comment, applied_on, entered_on, sanctioned_on, applied_amount, sanctioned_amount, duration_months, matching_grant, remarks, owner_id)`; `grant_investigator(grant_id, researcher_id?, name, role, is_lead, institution, department, share_pct)`; `seed_window(institution_id, label, opens_on, closes_on)`; `seed_proposal(id, institution_id, window_id, category, title, abstract, status, applied_on, owner_id)` with `seed_investigator`; `attachment(id, institution_id, owner_type, owner_id, filename, size, content_type, storage_key)`; `review_event(entity_type, entity_id, action, actor, comment, at)` as the workflow history; `researcher` gains `employee_id`, `roll_no`, `scopus_id` (unique per tenant).
+- Server rules: a new seed proposal is rejected (409) outside the window; submitting a grant requires title, agency and exactly one lead, and shares totalling 100%; only `approved` publications (or harvested, verified ones) count in reports; approval is checked against role and org scope.
 - `publication_source(publication_id, source, external_id, fetched_at, raw jsonb)` – provenance
 - `authorship_claim(publication_id, researcher_id, state[suggested|verified|rejected], decided_by, decided_at, score)`
 - `researcher_affiliation` is replaced by `appointment` (above)
@@ -71,7 +73,7 @@ REST/JSON under `/api`, tenant-scoped, paginated (`page`, `size` ≤ 200). List 
 | Import | `POST /api/publications/import?doi=` |
 | Reports | `GET /api/reports/{summary,publications-by-year,top-researchers,departments}` |
 
-Planned: `/api/me`, `/api/auth/*`, `/api/imports` (CSV import with preview and per-row errors), `/api/webhooks`, `/api/platform/tenants/{id}/{suspend|export|delete}` (platform admin only), `/api/claims`, `/api/org-units`, `/api/role-grants`, `/api/relationships`, `/api/milestones`, `/api/meeting-logs`, `/api/periods`, `/api/harvest/runs`, `/api/reports/{id}/export?format=csv|pdf` (reports also take `periodId` and `orgUnitId`), `/api/users`. Provide OpenAPI via springdoc; version under `/api/v1` before first external customer. Error bodies carry no internal messages (`server.error.include-message=never`).
+Planned: `/api/grants`, `/api/seed-money` (with `/window`), `/api/{publications|grants|seed-money}/{id}/review` (action approve, rework, revision_required or reject, with a comment), `/api/attachments`, `/api/researchers/lookup?kind=employee|orcid|scopus&value=`, `/api/reports/{slug}?from=&to=&basis=` for the report catalogue, `/api/me`, `/api/auth/*`, `/api/imports` (CSV import with preview and per-row errors), `/api/webhooks`, `/api/platform/tenants/{id}/{suspend|export|delete}` (platform admin only), `/api/claims`, `/api/org-units`, `/api/role-grants`, `/api/relationships`, `/api/milestones`, `/api/meeting-logs`, `/api/periods`, `/api/harvest/runs`, `/api/reports/{id}/export?format=csv|pdf` (reports also take `periodId` and `orgUnitId`), `/api/users`. Provide OpenAPI via springdoc; version under `/api/v1` before first external customer. Error bodies carry no internal messages (`server.error.include-message=never`).
 
 ## 6. Harvesting (Phase 2)
 - Scheduler + queue table in Postgres (`SKIP LOCKED`) to avoid new infrastructure; move to a broker only if needed.
@@ -90,6 +92,7 @@ Planned: `/api/me`, `/api/auth/*`, `/api/imports` (CSV import with preview and p
 
 ## 8. Security requirements
 - Input validation at the boundary (Bean Validation, ORCID/DOI formats); no mass assignment of server-owned fields.
+- Uploads: PDF only, up to 10 MB, content type checked on the server (not the file name), virus-scanned, stored outside the web root and served as a download.
 - Secrets only from environment/secret store; compose file refuses to start without `RMS_DB_PASSWORD`; DB bound to localhost in dev.
 - TLS terminated at ingress; HSTS; secure headers; CORS restricted to the UI origin.
 - Dependency scanning (OWASP dependency-check or Dependabot) and SAST in CI; secrets scanning.

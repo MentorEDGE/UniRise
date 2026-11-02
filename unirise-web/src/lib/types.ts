@@ -33,6 +33,9 @@ export interface Researcher {
   orcid?: string;
   departmentId: number;
   kind?: "faculty" | "scholar";
+  employeeId?: string;
+  rollNo?: string;
+  scopusId?: string;
   publicationCount?: number;
 }
 
@@ -58,8 +61,25 @@ export interface UnitRow {
 export interface UnitRollup { unit: OrgUnit; asOf: string; totals: UnitRow; children: UnitRow[]; byStage: { stage: string; count: number }[] }
 
 export type VerificationState = "verified" | "suggested" | "unverified";
-export type PublicationType = "journal-article" | "conference-paper" | "book-chapter" | "book" | "preprint" | "patent";
+export type PublicationType = "journal-article" | "conference-paper" | "book-chapter" | "book" | "technical-report" | "preprint" | "patent";
 export type PublicationSource = "crossref" | "orcid" | "openalex" | "manual";
+
+/** Approval workflow of an entry; harvested records have none and count as approved. */
+export type EntryStatus = "draft" | "submitted" | "approved" | "rework" | "revision_required" | "rejected";
+export type ReviewAction = "approve" | "rework" | "revision_required" | "reject";
+
+export type AuthorKind = "internal-faculty" | "internal-student" | "external" | "ex-faculty" | "ex-student";
+export interface PubAuthor {
+  kind: AuthorKind;
+  researcherId?: number;
+  name: string;
+  institution: string;
+  department?: string;
+  email?: string;
+  /** Termination or course-completion date for ex-faculty and ex-student authors (ISO date). */
+  endDate?: string;
+  continent?: string;
+}
 
 export interface Publication {
   id: number;
@@ -71,7 +91,69 @@ export interface Publication {
   authorIds: number[];
   state: VerificationState;
   source: PublicationSource;
+  entryStatus?: EntryStatus;
+  reviewComment?: string;
+  category?: string;
+  month?: number;
+  issn?: string;
+  projectRef?: boolean;
+  projectDetails?: string;
+  studentPublication?: boolean;
+  pdfName?: string;
+  authors?: PubAuthor[];
 }
+
+export interface Enclosure { name: string }
+export type GrantStatus = "draft" | "submitted" | "sanctioned" | "rework" | "rejected";
+export interface GrantInvestigator {
+  researcherId?: number; name: string; role: "PI" | "Co-PI" | "Collaborator"; isLead: boolean;
+  institution: string; department?: string; sharePct: number;
+}
+export interface Grant {
+  id: number;
+  unit: string;
+  status: GrantStatus;
+  type: string;
+  utn?: string;
+  title: string;
+  description?: string;
+  callTitle?: string;
+  source: string;
+  agency: string;
+  agencyComment?: string;
+  appliedOn: string;
+  enteredOn: string;
+  sanctionedOn?: string;
+  appliedAmount: number;
+  sanctionedAmount?: number;
+  durationMonths?: number;
+  matchingGrant: boolean;
+  contact?: string;
+  investigators: GrantInvestigator[];
+  enclosures: Enclosure[];
+  remarks?: string;
+  ownerId: number;
+  reviewComment?: string;
+}
+
+export interface SeedWindow { label: string; opensOn: string; closesOn: string }
+export interface SeedInvestigator { researcherId?: number; name: string; investigatorType: string; isLeadPI: boolean; institution: string; department?: string }
+export interface SeedProposal {
+  id: number;
+  appliedOn: string;
+  category: string;
+  title: string;
+  abstract: string;
+  windowLabel: string;
+  status: EntryStatus;
+  investigators: SeedInvestigator[];
+  ownerId: number;
+  reviewComment?: string;
+}
+
+export interface ReportTable { columns: string[]; rows: (string | number)[][] }
+export interface ReportParams { from?: string; to?: string; basis?: "applied" | "entered" | "sanctioned" }
+export interface LookupResult { researcher: Researcher; institute: string; department: string; publications: Publication[]; grants: number }
 
 export interface Award {
   id: number;
@@ -97,6 +179,6 @@ export interface TopResearcher { researcherId: number; name: string; publication
 export interface DepartmentRow { departmentId: number; name: string; publications: number; awards: number; funding: number }
 
 export interface PublicationFilters {
-  q?: string; year?: number; type?: PublicationType | ""; state?: VerificationState | ""; departmentId?: number;
+  q?: string; year?: number; type?: PublicationType | ""; state?: VerificationState | ""; status?: EntryStatus | ""; departmentId?: number;
   page: number; size: number; sort?: string;
 }

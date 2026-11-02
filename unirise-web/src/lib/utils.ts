@@ -20,3 +20,24 @@ export const orcidUrl = (id: string) => `https://orcid.org/${id}`;
 
 export const initials = (name: string) =>
   name.split(/\s+/).filter(Boolean).slice(0, 2).map((p) => p[0]?.toUpperCase()).join("");
+
+export const statusLabel: Record<string, string> = {
+  draft: "Draft", submitted: "Submitted", approved: "Approved", sanctioned: "Sanctioned",
+  rework: "Rework", revision_required: "Revision required", rejected: "Rejected",
+};
+
+/** Neutralises spreadsheet formulas so exported text can't run when opened in Excel. */
+export function tableToCsv(columns: string[], rows: (string | number)[][]) {
+  const esc = (v: string | number) => {
+    let s = String(v);
+    if (/^[=+\-@]/.test(s)) s = "'" + s;
+    return /[",\n]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s;
+  };
+  return [columns.map(esc).join(","), ...rows.map((r) => r.map(esc).join(","))].join("\n");
+}
+
+export function downloadCsv(filename: string, columns: string[], rows: (string | number)[][]) {
+  const blob = new Blob([tableToCsv(columns, rows)], { type: "text/csv;charset=utf-8" });
+  const a = document.createElement("a");
+  a.href = URL.createObjectURL(blob); a.download = filename; a.click(); URL.revokeObjectURL(a.href);
+}

@@ -1,6 +1,6 @@
 import { NavLink, Outlet, useNavigate } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
-import { Award, BarChart3, BookOpen, CheckSquare, GraduationCap, Home, LayoutDashboard, LogOut, Network, Settings, Users, UsersRound } from "lucide-react";
+import { Award, BarChart3, BookOpen, CheckSquare, Coins, GraduationCap, Home, LayoutDashboard, LogOut, Network, Settings, Sprout, UserRoundSearch, Users, UsersRound } from "lucide-react";
 import { Logo } from "./Logo";
 import { ThemeToggle } from "./ThemeToggle";
 import { Button } from "@/components/ui/button";
@@ -17,7 +17,10 @@ const items: Item[] = [
   { to: "/units", label: "Units", icon: LayoutDashboard, roles: roleSets.overview },
   { to: "/publications", label: "Publications", icon: BookOpen },
   { to: "/people", label: "People", icon: Users, roles: roleSets.overview },
+  { to: "/grants", label: "Grants", icon: Coins },
+  { to: "/seed-money", label: "Seed money", icon: Sprout },
   { to: "/awards", label: "Awards", icon: Award },
+  { to: "/lookup", label: "Find researcher", icon: UserRoundSearch },
   { to: "/reports", label: "Reports", icon: BarChart3, roles: roleSets.overview },
   { to: "/review", label: "Review", icon: CheckSquare, roles: roleSets.claimants, badge: true },
   { to: "/organisation", label: "Organisation", icon: Network, roles: ["RESEARCH_ADMIN"] },

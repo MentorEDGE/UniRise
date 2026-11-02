@@ -23,6 +23,12 @@ const Awards = lazy(() => import("@/features/awards/Awards"));
 const Review = lazy(() => import("@/features/review/ReviewQueue"));
 const ReportList = lazy(() => import("@/features/reports/Reports").then((m) => ({ default: m.ReportList })));
 const ReportView = lazy(() => import("@/features/reports/Reports").then((m) => ({ default: m.ReportView })));
+const Grants = lazy(() => import("@/features/grants/Grants"));
+const GrantWizard = lazy(() => import("@/features/grants/GrantWizard"));
+const SeedMoney = lazy(() => import("@/features/seedmoney/SeedMoney"));
+const SeedMoneyForm = lazy(() => import("@/features/seedmoney/SeedMoneyForm"));
+const SeedMoneyReport = lazy(() => import("@/features/seedmoney/SeedMoneyReport"));
+const Lookup = lazy(() => import("@/features/lookup/Lookup"));
 const Settings = lazy(() => import("@/features/settings/Settings"));
 
 const queryClient = new QueryClient({
@@ -66,6 +72,12 @@ export default function App() {
                   <Route path="my-progress" element={<RequireAuth roles={["RESEARCHER"]}><MyProgress /></RequireAuth>} />
                   <Route path="mentees" element={<RequireAuth roles={["SUPERVISOR"]}><MenteeList /></RequireAuth>} />
                   <Route path="mentees/:id" element={<RequireAuth roles={["SUPERVISOR"]}><MenteeDetail /></RequireAuth>} />
+                  <Route path="grants" element={<Grants />} />
+                  <Route path="grants/:id" element={<GrantWizard />} />
+                  <Route path="seed-money" element={<SeedMoney />} />
+                  <Route path="seed-money/report" element={<SeedMoneyReport />} />
+                  <Route path="seed-money/:id" element={<SeedMoneyForm />} />
+                  <Route path="lookup" element={<Lookup />} />
                   <Route path="awards" element={<Awards />} />
                   <Route path="review" element={<RequireAuth roles={roleSets.claimants}><Review /></RequireAuth>} />
                   <Route path="reports" element={<RequireAuth roles={roleSets.overview}><ReportList /></RequireAuth>} />

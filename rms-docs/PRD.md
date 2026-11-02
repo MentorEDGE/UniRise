@@ -91,6 +91,16 @@ ORCID, OpenAlex, Crossref, SSO providers, DSpace/repository sync, HR and grants 
 - R35 (P2). Usage metering: active researchers per month for billing. What counts as a paid seat is a commercial decision (see Open).
 - R36 (P1). Integration surface: versioned API, API keys with rotation, webhooks for key events, CSV import for HR and grants data.
 
+### 5.10 Institutional entry modules (from a reference RMS)
+Source: a research data management system used at a large Indian university (screenshots and a short feature list, `RMS.docx`). Only the features below are described there in enough detail to specify.
+- R37 (P1). Publication entry by type (Book, Book chapter, Conference paper, Journal article, Technical report). Fields: category, DOI or web link, title, journal or venue, publish month and year, ISSN (journals), project reference. Authors table covers people from this institution, **outside authors, ex-faculty and ex-students** (the last two with termination or course-completion date). PDF upload (PDF only, up to 10 MB, optional for books). Save draft, then submit. Statuses: draft, submitted, approved, rework, revision required, rejected. Only approved entries count in reports.
+- R38 (P1). Grant entry as a five-step form (basic details, investigators, enclosures, other information, submit) with save draft at any step. Statuses: draft, submitted, sanctioned, rework, rejected. Exactly one lead investigator; investigator shares total 100%. UTN is assigned on sanction.
+- R39 (P1). Seed money: proposals (category, title, abstract, investigators with type and lead PI) during a **quarterly application window enforced by the server**. Statuses: approved, yet to be submitted, submitted, rework, reject, revision required. Report by date range and status.
+- R40 (P1). Report catalogue with CSV export and print: 11 publication reports (by year, institute, department, employee ID, roll number, journal, faculty- or student-authored, partner institution, continent, counts) and 8 grant reports (by type, department, year received, inter-institute, percentage sharing, sanctioned details, employee ID, counts) with a date range and, for grants, a date basis (applied, entered or sanctioned).
+- R41 (P1). Researcher lookup by employee ID, ORCID iD or Scopus ID, limited to people the viewer may see.
+- R42 (unscheduled). The reference system's menu also names Grant Call, Incentive Point, Journal Entry, APC, IPR, Approval, PAS, Conference and Search, but the source document does not describe them. Do not design or build them until the first customer defines what each does.
+- Institution-specific fields in the reference (for example an "ERF related" flag, grant units such as "Indian Grant") are per-tenant settings and custom fields (R34), not fixed columns.
+
 ## 6. Non-functional requirements
 - Security: tenant isolation tested automatically; keys stored hashed; least-privilege roles; OWASP ASVS L2 target before first paid customer.
 - Privacy: collect minimum personal data; GDPR-ready (export/delete a researcher); regional hosting option in Phase 4. Scholar data is limited to supervision, milestones and own outputs. The launch region decides which law applies (for example India's DPDP Act). Confidential notes never roll up to Dean or VC views.
@@ -110,7 +120,7 @@ ORCID, OpenAlex, Crossref, SSO providers, DSpace/repository sync, HR and grants 
 | Phase | Content | Exit criterion |
 |---|---|---|
 | 1 MVP | R1, R2, R6, R9, R10, R15, R17 (built, unverified build) | Runs end to end in a demo tenant |
-| 2 Pilot-ready | R3, R4 (OIDC), R7, R11–R13, R18, R21, R23–R27, R31–R34, R36 | One department live with real users |
+| 2 Pilot-ready | R3, R4 (OIDC), R7, R11–R13, R18, R21, R23–R27, R31–R34, R36, R37–R41 | One department live with real users |
 | 3 Sellable | R4 (SAML), R5, R8, R16, R19, R14, R22, R28–R30, R35 | Passes a university security review |
 | 4 Scale | R20, repository/HR/grants integrations, data residency | Multiple paying tenants |
 

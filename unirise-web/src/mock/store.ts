@@ -1,5 +1,5 @@
-import { awards, meetings, milestones, orgUnits, publications, relationships, researchers, suggestions } from "./seed";
-import type { Award, MeetingLog, Milestone, OrgUnit, Publication, Relationship, Researcher, Suggestion, User } from "@/lib/types";
+import { awards, grants, meetings, milestones, orgUnits, publications, relationships, researchers, seedProposals, seedWindow, suggestions } from "./seed";
+import type { Award, Grant, MeetingLog, Milestone, OrgUnit, Publication, Relationship, Researcher, SeedProposal, SeedWindow, Suggestion, User } from "@/lib/types";
 
 // In-memory sample data so the UI runs without a backend (VITE_USE_MOCK=true).
 export const db = {
@@ -11,7 +11,10 @@ export const db = {
   relationships: structuredClone(relationships) as Relationship[],
   milestones: structuredClone(milestones) as Milestone[],
   meetings: structuredClone(meetings) as MeetingLog[],
-  nextId: { orgUnit: 100, researcher: 100, publication: 1000, award: 100 },
+  grants: structuredClone(grants) as Grant[],
+  seedProposals: structuredClone(seedProposals) as SeedProposal[],
+  seedWindow: structuredClone(seedWindow) as SeedWindow,
+  nextId: { orgUnit: 100, researcher: 100, publication: 1000, award: 100, grant: 100, seed: 100 },
 };
 
 const institution = "Demo University";

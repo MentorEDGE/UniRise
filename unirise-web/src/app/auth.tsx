@@ -40,4 +40,5 @@ export const roleSets: Record<"overview" | "claimants", Role[]> = {
 export const can = {
   edit: (r?: Role) => !!r && roleSets.claimants.includes(r),
   admin: (r?: Role) => r === "RESEARCH_ADMIN",
+  review: (r?: Role) => r === "RESEARCH_ADMIN" || r === "HOD" || r === "DEAN",
 };

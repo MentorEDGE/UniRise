@@ -91,6 +91,21 @@ Scope picker over the org tree the viewer is allowed to see; period selector. Ti
 ### 4.13 Roles and access (admin) *(planned)*
 Role grants with scope and validity dates, delegation (acting HoD), a periodic access-review list, and a view of the break-glass and drill-down log.
 
+### 4.14 Publication entry (PRD R37)
+Add flow: "Import by DOI" or "Enter manually". Manual form: entry type (changes the venue label and shows category and ISSN where they apply), title, DOI or doi.org link, publish month and year, project reference with details. **Author cards**: faculty or student of this institution (pick from the directory), ex-faculty or ex-student (end date required), or outside author (name, institution, department, email, continent). PDF chooser with type and 10 MB checks (required to submit except for books). Buttons: Save draft, Submit for review. Records in draft, rework or revision required are editable; submitted, approved and rejected ones are read-only. A reviewer (admin, HoD, dean) sees a Review bar on submitted records with Approve, Send for rework, Request revision and Reject; every non-approve action needs a comment. The list adds an entry-status filter, author search and CSV export of the current page.
+
+### 4.15 Grants (PRD R38)
+List with search by grant ID, title or UTN, filters by grant type and status, CSV export. Wizard with five numbered steps (Basic details, Investigators, Enclosures, Others, Submit). "Next" validates the current step; Save draft works at every step. Investigators: from this institution or outside, role (PI, Co-PI, Collaborator), share %, one lead; the page shows the running total. Enclosures: PDFs up to 10 MB. The last step summarises the grant before Submit. Reviewers see a Review bar (approve means sanction) on submitted grants.
+
+### 4.16 Seed money (PRD R39)
+List with search by ID or title and a banner stating whether applications are open and until when; "New proposal" appears only while the window is open. Form: category, title, abstract, investigators (type, lead PI; the applicant is pre-filled as lead). A "Yet to be submitted" status label replaces "Draft". Report page: from and to date and a status filter (ALL, Approved, Yet to be submitted, Submitted, Rework, Reject, Revision required), table and CSV export.
+
+### 4.17 Report catalogue (PRD R40)
+Reports page lists the core reports, then Publication reports and Grant reports. Each opens a table with from and to filters (years for publications, dates for grants), a date-basis selector for grants (applied, entry or sanction date), Print and Export CSV. Amount columns are formatted as currency.
+
+### 4.18 Find a researcher (PRD R41)
+Radio choice of Employee ID, ORCID iD or Scopus ID, one input, Search. Result shows name, title, department, institute, the three IDs, counts of verified publications and grants, and the latest publications. No match, or no access, shows one neutral message.
+
 ## 5. Cross-cutting UI behaviour
 - **Loading:** skeletons for lists/charts; buttons disable while submitting.
 - **Errors:** 401 → redirect to sign in preserving the target route; 403 → "You don't have access" page; 404 → not-found page; 400 → field-level messages (server `message` is intentionally empty, so the client maps its own field validation and shows a generic message for unexpected 400s); 5xx/network → retry banner. No stack traces or raw server text.

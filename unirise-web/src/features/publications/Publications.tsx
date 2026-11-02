@@ -1,17 +1,17 @@
 import { useState } from "react";
 import { Link } from "react-router-dom";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { ExternalLink, Plus, Search, Trash2 } from "lucide-react";
+import { Download, ExternalLink, Plus, Search, Trash2 } from "lucide-react";
 import { api } from "@/lib/api";
 import { useAuth, can } from "@/app/auth";
 import { useListParams } from "@/lib/useListParams";
-import { doiUrl } from "@/lib/utils";
-import type { PublicationFilters, PublicationType, VerificationState } from "@/lib/types";
+import { doiUrl, downloadCsv, statusLabel } from "@/lib/utils";
+import type { EntryStatus, PublicationFilters, PublicationType, VerificationState } from "@/lib/types";
 import { PageHeader } from "@/components/layout/PageHeader";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input, Select } from "@/components/ui/form";
-import { SourceChip, VerificationBadge } from "@/components/ui/badge";
+import { SourceChip, StatusBadge, VerificationBadge } from "@/components/ui/badge";
 import { EmptyState, ErrorBanner, Skeleton } from "@/components/ui/feedback";
 import { Pagination, SortHeader, Table, TBody, TD, TH, THead, TR } from "@/components/ui/table";
 import { ConfirmDialog } from "@/components/ui/dialog";
@@ -31,6 +31,7 @@ export default function Publications() {
     year: get("year") ? Number(get("year")) : undefined,
     type: (get("type") as PublicationType) || "",
     state: (get("state") as VerificationState) || "",
+    status: (get("status") as EntryStatus) || "",
     departmentId: get("dept") ? Number(get("dept")) : undefined,
     sort: get("sort"),
     page,
@@ -60,20 +61,27 @@ export default function Publications() {
   return (
     <div>
       <PageHeader eyebrow="Research output" title="Publications" description="Every record shows where it came from and whether it has been verified."
-        actions={canEdit && <Link to="/publications/new" className="inline-flex h-10 items-center gap-2 rounded-xl border border-primary/80 bg-primary px-4 text-sm font-semibold text-primary-foreground shadow-[0_10px_24px_hsl(var(--primary)/0.25)] transition-transform active:scale-[0.98]"><Plus className="size-4" aria-hidden />Add publication</Link>} />
+        actions={<>
+          <Button variant="secondary" disabled={!data?.items.length} onClick={() => data && downloadCsv("publications.csv", ["ID", "Title", "Type", "Venue", "Year", "Authors", "Verification", "Status"],
+            data.items.map((p) => [p.id, p.title, p.type, p.venue, p.year, p.authorIds.map(nameOf).join("; "), p.state, statusLabel[p.entryStatus ?? "approved"]]))}><Download /> Export page</Button>
+          {canEdit && <Link to="/publications/new" className="inline-flex h-10 items-center gap-2 rounded-xl border border-primary/80 bg-primary px-4 text-sm font-semibold text-primary-foreground shadow-[0_10px_24px_hsl(var(--primary)/0.25)] transition-transform active:scale-[0.98]"><Plus className="size-4" aria-hidden />Add publication</Link>}</>} />
 
       <Card className="mb-4 p-4">
-        <form role="search" className="grid gap-3 sm:grid-cols-2 lg:grid-cols-[2fr_1fr_1fr_1fr_1fr]" onSubmit={(e) => e.preventDefault()}>
+        <form role="search" className="grid gap-3 sm:grid-cols-2 lg:grid-cols-[2fr_1fr_1fr_1fr_1fr_1fr]" onSubmit={(e) => e.preventDefault()}>
           <div className="relative">
             <Search className="pointer-events-none absolute left-3 top-3 size-4 text-muted-foreground" aria-hidden />
-            <Input aria-label="Search publications" placeholder="Search title, venue or DOI" className="pl-9" defaultValue={get("q")} onChange={(e) => set({ q: e.target.value })} />
+            <Input aria-label="Search publications" placeholder="Search title, venue, DOI or author" className="pl-9" defaultValue={get("q")} onChange={(e) => set({ q: e.target.value })} />
           </div>
           <Select aria-label="Year" value={get("year")} onChange={(e) => set({ year: e.target.value })}>
             <option value="">All years</option>{years.map((y) => <option key={y}>{y}</option>)}
           </Select>
           <Select aria-label="Type" value={get("type")} onChange={(e) => set({ type: e.target.value })}>
             <option value="">All types</option>
-            {["journal-article", "conference-paper", "book-chapter", "book", "preprint", "patent"].map((t) => <option key={t} value={t}>{t.replace("-", " ")}</option>)}
+            {["journal-article", "conference-paper", "book-chapter", "book", "technical-report", "preprint", "patent"].map((t) => <option key={t} value={t}>{t.replace("-", " ")}</option>)}
+          </Select>
+          <Select aria-label="Entry status" value={get("status")} onChange={(e) => set({ status: e.target.value })}>
+            <option value="">Any status</option>
+            {(["draft", "submitted", "approved", "rework", "revision_required", "rejected"] as const).map((s) => <option key={s} value={s}>{statusLabel[s]}</option>)}
           </Select>
           <Select aria-label="Verification" value={get("state")} onChange={(e) => set({ state: e.target.value })}>
             <option value="">Any state</option><option value="verified">Verified</option><option value="suggested">Suggested</option><option value="unverified">Unverified</option>
@@ -114,7 +122,7 @@ export default function Publications() {
                       </TD>
                       <TD>{p.year}</TD>
                       <TD className="max-w-48 text-muted-foreground">{p.authorIds.map(nameOf).join(", ") || "—"}</TD>
-                      <TD><VerificationBadge state={p.state} /></TD>
+                      <TD><div className="flex flex-col items-start gap-1"><VerificationBadge state={p.state} />{p.entryStatus && <StatusBadge status={p.entryStatus} />}</div></TD>
                       <TD><SourceChip source={p.source} /></TD>
                       <TD>{canEdit && <Button variant="ghost" size="icon" aria-label={`Delete ${p.title}`} onClick={() => setToDelete(p.id)}><Trash2 /></Button>}</TD>
                     </TR>
@@ -128,7 +136,7 @@ export default function Publications() {
                 <li key={p.id} className="space-y-2 p-4">
                   <Link to={`/publications/${p.id}`} className="block font-medium">{p.title}</Link>
                   <p className="text-xs text-muted-foreground">{p.venue} · {p.year}</p>
-                  <div className="flex flex-wrap gap-2"><VerificationBadge state={p.state} /><SourceChip source={p.source} /></div>
+                  <div className="flex flex-wrap gap-2"><VerificationBadge state={p.state} />{p.entryStatus && <StatusBadge status={p.entryStatus} />}<SourceChip source={p.source} /></div>
                 </li>
               ))}
             </ul>

@@ -193,6 +193,9 @@ Built on shadcn/ui primitives, restyled with §3.
 | `/units` | unit and executive dashboard (scope picker, comparison, scholars by stage) | admin, executive, dean, HoD, viewer |
 | `/my-progress` | scholar milestones | scholar |
 | `/mentees`, `/mentees/:id` | supervisor view, milestones and confidential meeting log | supervisor |
+| `/grants`, `/grants/:id` | grant list and five-step wizard | all (edit: admin, researcher, supervisor; review: admin, HoD, dean) |
+| `/seed-money`, `/seed-money/:id`, `/seed-money/report` | seed money proposals, form, report | all (same edit and review roles) |
+| `/lookup` | find a researcher by employee ID, ORCID or Scopus ID | all (server scopes it) |
 | `/awards`, `/awards/:id` | awards | all (server scopes by role) |
 | `/review` | review queue | admin, researcher, supervisor |
 | `/duplicates` | merge (planned) | admin |

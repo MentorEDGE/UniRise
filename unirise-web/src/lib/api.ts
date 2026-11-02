@@ -2,8 +2,9 @@ import { HttpError, http, qs } from "./http";
 import { db, demoUsers } from "@/mock/store";
 import { stageNames } from "@/mock/seed";
 import type {
-  Award, Department, DepartmentRow, MenteeDetail, MenteeRow, Milestone, MilestoneView, OrgUnit, OrgUnitType, Page, Publication,
-  PublicationFilters, Researcher, Suggestion, Summary, TopResearcher, UnitRollup, UnitRow, User, YearCount,
+  Award, Department, DepartmentRow, EntryStatus, Grant, GrantStatus, LookupResult, MenteeDetail, MenteeRow, Milestone, MilestoneView, OrgUnit,
+  OrgUnitType, Page, Publication, PublicationFilters, ReportParams, ReportTable, Researcher, ReviewAction, SeedProposal, SeedWindow, Suggestion,
+  Summary, TopResearcher, UnitRollup, UnitRow, User, YearCount,
 } from "./types";
 import { DOI_RE } from "./utils";
 
@@ -52,6 +53,86 @@ const visibleUnits = (u: User | null) => {
 };
 
 const today = () => new Date().toISOString().slice(0, 10);
+const reviewStatus: Record<ReviewAction, EntryStatus> = { approve: "approved", rework: "rework", revision_required: "revision_required", reject: "rejected" };
+const grantReviewStatus: Record<ReviewAction, GrantStatus> = { approve: "sanctioned", rework: "rework", revision_required: "rework", reject: "rejected" };
+const instituteOf = (deptId: number) => {
+  const d = db.orgUnits.find((u) => u.id === deptId);
+  return { institute: db.orgUnits.find((u) => u.id === d?.parentId)?.name ?? "—", department: d?.name ?? "—" };
+};
+const uniq = <T,>(xs: T[]) => [...new Set(xs)];
+
+/** Group identical keys and count them, largest first. */
+function tally(keys: string[][], cols: string[], countLabel: string): ReportTable {
+  const m = new Map<string, { k: string[]; n: number }>();
+  for (const k of keys) { const id = k.join("\u0001"); const e = m.get(id) ?? { k, n: 0 }; e.n++; m.set(id, e); }
+  return { columns: [...cols, countLabel], rows: [...m.values()].sort((a, b) => b.n - a.n || a.k[0].localeCompare(b.k[0])).map((e) => [...e.k, e.n]) };
+}
+
+function grantsInScope(u: User | null): Grant[] {
+  const ids = scopeIds(u);
+  return db.grants.filter((g) => !ids || ids.has(g.ownerId) || g.investigators.some((i) => i.researcherId !== undefined && ids.has(i.researcherId)));
+}
+
+function publicationReport(slug: string, p: ReportParams): ReportTable {
+  const ids = scopeIds(mockUser());
+  const yf = p.from ? Number(p.from.slice(0, 4)) : -Infinity;
+  const yt = p.to ? Number(p.to.slice(0, 4)) : Infinity;
+  const pubs = db.publications.filter((x) => x.state === "verified" && x.year >= yf && x.year <= yt && (!ids || x.authorIds.some((a) => ids.has(a))));
+  const people = (x: Publication) => x.authorIds.map((id) => db.researchers.find((r) => r.id === id)).filter((r): r is Researcher => !!r);
+  const outsiders = (x: Publication) => (x.authors ?? []).filter((a) => a.kind !== "internal-faculty" && a.kind !== "internal-student");
+  const list = (kind: "faculty" | "scholar", key: "employeeId" | "rollNo", label: string): ReportTable => ({
+    columns: [label, "Name", "Publication ID", "Title", "Year"],
+    rows: pubs.flatMap((x) => people(x).filter((r) => (r.kind ?? "faculty") === kind && r[key]).map((r) => [r[key]!, r.name, x.id, x.title, x.year])).sort((a, b) => String(a[0]).localeCompare(String(b[0]))),
+  });
+  switch (slug) {
+    case "pub-university": return tally(pubs.map((x) => [String(x.year)]), ["Year"], "Publications");
+    case "pub-institute-count": return tally(pubs.flatMap((x) => uniq(people(x).map((r) => instituteOf(r.departmentId).institute)).map((i) => [i])), ["Institute"], "Publications");
+    case "pub-institute-department": return tally(pubs.flatMap((x) => uniq(people(x).map((r) => instituteOf(r.departmentId))).map((d) => [d.institute, d.department])), ["Institute", "Department"], "Publications");
+    case "pub-employee": return list("faculty", "employeeId", "Employee ID");
+    case "pub-roll": return list("scholar", "rollNo", "Roll number");
+    case "pub-employee-count": return tally(pubs.flatMap((x) => people(x).filter((r) => r.employeeId).map((r) => [r.employeeId!, r.name])), ["Employee ID", "Name"], "Publications");
+    case "pub-journal": return tally(pubs.map((x) => [x.venue, x.type.replace("-", " ")]), ["Journal or venue", "Type"], "Publications");
+    case "pub-faculty-journal": return tally(pubs.filter((x) => people(x).some((r) => r.kind !== "scholar")).map((x) => [x.venue]), ["Journal"], "Faculty-authored");
+    case "pub-student-journal": return tally(pubs.filter((x) => x.studentPublication).map((x) => [x.venue]), ["Journal"], "Student-authored");
+    case "pub-inter-institution": return tally(pubs.flatMap((x) => uniq(outsiders(x).map((a) => a.institution)).map((i) => [i])), ["Partner institution"], "Joint publications");
+    case "pub-continent": return tally(pubs.flatMap((x) => uniq(outsiders(x).map((a) => a.continent ?? "Unknown")).map((c) => [c])), ["Continent"], "Publications");
+    default: throw new HttpError(404);
+  }
+}
+
+function grantReport(slug: string, p: ReportParams): ReportTable {
+  const basis = p.basis ?? "applied";
+  const dateOf = (g: Grant) => (basis === "entered" ? g.enteredOn : basis === "sanctioned" ? g.sanctionedOn : g.appliedOn);
+  const gs = grantsInScope(mockUser()).filter((g) => { const d = dateOf(g); return !!d && (!p.from || d >= p.from) && (!p.to || d <= p.to); });
+  const lead = (g: Grant) => g.investigators.find((i) => i.isLead) ?? g.investigators[0];
+  const dept = (g: Grant) => { const r = db.researchers.find((x) => x.id === lead(g)?.researcherId); return r ? instituteOf(r.departmentId) : { institute: lead(g)?.institution ?? "—", department: lead(g)?.department ?? "—" }; };
+  const sum = (xs: number[]) => xs.reduce((s, x) => s + x, 0);
+  switch (slug) {
+    case "grant-type": {
+      const types = uniq(gs.map((g) => g.type));
+      return { columns: ["Grant type", "Grants", "Applied (INR)", "Sanctioned (INR)"], rows: types.map((t) => { const x = gs.filter((g) => g.type === t); return [t, x.length, sum(x.map((g) => g.appliedAmount)), sum(x.map((g) => g.sanctionedAmount ?? 0))]; }) };
+    }
+    case "grant-institute-department": return tally(gs.map((g) => [dept(g).institute, dept(g).department]), ["Institute", "Department"], "Grants");
+    case "grant-institution-count": return tally(gs.map((g) => [dept(g).institute]), ["Institute"], "Grants");
+    case "grant-year-received": {
+      const sanctioned = grantsInScope(mockUser()).filter((g) => g.sanctionedOn);
+      const years = uniq(sanctioned.map((g) => g.sanctionedOn!.slice(0, 4))).sort();
+      return { columns: ["Year", "Grants sanctioned", "Amount (INR)"], rows: years.map((y) => { const x = sanctioned.filter((g) => g.sanctionedOn!.startsWith(y)); return [y, x.length, sum(x.map((g) => g.sanctionedAmount ?? 0))]; }) };
+    }
+    case "grant-inter-institute":
+      return { columns: ["Grant ID", "Title", "Institutions", "Applied (INR)"], rows: gs.filter((g) => uniq(g.investigators.map((i) => i.institution)).length > 1).map((g) => [`G-${String(g.id).padStart(5, "0")}`, g.title, uniq(g.investigators.map((i) => i.institution)).join("; "), g.appliedAmount]) };
+    case "grant-sharing":
+      return { columns: ["Grant ID", "Title", "Investigator", "Role", "Share %", "Share (INR)"], rows: gs.flatMap((g) => g.investigators.map((i) => [`G-${String(g.id).padStart(5, "0")}`, g.title, i.name, i.role, i.sharePct, Math.round(((g.sanctionedAmount ?? g.appliedAmount) * i.sharePct) / 100)])) };
+    case "grant-sanctioned":
+      return { columns: ["Grant ID", "Title", "Agency", "Sanctioned on", "Sanctioned (INR)", "Duration (months)"], rows: gs.filter((g) => g.status === "sanctioned").map((g) => [`G-${String(g.id).padStart(5, "0")}`, g.title, g.agency, g.sanctionedOn ?? "—", g.sanctionedAmount ?? 0, g.durationMonths ?? "—"]) };
+    case "grant-employee": {
+      const rows = gs.flatMap((g) => g.investigators.filter((i) => i.researcherId).map((i) => ({ r: db.researchers.find((x) => x.id === i.researcherId), g }))).filter((x) => x.r?.employeeId);
+      const ids = uniq(rows.map((x) => x.r!.employeeId!));
+      return { columns: ["Employee ID", "Name", "Grants", "Applied (INR)"], rows: ids.map((e) => { const x = rows.filter((y) => y.r!.employeeId === e); return [e, x[0].r!.name, x.length, sum(x.map((y) => y.g.appliedAmount))]; }) };
+    }
+    default: throw new HttpError(404);
+  }
+}
 const withStatus = (m: Milestone): MilestoneView => ({ ...m, status: m.completedAt ? "done" : m.dueDate < today() ? "overdue" : "upcoming" });
 const milestonesOf = (scholarId: number) => db.milestones.filter((m) => m.scholarId === scholarId).sort((a, b) => a.id - b.id).map(withStatus);
 const currentOf = (ms: MilestoneView[]) => ms.find((m) => m.status !== "done");
@@ -210,7 +291,8 @@ const mock = {
     const ids = scopeIds(u);
     if (ids) rows = rows.filter((p) => p.authorIds.some((a) => ids.has(a)));
     if (u?.role === "RESEARCHER") rows = rows.filter((p) => u.researcherId && p.authorIds.includes(u.researcherId));
-    if (f.q) rows = rows.filter((p) => (p.title + p.venue + (p.doi ?? "")).toLowerCase().includes(f.q!.toLowerCase()));
+    if (f.q) rows = rows.filter((p) => (p.title + p.venue + (p.doi ?? "") + (p.authors ?? []).map((a) => a.name).join(" ")).toLowerCase().includes(f.q!.toLowerCase()));
+    if (f.status) rows = rows.filter((p) => (p.entryStatus ?? "approved") === f.status);
     if (f.year) rows = rows.filter((p) => p.year === f.year);
     if (f.type) rows = rows.filter((p) => p.type === f.type);
     if (f.state) rows = rows.filter((p) => p.state === f.state);
@@ -234,6 +316,77 @@ const mock = {
     db.publications.unshift(n); return wait(n, 700);
   },
   deletePublication: (id: number) => { db.publications = db.publications.filter((p) => p.id !== id); return wait(undefined); },
+  reviewPublication: (id: number, action: ReviewAction, comment?: string) => {
+    const p = db.publications.find((x) => x.id === id);
+    if (!p) throw new HttpError(404);
+    p.entryStatus = reviewStatus[action];
+    p.reviewComment = comment;
+    if (action === "approve") p.state = "verified"; // only approved entries count in reports
+    return wait(p);
+  },
+
+  grants: (): Promise<Grant[]> => {
+    const u = mockUser();
+    const all = grantsInScope(u);
+    // A plain researcher sees only grants they own or sit on.
+    return wait(u?.role === "RESEARCHER" ? all.filter((g) => g.ownerId === u.researcherId || g.investigators.some((i) => i.researcherId === u.researcherId)) : all);
+  },
+  grant: (id: number) => { const g = db.grants.find((x) => x.id === id); if (!g) throw new HttpError(404); return wait(g); },
+  saveGrant: (g: Omit<Grant, "id" | "enteredOn" | "ownerId"> & { id?: number }) => {
+    if (g.status === "submitted" && (!g.title.trim() || !g.agency.trim() || !g.investigators.some((i) => i.isLead))) throw new HttpError(400);
+    if (g.id) { db.grants = db.grants.map((x) => (x.id === g.id ? { ...x, ...g, id: x.id } : x)); return wait(db.grants.find((x) => x.id === g.id)!); }
+    const n: Grant = { ...g, id: db.nextId.grant++, enteredOn: today(), ownerId: mockUser()?.researcherId ?? 0 };
+    db.grants.unshift(n);
+    return wait(n);
+  },
+  reviewGrant: (id: number, action: ReviewAction, comment?: string) => {
+    const g = db.grants.find((x) => x.id === id);
+    if (!g) throw new HttpError(404);
+    g.status = grantReviewStatus[action];
+    g.reviewComment = comment;
+    if (action === "approve") { g.sanctionedOn = today(); g.sanctionedAmount = g.sanctionedAmount ?? g.appliedAmount; }
+    return wait(g);
+  },
+
+  seedWindow: (): Promise<SeedWindow> => wait(db.seedWindow),
+  seedProposals: (f: { from?: string; to?: string; status?: EntryStatus | "" } = {}): Promise<SeedProposal[]> => {
+    const u = mockUser();
+    const ids = scopeIds(u);
+    const mine = (s: SeedProposal) => s.ownerId === u?.researcherId || s.investigators.some((i) => i.researcherId === u?.researcherId);
+    return wait(db.seedProposals
+      .filter((s) => (u?.role === "RESEARCHER" ? mine(s) : !ids || ids.has(s.ownerId)))
+      .filter((s) => (!f.from || s.appliedOn >= f.from) && (!f.to || s.appliedOn <= f.to) && (!f.status || s.status === f.status))
+      .sort((a, b) => b.appliedOn.localeCompare(a.appliedOn)));
+  },
+  seedProposal: (id: number) => { const s = db.seedProposals.find((x) => x.id === id); if (!s) throw new HttpError(404); return wait(s); },
+  saveSeedProposal: (s: Omit<SeedProposal, "id" | "appliedOn" | "ownerId" | "windowLabel"> & { id?: number }) => {
+    if (s.id) { db.seedProposals = db.seedProposals.map((x) => (x.id === s.id ? { ...x, ...s, id: x.id } : x)); return wait(db.seedProposals.find((x) => x.id === s.id)!); }
+    // The server, not the UI, enforces the quarterly application window.
+    if (today() < db.seedWindow.opensOn || today() > db.seedWindow.closesOn) throw new HttpError(409);
+    const n: SeedProposal = { ...s, id: db.nextId.seed++, appliedOn: today(), windowLabel: db.seedWindow.label, ownerId: mockUser()?.researcherId ?? 0 };
+    db.seedProposals.unshift(n);
+    return wait(n);
+  },
+  reviewSeedProposal: (id: number, action: ReviewAction, comment?: string) => {
+    const s = db.seedProposals.find((x) => x.id === id);
+    if (!s) throw new HttpError(404);
+    s.status = reviewStatus[action];
+    s.reviewComment = comment;
+    return wait(s);
+  },
+
+  report: (slug: string, p: ReportParams = {}): Promise<ReportTable> => wait(slug.startsWith("pub-") ? publicationReport(slug, p) : grantReport(slug, p)),
+  lookup: (kind: "employee" | "orcid" | "scopus", value: string): Promise<LookupResult> => {
+    const v = value.trim().toLowerCase();
+    const field = kind === "employee" ? "employeeId" : kind === "orcid" ? "orcid" : "scopusId";
+    const r = scopeResearchers(mockUser()).find((x) => (x[field] ?? "").toLowerCase() === v);
+    if (!v || !r) throw new HttpError(404);
+    return wait({
+      researcher: r, ...instituteOf(r.departmentId),
+      publications: db.publications.filter((p) => p.state === "verified" && p.authorIds.includes(r.id)).sort((a, b) => b.year - a.year),
+      grants: db.grants.filter((g) => g.investigators.some((i) => i.researcherId === r.id)).length,
+    });
+  },
 
   awards: (): Promise<Award[]> => {
     const ids = new Set(scopeResearchers(mockUser()).map((r) => r.id));
@@ -289,6 +442,19 @@ const real: typeof mock = {
   savePublication: (p) => (p.id ? http(`/publications/${p.id}`, { method: "PUT", body: JSON.stringify(p) }) : http("/publications", { method: "POST", body: JSON.stringify(p) })),
   importDoi: (doi) => http(`/publications/import${qs({ doi })}`, { method: "POST" }),
   deletePublication: (id) => http(`/publications/${id}`, { method: "DELETE" }),
+  // Planned endpoints (TRD §5): review workflow, grants, seed money, report catalogue, researcher lookup.
+  reviewPublication: (id, action, comment) => http(`/publications/${id}/review`, { method: "POST", body: JSON.stringify({ action, comment }) }),
+  grants: async () => (await http<Page<Grant>>("/grants?size=200")).items,
+  grant: (id) => http(`/grants/${id}`),
+  saveGrant: (g) => (g.id ? http(`/grants/${g.id}`, { method: "PUT", body: JSON.stringify(g) }) : http("/grants", { method: "POST", body: JSON.stringify(g) })),
+  reviewGrant: (id, action, comment) => http(`/grants/${id}/review`, { method: "POST", body: JSON.stringify({ action, comment }) }),
+  seedWindow: () => http("/seed-money/window"),
+  seedProposals: (f) => http(`/seed-money${qs({ ...f })}`),
+  seedProposal: (id) => http(`/seed-money/${id}`),
+  saveSeedProposal: (s) => (s.id ? http(`/seed-money/${s.id}`, { method: "PUT", body: JSON.stringify(s) }) : http("/seed-money", { method: "POST", body: JSON.stringify(s) })),
+  reviewSeedProposal: (id, action, comment) => http(`/seed-money/${id}/review`, { method: "POST", body: JSON.stringify({ action, comment }) }),
+  report: (slug, p) => http(`/reports/${slug}${qs({ ...p })}`),
+  lookup: (kind, value) => http(`/researchers/lookup${qs({ kind, value })}`),
   awards: async () => (await http<Page<Award>>("/awards?size=200")).items,
   saveAward: (a) => (a.id ? http(`/awards/${a.id}`, { method: "PUT", body: JSON.stringify(a) }) : http("/awards", { method: "POST", body: JSON.stringify(a) })),
   deleteAward: (id) => http(`/awards/${id}`, { method: "DELETE" }),

@@ -23,6 +23,13 @@ Endpoints that exist today: departments, researchers, publications (+ `/import?d
 the `{items,total,page,size}` page shape, and the org-tree and progress endpoints: `/org-units`, `/milestones`,
 `/relationships/mentees`, `/reports/units/{id}` (TRD §4–§5). Settings tab data is static sample data.
 
+## Entry modules (from the reference RMS)
+Publication entry with outside, ex-faculty and ex-student authors and PDF upload; a five-step grant wizard; seed money with a
+quarterly application window; 19 publication and grant reports with CSV export; researcher lookup by employee ID, ORCID or
+Scopus ID. Submitted records can be approved, sent for rework, sent back for revision or rejected by an admin, HoD or dean.
+Not built: Grant Call, Incentive Point, Journal Entry, APC, IPR, Approval inbox, PAS, Conference and global Search; the source
+document names them without describing them (PRD R42). File uploads store only the file name in mock mode.
+
 ## Demo roles
 Mock mode offers eight sign-ins: Research Admin, Executive (Pro-VC), Dean (school), HoD (department), Supervisor,
 Researcher, PhD scholar and Viewer. Scope follows the org tree: a Dean sees their school's departments, a HoD one
