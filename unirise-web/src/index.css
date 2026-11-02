@@ -1,0 +1,97 @@
+@import "@fontsource-variable/figtree";
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  :root {
+    --background: 252 100% 99%;
+    --foreground: 220 27% 13%;
+    --card: 0 0% 100%;
+    --card-foreground: 220 27% 13%;
+    --popover: 0 0% 100%;
+    --popover-foreground: 220 27% 13%;
+    --primary: 263 70% 42%;
+    --primary-foreground: 0 0% 100%;
+    --secondary: 257 100% 97%;
+    --secondary-foreground: 263 70% 35%;
+    --muted: 257 100% 97%;
+    --muted-foreground: 220 9% 46%;
+    --accent: 261 73% 58%;
+    --accent-foreground: 0 0% 100%;
+    --destructive: 354 70% 54%;
+    --destructive-foreground: 0 0% 100%;
+    --success: 152 60% 32%;
+    --warning: 32 90% 40%;
+    --border: 248 100% 95%;
+    --input: 248 100% 95%;
+    --ring: 263 70% 42%;
+    --radius: 0.75rem;
+    --ease-out-strong: cubic-bezier(0.23, 1, 0.32, 1);
+    --ease-in-out-strong: cubic-bezier(0.77, 0, 0.175, 1);
+  }
+  .dark {
+    color-scheme: dark;
+    --background: 236 28% 9%;
+    --foreground: 257 100% 97%;
+    --card: 236 24% 14%;
+    --card-foreground: 257 100% 97%;
+    --popover: 236 28% 10%;
+    --popover-foreground: 257 100% 97%;
+    --primary: 258 90% 66%;
+    --primary-foreground: 260 60% 5%; /* dark text on the lighter violet, as on the MentorEDGE site (4.7:1) */
+    --secondary: 251 44% 20%;
+    --secondary-foreground: 257 100% 97%;
+    --muted: 236 22% 16%;
+    --muted-foreground: 257 36% 78%;
+    --accent: 262 76% 56%;
+    --accent-foreground: 257 100% 97%;
+    --destructive: 0 100% 71%;
+    --destructive-foreground: 257 100% 97%;
+    --success: 152 55% 55%;
+    --warning: 38 92% 62%;
+    --border: 248 28% 28%;
+    --input: 248 28% 28%;
+    --ring: 258 90% 66%;
+  }
+  * { @apply border-border; }
+  html {
+    -webkit-text-size-adjust: 100%;
+    overflow-x: hidden;
+    scroll-behavior: smooth;
+    /* Same fluid base as the MentorEDGE site: 14px on mobile, 17px at 1440px, 20px ceiling. */
+    font-size: clamp(14px, 0.72vw + 6.6px, 20px);
+  }
+  body { @apply bg-background text-foreground font-sans antialiased; text-rendering: optimizeLegibility; }
+  ::selection { background: hsl(var(--primary) / 0.18); color: hsl(var(--foreground)); }
+  a, button, input, textarea, select { transition-timing-function: var(--ease-out-strong); }
+  button:not(:disabled), [role="button"]:not(:disabled) { cursor: pointer; }
+  select {
+    appearance: none;
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16' viewBox='0 0 24 24' fill='none' stroke='%236b7280' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpolyline points='6 9 12 15 18 9'/%3E%3C/svg%3E");
+    background-repeat: no-repeat;
+    background-position: right 12px center;
+    background-size: 16px;
+    padding-right: 2.5rem !important;
+  }
+  .dark select {
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16' viewBox='0 0 24 24' fill='none' stroke='%23a1a1aa' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpolyline points='6 9 12 15 18 9'/%3E%3C/svg%3E");
+  }
+  :focus-visible { @apply outline-none ring-2 ring-ring ring-offset-2 ring-offset-background; }
+  @media (prefers-reduced-motion: reduce) {
+    *, *::before, *::after { animation-duration: .01ms !important; transition-duration: .01ms !important; scroll-behavior: auto !important; }
+  }
+}
+
+@layer components {
+  .eyebrow { @apply text-xs md:text-sm font-semibold uppercase tracking-[0.25em] text-violet-600 dark:text-violet-400; }
+  .surface-card {
+    @apply rounded-2xl border border-slate-200/70 bg-card shadow-card transition-all duration-300 ease-out-strong
+           dark:border-white/[0.07] dark:shadow-[0_8px_32px_rgba(0,0,0,0.4)];
+  }
+  .surface-card-hover {
+    @apply hover:-translate-y-1 hover:border-violet-200 hover:shadow-card-hover
+           dark:hover:border-white/20 dark:hover:shadow-[0_16px_48px_rgba(139,92,246,0.15)];
+  }
+  .skeleton { @apply relative overflow-hidden rounded-md bg-muted before:absolute before:inset-0 before:-translate-x-full before:animate-[shimmer_1.4s_infinite] before:bg-gradient-to-r before:from-transparent before:via-white/40 before:to-transparent dark:before:via-white/10; }
+}

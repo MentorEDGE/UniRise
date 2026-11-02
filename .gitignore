@@ -1,0 +1,10 @@
+node_modules/
+dist/
+*.tsbuildinfo
+.DS_Store
+.env
+.env.local
+.claude/
+graphify-out/
+rms-docs.zip
+rms-docs/RMS_DOCS_BUNDLE.md
