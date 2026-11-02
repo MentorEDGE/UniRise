@@ -1,6 +1,6 @@
 # RMS – Technical Requirements Document
 
-Status: Draft v0.2 · Companion to PRD.md and ACCESS_AND_VISIBILITY_MODEL.md · Last updated: 2026-11-02
+Status: Draft v0.3 · Companion to PRD.md and ACCESS_AND_VISIBILITY_MODEL.md · Last updated: 2026-11-02
 "MVP" below means what exists in `src/` today; it has not yet been compiled or tested in CI.
 
 ## 1. Architecture
@@ -21,6 +21,7 @@ Modules: `tenancy/auth`, `directory` (org units, people, appointments), `supervi
 - Hardening (Phase 2–3): PostgreSQL Row-Level Security with `SET LOCAL app.tenant_id` per transaction as defence in depth; tests that fail if any table lacks `institution_id`, with an explicit exemption list (`institution` itself and join tables such as `publication_authors`).
 - Isolation test (exists): `TenantIsolationTest` checks cross-tenant read, cross-tenant author reference, bootstrap auth, and report scoping. Extend per new endpoint.
 - Escape hatch: tenant-per-schema or per-database for customers with residency or contractual isolation needs.
+- Under review (ARCHITECTURE.md ADR 11, proposed): B2B means tens to low hundreds of large tenants, so schema-per-tenant (database-per-tenant for large or in-region customers) may become the default, with shared schema and RLS kept for sandbox and pilot tenants. It makes per-tenant restore, contract-end deletion and residency simple, at the cost of running migrations per schema. Keep every repository call tenant-scoped so either model works. Decide after the first customer conversation.
 
 ## 3. Authentication and authorization
 - MVP: per-tenant API key in `X-API-Key` (256-bit random, SHA-256 hash stored, shown once). Tenant creation requires `X-Admin-Key` (env `RMS_ADMIN_KEY`, constant-time compare; endpoint disabled if unset).
@@ -29,7 +30,7 @@ Modules: `tenancy/auth`, `directory` (org units, people, appointments), `supervi
 - Visibility check: the viewer is the owner, or has a `relationship` to the owner, or holds a `role_grant` whose scope contains the owner's org unit, and the record's sensitivity is within what the role may see. Resolution order, most specific wins: screen → field sensitivity → per-record restriction → whole-record private. Checked in the service layer on every read and write, never only in controllers or the UI.
 - Delegation: role grants are time-bound and can be granted by another role-holder (acting HoD, an assistant to the VC).
 - Named drill-down by Executive or Dean is logged. Platform support access is break-glass and logged.
-- Phase 2 sign-in (proposed, to confirm): invitation-based accounts with an email one-time link, until SSO ships in Phase 3.
+- Phase 2 sign-in: OIDC single sign-on (Google Workspace, Microsoft 365) through Spring Security, with a session cookie for the web UI. SAML follows in Phase 3. Invitation-based email one-time links are for sandbox and demo tenants only.
 - Rate limiting and lockout on key failures (Phase 2).
 
 ## 4. Data model
@@ -41,7 +42,7 @@ Current tables (all carry `institution_id`):
 - `award(id, institution_id, title, funder, amount, start_year, end_year, researcher_id)`
 
 Planned additions:
-- `org_unit(id, institution_id, parent_id, type[campus|school|department|group], name)` replaces the flat `department`; existing departments migrate as `department` units under one root
+- `org_unit(id, institution_id, parent_id, type[campus|school|department|group], name)` replaces the flat `department`; existing departments migrate as `department` units under one root. Subtree queries use a closure table `org_unit_closure(ancestor_id, descendant_id, depth)` (or PostgreSQL `ltree`); choose before the first scoped endpoint, because every read depends on it
 - `researcher` becomes the general person record (type: faculty, scholar, staff, guest)
 - `app_user(id, institution_id, subject, researcher_id)` – login identity only; permissions come from `role_grant`
 - `appointment(id, institution_id, researcher_id, org_unit_id, designation, fte, valid_from, valid_to)` – supports joint appointments; department credit uses the appointment valid on the publication date
@@ -52,6 +53,7 @@ Planned additions:
 - `classification_scheme(id, code)` and `classification_term(id, scheme_id, code, label, valid_from, valid_to)` instead of hardcoded enums (journal quality lists, publication types)
 - `period(id, institution_id, label, starts_on, ends_on, closed_at)` and `period_snapshot(period_id, org_unit_id, metric, value, payload jsonb)`
 - `tenant_settings(institution_id, currency, locale, fiscal_year_start)`; `currency` on `award`; `sensitivity` (public|internal|confidential) on activity records; `version` integer on editable records (optimistic locking)
+- `institution` gains `status[sandbox|pilot|active|suspended|closed]` and `plan`; `access_log(id, institution_id, actor, action, target_person_id, at)` for named drill-downs and platform support access (Phase 2); `usage_counter(institution_id, month, active_researchers)` for metering
 - `publication_source(publication_id, source, external_id, fetched_at, raw jsonb)` – provenance
 - `authorship_claim(publication_id, researcher_id, state[suggested|verified|rejected], decided_by, decided_at, score)`
 - `researcher_affiliation` is replaced by `appointment` (above)
@@ -69,7 +71,7 @@ REST/JSON under `/api`, tenant-scoped, paginated (`page`, `size` ≤ 200). List 
 | Import | `POST /api/publications/import?doi=` |
 | Reports | `GET /api/reports/{summary,publications-by-year,top-researchers,departments}` |
 
-Planned: `/api/me`, `/api/auth/*`, `/api/claims`, `/api/org-units`, `/api/role-grants`, `/api/relationships`, `/api/milestones`, `/api/meeting-logs`, `/api/periods`, `/api/harvest/runs`, `/api/reports/{id}/export?format=csv|pdf` (reports also take `periodId` and `orgUnitId`), `/api/users`. Provide OpenAPI via springdoc; version under `/api/v1` before first external customer. Error bodies carry no internal messages (`server.error.include-message=never`).
+Planned: `/api/me`, `/api/auth/*`, `/api/imports` (CSV import with preview and per-row errors), `/api/webhooks`, `/api/platform/tenants/{id}/{suspend|export|delete}` (platform admin only), `/api/claims`, `/api/org-units`, `/api/role-grants`, `/api/relationships`, `/api/milestones`, `/api/meeting-logs`, `/api/periods`, `/api/harvest/runs`, `/api/reports/{id}/export?format=csv|pdf` (reports also take `periodId` and `orgUnitId`), `/api/users`. Provide OpenAPI via springdoc; version under `/api/v1` before first external customer. Error bodies carry no internal messages (`server.error.include-message=never`).
 
 ## 6. Harvesting (Phase 2)
 - Scheduler + queue table in Postgres (`SKIP LOCKED`) to avoid new infrastructure; move to a broker only if needed.
@@ -91,7 +93,7 @@ Planned: `/api/me`, `/api/auth/*`, `/api/claims`, `/api/org-units`, `/api/role-g
 - Secrets only from environment/secret store; compose file refuses to start without `RMS_DB_PASSWORD`; DB bound to localhost in dev.
 - TLS terminated at ingress; HSTS; secure headers; CORS restricted to the UI origin.
 - Dependency scanning (OWASP dependency-check or Dependabot) and SAST in CI; secrets scanning.
-- Audit log for writes and exports (Phase 3).
+- Access log for named drill-downs and platform support access (Phase 2); audit log for writes and exports (Phase 3).
 - Personal-data handling: researcher delete/export endpoints; no student academic records (scholars hold only supervision, milestones and own outputs); meeting logs and mentee notes never feed rollups; confidential projects show as "restricted" to people outside them; encryption at rest via managed Postgres/volume encryption.
 - Pre-sale: third-party penetration test, ASVS L2 checklist, completed HECVAT-style questionnaire.
 
@@ -99,6 +101,16 @@ Planned: `/api/me`, `/api/auth/*`, `/api/claims`, `/api/org-units`, `/api/role-g
 - p95 < 500 ms for list/report calls at 5,000 researchers / 200,000 publications per tenant (verify with load test; add indexes above).
 - 99.5% (pilot) → 99.9% (paid) availability; RPO ≤ 24 h → ≤ 1 h with PITR; RTO ≤ 4 h; quarterly restore drill.
 - Observability: structured logs with tenant id (no PII), metrics and tracing via Micrometer/OpenTelemetry, harvest-run dashboards and alerts.
+
+## 9a. Tenant lifecycle and operations (B2B)
+- **Provisioning:** the operator creates a sandbox or pilot tenant, sets its plan and status, and the customer configures OIDC. Pilot converts to active by changing status, with no data migration.
+- **Onboarding:** CSV import of org units, people and appointments with a preview and per-row errors before commit; imports are idempotent and re-runnable (HR is the source of truth).
+- **Contract exit:** export of all tenant data in open formats (CSV plus JSON); delete-all with confirmation and a written deletion record; both are platform-admin actions and are logged.
+- **Backup and restore:** daily backups with a tested restore. Restoring a single tenant must be possible; this is the main reason ADR 11 proposes schema-per-tenant.
+- **Per-tenant limits:** rate limits and job concurrency per tenant so one large tenant cannot starve the others.
+- **Metering:** monthly active-researcher counts. No billing engine in v1.
+- **Support access:** platform console with break-glass access to a tenant, time-limited and recorded in `access_log`.
+- **Observability:** logs and metrics carry the tenant id and never personal data.
 
 ## 10. Delivery and environments
 - Repo: Maven build, JUnit tests (H2 in PostgreSQL mode for unit/integration; Testcontainers Postgres for RLS and index tests).
@@ -119,4 +131,4 @@ Planned: `/api/me`, `/api/auth/*`, `/api/claims`, `/api/org-units`, `/api/role-g
 ## 12. Decisions and open questions
 - Decided: greenfield (not a VIVO/DSpace fork), Java/Spring Boot + PostgreSQL, shared-schema multi-tenancy.
 - Accepted (ACCESS_AND_VISIBILITY_MODEL.md §7): one tenant per legal customer with colleges as org units; PhD scholars have accounts; HR or CSV is the source of truth for people and org structure; milestones and supervision are in v1.
-- Open: hosting provider and region (and whether the first customer accepts shared hosting); SAML vs OIDC priority per first customer; confirm the SPA choice in RMS_FRONTEND_ARCHITECTURE.md; licence for any third-party bibliographic data used; Kuali or other grants systems are CSV import only until an API is confirmed with the customer.
+- Open: hosting provider and region (and whether the first customer accepts shared hosting); whether the first customer needs SAML before Phase 3; confirm the SPA choice in RMS_FRONTEND_ARCHITECTURE.md; licence for any third-party bibliographic data used; Kuali or other grants systems are CSV import only until an API is confirmed with the customer.

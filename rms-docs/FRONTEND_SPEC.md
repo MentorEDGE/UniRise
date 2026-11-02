@@ -1,6 +1,6 @@
 # RMS – Frontend Specification
 
-Status: Draft v0.2 · Companion to PRD.md, TRD.md and ACCESS_AND_VISIBILITY_MODEL.md · Last updated: 2026-11-02
+Status: Draft v0.3 · Companion to PRD.md, TRD.md and ACCESS_AND_VISIBILITY_MODEL.md · Last updated: 2026-11-02
 Scope: web UI for Phases 2–3. Only the API in TRD §5 exists today; endpoints marked *(planned)* must be built first.
 
 ## 1. Principles
@@ -36,7 +36,7 @@ Items a role cannot use are hidden, and routes are guarded; the server remains t
 ## 4. Screens
 
 ### 4.1 Sign in
-SSO button(s) per tenant (OIDC/SAML) once SSO ships (Phase 3). Phase 2 (proposed, to confirm): invitation-based sign-in with an email one-time link; still no password form. Error states: unknown tenant, user not provisioned, SSO failure with a retry link.
+SSO button per tenant (OIDC in Phase 2, SAML in Phase 3); no local password form. Sandbox and demo tenants may use an invitation email link. Error states: unknown tenant, user not provisioned, SSO failure with a retry link.
 
 ### 4.2 Home dashboard
 - Tiles from `GET /api/reports/summary` (departments, researchers, publications, awards).
@@ -74,10 +74,10 @@ Side-by-side comparison of two probable duplicate publications, choose the survi
 - Every report page states what it counts (e.g. "verified publications only") and when data was last refreshed.
 
 ### 4.8 Settings (admin) *(planned)*
-Users and roles, SSO configuration status, ORCID/OpenAlex harvest status and last run, API keys (create, rotate, revoke; key shown once with a copy button), audit log viewer.
+Users and roles, SSO setup and status, tenant settings (logo, accent colour, currency, fiscal year, classification lists), CSV import of people and org structure with preview, ORCID/OpenAlex harvest status and last run, API keys (create, rotate, revoke; key shown once with a copy button), audit log viewer.
 
 ### 4.9 Platform admin (internal)
-Separate minimal screen/CLI for creating a tenant (`POST /api/institutions`), shows the API key once. Not exposed to tenant users.
+Separate internal console, never exposed to tenant users: create a sandbox or pilot tenant (shows the API key once), change its status, suspend, export and delete a tenant (each with confirmation), see active researcher counts, and open logged support access.
 
 ### 4.10 Scholar progress *(planned, Phase 2)*
 Timeline of stages (registration, coursework, proposal, progress reviews, thesis submission, viva) with due dates, status, approvals and feedback addressed to the scholar. A "next due" card on Home. A scholar sees only their own data.

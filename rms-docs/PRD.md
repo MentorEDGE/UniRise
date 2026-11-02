@@ -1,6 +1,6 @@
 # RMS – Product Requirements Document
 
-Status: Draft v0.2 · Owner: TBD · Last updated: 2026-11-02 · v0.2 adds the org hierarchy, supervision and milestones, and visibility rules (see ACCESS_AND_VISIBILITY_MODEL.md)
+Status: Draft v0.3 (adds B2B tenant lifecycle and SSO in Phase 2) · Owner: TBD · Last updated: 2026-11-02 · v0.2 adds the org hierarchy, supervision and milestones, and visibility rules (see ACCESS_AND_VISIBILITY_MODEL.md)
 
 ## 1. Summary
 RMS is a multi-tenant SaaS that gives a university a single, current system of record for its researchers, publications, grants and projects, and produces the reports the research office is asked for (accreditation, rankings, funders, annual faculty review) without manual spreadsheet assembly.
@@ -39,9 +39,9 @@ Priority: P0 = pilot-blocking, P1 = needed to sell, P2 = later.
 ### 5.1 Tenancy and access
 - R1 (P0). Each university is an isolated tenant; no cross-tenant read or write, including via references between records. *Implemented in MVP (API key per tenant).*
 - R2 (P0). Operator-only tenant creation. *MVP.*
-- R3 (P1). Per-user authentication. Access is role + scope + sensitivity (ACCESS_AND_VISIBILITY_MODEL.md §1). Roles: Researcher/Scholar (self), Supervisor (own mentees), HoD (department), Dean (school), Executive (whole tenant, aggregates by default), Research Admin, IT Admin (access settings, no research content), Guest (time-limited, narrow), Read-only. Role grants are time-bound and can be delegated (acting HoD). Phase 2 sign-in, until SSO (R4) ships: invitation-based email one-time link. *Proposed, to confirm.*
-- R4 (P1). SSO via SAML 2.0 and OIDC.
-- R5 (P1). Audit log of changes and report exports.
+- R3 (P1). Per-user authentication. Access is role + scope + sensitivity (ACCESS_AND_VISIBILITY_MODEL.md §1). Roles: Researcher/Scholar (self), Supervisor (own mentees), HoD (department), Dean (school), Executive (whole tenant, aggregates by default), Research Admin, IT Admin (access settings, no research content), Guest (time-limited, narrow), Read-only. Role grants are time-bound and can be delegated (acting HoD). Sign-in in Phase 2 is OIDC single sign-on (R4); an invitation-based email one-time link is for sandbox and demo tenants only.
+- R4 (P1). SSO via OIDC (Google Workspace, Microsoft 365) in Phase 2 and SAML 2.0 in Phase 3. University IT will not approve email-link login for real staff.
+- R5 (P1). Audit log of changes and report exports (Phase 3). The access log, meaning named drill-downs by executives and deans plus platform support access, is Phase 2 because R27 depends on it.
 
 ### 5.2 Organisation and people
 - R6 (P0). Departments; researchers with name, email, title, department, ORCID (format-validated). *MVP.* Departments become org units in R23.
@@ -83,6 +83,14 @@ ORCID, OpenAlex, Crossref, SSO providers, DSpace/repository sync, HR and grants 
 - R29 (P1). Cross-department counting: each department gets credit by the author's appointment on the publication date; university totals count each item once.
 - R30 (P1). Disputes: a researcher can contest or reject a claim; every change is audited.
 
+### 5.9 Tenant lifecycle and operations (B2B)
+- R31 (P1). Fast onboarding: the operator provisions a tenant, the customer sets up OIDC SSO and imports people and org structure from CSV with a preview. Target: first report within two weeks of kickoff (G3).
+- R32 (P1). Pilot and sandbox tenants with synthetic or limited data that convert to paid without migrating data.
+- R33 (P1). Tenant controls: suspend; export all of a tenant's data; delete all of it at contract end with confirmation; restore a single tenant from backup.
+- R34 (P1). Per-tenant settings: logo and accent colour, currency, fiscal year, report templates, classification lists.
+- R35 (P2). Usage metering: active researchers per month for billing. What counts as a paid seat is a commercial decision (see Open).
+- R36 (P1). Integration surface: versioned API, API keys with rotation, webhooks for key events, CSV import for HR and grants data.
+
 ## 6. Non-functional requirements
 - Security: tenant isolation tested automatically; keys stored hashed; least-privilege roles; OWASP ASVS L2 target before first paid customer.
 - Privacy: collect minimum personal data; GDPR-ready (export/delete a researcher); regional hosting option in Phase 4. Scholar data is limited to supervision, milestones and own outputs. The launch region decides which law applies (for example India's DPDP Act). Confidential notes never roll up to Dean or VC views.
@@ -102,8 +110,8 @@ ORCID, OpenAlex, Crossref, SSO providers, DSpace/repository sync, HR and grants 
 | Phase | Content | Exit criterion |
 |---|---|---|
 | 1 MVP | R1, R2, R6, R9, R10, R15, R17 (built, unverified build) | Runs end to end in a demo tenant |
-| 2 Pilot-ready | R3, R7, R11–R13, R18, R21, R23–R27 | One department live with real users |
-| 3 Sellable | R4, R5, R8, R16, R19, R14, R22, R28–R30 | Passes a university security review |
+| 2 Pilot-ready | R3, R4 (OIDC), R7, R11–R13, R18, R21, R23–R27, R31–R34, R36 | One department live with real users |
+| 3 Sellable | R4 (SAML), R5, R8, R16, R19, R14, R22, R28–R30, R35 | Passes a university security review |
 | 4 Scale | R20, repository/HR/grants integrations, data residency | Multiple paying tenants |
 
 ## 9. Risks and open questions
@@ -112,4 +120,4 @@ ORCID, OpenAlex, Crossref, SSO providers, DSpace/repository sync, HR and grants 
 - Slow university sales cycles → free pilot with a research-office champion.
 - Privacy law differs by region (GDPR, FERPA) → decide launch region(s).
 - Decided (ACCESS_AND_VISIBILITY_MODEL.md §7): one tenant per legal customer with colleges as org units; PhD scholars have accounts; HR system or CSV is the source of truth for people and org structure; milestones and supervision are in v1.
-- Open: which report format does the pilot customer need first? Does the first customer accept a shared hosted service, and where may data be stored? Who owns data after contract end (export guarantees)? What counts as a paid seat (leavers, students, guests)? Pricing tiers by researcher count to be validated.
+- Open: tenancy isolation model (schema per tenant vs shared schema; ARCHITECTURE.md ADR 11). Which report format does the pilot customer need first? Does the first customer accept a shared hosted service, and where may data be stored? Who owns data after contract end (export guarantees)? What counts as a paid seat (leavers, students, guests)? Pricing tiers by researcher count to be validated.
