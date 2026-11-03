@@ -19,6 +19,8 @@ public class AccessService {
 	}
 
 	private static final List<String> SCOPE_ROLES = List.of("RESEARCH_ADMIN", "EXECUTIVE", "DEAN", "HOD", "VIEWER");
+	/** The one definition of an active relationship, used by every check so they cannot drift apart. */
+	private static final String CURRENT = " valid_from <= current_date AND (valid_to IS NULL OR valid_to >= current_date)";
 	private final JdbcClient db;
 
 	public AccessService(@Qualifier("tenantJdbc") JdbcClient db) { this.db = db; }
@@ -49,8 +51,7 @@ public class AccessService {
 		if (a.researcherId() != null) {
 			ids.add(a.researcherId());
 			ids.addAll(db.sql("""
-				SELECT mentee_id FROM relationship WHERE mentor_id = :m
-				AND valid_from <= current_date AND (valid_to IS NULL OR valid_to >= current_date)""")
+				SELECT mentee_id FROM relationship WHERE mentor_id = :m AND""" + CURRENT)
 				.param("m", a.researcherId()).query(Long.class).list());
 		}
 		List<Long> units = a.grants().stream().filter(g -> g.scopeUnitId() != null && SCOPE_ROLES.contains(g.role())).map(Actor.Grant::scopeUnitId).toList();
@@ -67,7 +68,7 @@ public class AccessService {
 	public void logDrillDown(Actor a, long researcherId) {
 		if (a.userId() == null || !a.hasRole("EXECUTIVE", "DEAN")) return;
 		boolean own = a.researcherId() != null && a.researcherId() == researcherId;
-		boolean mentee = a.researcherId() != null && db.sql("SELECT count(*) FROM relationship WHERE mentor_id = :m AND mentee_id = :t AND valid_to IS NULL")
+		boolean mentee = a.researcherId() != null && db.sql("SELECT count(*) FROM relationship WHERE mentor_id = :m AND mentee_id = :t AND" + CURRENT)
 			.param("m", a.researcherId()).param("t", researcherId).query(Long.class).single() > 0;
 		if (!own && !mentee) {
 			db.sql("INSERT INTO access_log(actor_user_id, action, target_researcher_id) VALUES (:u, 'view.person', :t)").param("u", a.userId()).param("t", researcherId).update();

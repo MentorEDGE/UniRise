@@ -37,17 +37,18 @@ public class AuthController {
 	@PostMapping("/auth/invitations")
 	@ResponseStatus(HttpStatus.CREATED)
 	Map<String, Object> invite(@RequestBody Invite i, HttpServletRequest req) {
-		access.requireAdmin(access.actor(req));
+		Actor admin = access.actor(req);
+		access.requireAdmin(admin);
 		if (i.email() == null || !i.email().matches("[^@\\s]+@[^@\\s]+")) throw new ResponseStatusException(HttpStatus.BAD_REQUEST);
 		long userId = tenant.sql("""
 			INSERT INTO app_user(email, researcher_id) VALUES (lower(:e), :r)
-			ON CONFLICT (email) DO UPDATE SET researcher_id = COALESCE(EXCLUDED.researcher_id, app_user.researcher_id) RETURNING id""")
+			ON CONFLICT (email) DO UPDATE SET email = EXCLUDED.email RETURNING id""")
 			.param("e", i.email()).param("r", i.researcherId()).query(Long.class).single();
 		String token = Provisioner.randomHex(32);
 		control.sql("""
-			INSERT INTO user_token(token_hash, institution_id, app_user_id, kind, expires_at)
-			VALUES (:h, (SELECT id FROM institution WHERE slug = :s), :u, 'invite', now() + interval '7 days')""")
-			.param("h", Provisioner.hash(token)).param("s", TenantContext.require()).param("u", userId).update();
+			INSERT INTO user_token(token_hash, institution_id, app_user_id, kind, expires_at, issued_by)
+			VALUES (:h, (SELECT id FROM institution WHERE slug = :s), :u, 'invite', now() + interval '7 days', :by)""")
+			.param("h", Provisioner.hash(token)).param("s", TenantContext.require()).param("u", userId).param("by", admin.userId()).update();
 		return Map.of("userId", userId, "token", token);
 	}
 
