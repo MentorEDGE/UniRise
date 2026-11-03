@@ -1,0 +1,20 @@
+name: api
+on:
+  push:
+    paths: ["unirise-api/**", "scripts/**", ".github/workflows/api.yml"]
+  pull_request:
+    paths: ["unirise-api/**", "scripts/**", ".github/workflows/api.yml"]
+permissions:
+  contents: read
+jobs:
+  build:
+    runs-on: ubuntu-latest   # has Docker, which the Testcontainers isolation suite needs
+    defaults:
+      run:
+        working-directory: unirise-api
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with: { distribution: temurin, java-version: "21", cache: maven }
+      - run: ./mvnw -B verify
+      - run: docker build -t unirise-api:ci .

@@ -1,6 +1,8 @@
 package in.co.mentoredge.unirise.tenancy;
 
+import in.co.mentoredge.unirise.util.CsvWriter;
 import java.io.IOException;
+import java.nio.charset.StandardCharsets;
 import java.io.OutputStream;
 import java.sql.Connection;
 import java.sql.DriverManager;
@@ -11,7 +13,6 @@ import java.util.Map;
 import java.util.Set;
 import java.util.zip.ZipEntry;
 import java.util.zip.ZipOutputStream;
-import org.postgresql.PGConnection;
 import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.http.HttpStatus;
 import org.springframework.jdbc.core.simple.JdbcClient;
@@ -74,9 +75,26 @@ public class TenantLifecycle {
 			try (var st = c.createStatement(); var rs = st.executeQuery("SELECT table_name FROM information_schema.tables WHERE table_schema = 'public' AND table_type = 'BASE TABLE' AND table_name <> 'flyway_schema_history' ORDER BY 1")) {
 				while (rs.next()) tables.add(rs.getString(1));
 			}
+			zip.putNextEntry(new ZipEntry("README.txt"));
+			zip.write("One CSV per table. Text cells that begin with = + - or @ carry a leading apostrophe so a spreadsheet will not run them as formulas; remove it if you load the data elsewhere.\r\n".getBytes(StandardCharsets.UTF_8));
+			zip.closeEntry();
+			c.setAutoCommit(false);   // lets the driver stream rows instead of loading a whole table
 			for (String table : tables) {   // names come from the catalog, not from a request
 				zip.putNextEntry(new ZipEntry(table + ".csv"));
-				c.unwrap(PGConnection.class).getCopyAPI().copyOut("COPY (SELECT * FROM \"" + table + "\") TO STDOUT WITH (FORMAT csv, HEADER true)", zip);
+				try (var st = c.createStatement()) {
+					st.setFetchSize(1000);
+					try (var rs = st.executeQuery("SELECT * FROM \"" + table + "\"")) {
+						int n = rs.getMetaData().getColumnCount();
+						List<Object> cells = new ArrayList<>(n);
+						for (int i = 1; i <= n; i++) cells.add(rs.getMetaData().getColumnLabel(i));
+						zip.write(CsvWriter.line(cells).getBytes(StandardCharsets.UTF_8));
+						while (rs.next()) {
+							cells.clear();
+							for (int i = 1; i <= n; i++) cells.add(rs.getObject(i));
+							zip.write(CsvWriter.line(cells).getBytes(StandardCharsets.UTF_8));
+						}
+					}
+				}
 				zip.closeEntry();
 			}
 		} catch (SQLException e) {

@@ -28,6 +28,20 @@ services:
     image: axllent/mailpit:latest
     ports: ["127.0.0.1:1025:1025", "127.0.0.1:8025:8025"]
 
+  api: # the backend itself: docker compose --profile api up --build
+    profiles: ["api"]
+    build: ./unirise-api
+    depends_on:
+      postgres: { condition: service_healthy }
+    environment:
+      CONTROL_DB_URL: jdbc:postgresql://postgres:5432/unirise
+      CONTROL_DB_USER: unirise
+      RMS_DB_PASSWORD: ${RMS_DB_PASSWORD:?Set RMS_DB_PASSWORD in .env}
+      TENANT_DB_HOST: postgres
+      TENANT_DB_PORT: "5432"
+      RMS_ADMIN_KEY: ${RMS_ADMIN_KEY:?Set RMS_ADMIN_KEY in .env}
+    ports: ["127.0.0.1:8081:8080"]
+
 volumes:
   pgdata:
   miniodata:

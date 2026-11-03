@@ -1,5 +1,6 @@
 package in.co.mentoredge.unirise.api;
 
+import in.co.mentoredge.unirise.util.CsvWriter;
 import jakarta.servlet.http.HttpServletRequest;
 import java.nio.charset.StandardCharsets;
 import java.time.LocalDate;
@@ -92,8 +93,8 @@ public class ReportController {
 		@RequestParam(required = false) LocalDate to, @RequestParam(defaultValue = "applied") String basis, HttpServletRequest req) {
 		if (!format.equals("csv")) throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "format"); // shortcut: PDF needs a renderer, add with the printable annual report
 		Table t = run(slug, from, to, basis, access.actor(req));
-		StringBuilder sb = new StringBuilder("﻿").append(csvLine(new ArrayList<>(t.columns())));
-		for (List<Object> row : t.rows()) sb.append(csvLine(row));
+		StringBuilder sb = new StringBuilder("﻿").append(CsvWriter.line(t.columns()));
+		for (List<Object> row : t.rows()) sb.append(CsvWriter.line(row));
 		return ResponseEntity.ok().header(HttpHeaders.CONTENT_DISPOSITION, "attachment; filename=\"" + slug + ".csv\"") // slug is a catalogue key, never user text
 			.contentType(new MediaType("text", "csv", StandardCharsets.UTF_8)).body(sb.toString().getBytes(StandardCharsets.UTF_8));
 	}
@@ -128,17 +129,5 @@ public class ReportController {
 			return row;
 		}).list();
 		return new Table(spec.columns(), rows);
-	}
-
-	/** Cells starting with = + - @ would run as formulas in a spreadsheet, so they get a leading quote. */
-	static String csvLine(List<Object> cells) {
-		StringBuilder sb = new StringBuilder();
-		for (int i = 0; i < cells.size(); i++) {
-			String s = String.valueOf(cells.get(i));
-			if (!s.isEmpty() && "=+-@\t\r".indexOf(s.charAt(0)) >= 0 && !(cells.get(i) instanceof Number)) s = "'" + s;
-			if (i > 0) sb.append(',');
-			sb.append('"').append(s.replace("\"", "\"\"")).append('"');
-		}
-		return sb.append("\r\n").toString();
 	}
 }

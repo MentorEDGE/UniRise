@@ -83,6 +83,7 @@ class LifecycleTest {
 	void suspendExportAndDeleteFollowTheExitProcess() throws Exception {
 		String key = tenant("lifea");
 		assertEquals(201, call("POST", "/api/researchers", "X-API-Key", key, "{\"name\":\"Keep Me\"}").statusCode());
+		assertEquals(201, call("POST", "/api/researchers", "X-API-Key", key, "{\"name\":\"=HYPERLINK(1)\"}").statusCode());
 		assertEquals(401, call("GET", "/api/platform/tenants", null, null, null).statusCode());
 		assertEquals(401, call("GET", "/api/platform/tenants", "X-API-Key", key, null).statusCode());
 		assertTrue(call("GET", "/api/platform/tenants", "X-Admin-Key", OP, null).body().contains("lifea"));
@@ -104,8 +105,8 @@ class LifecycleTest {
 				if (e.getName().equals("researcher.csv")) researchers = new String(in.readAllBytes());
 			}
 		}
-		assertTrue(files.contains("researcher.csv") && files.contains("publication.csv") && !files.contains("flyway_schema_history.csv"), files.toString());
-		assertTrue(researchers.contains("Keep Me"));
+		assertTrue(files.contains("researcher.csv") && files.contains("README.txt") && files.contains("publication.csv") && !files.contains("flyway_schema_history.csv"), files.toString());
+		assertTrue(researchers.contains("Keep Me") && researchers.contains("\"'=HYPERLINK(1)\""), researchers);   // formulas are defused
 
 		assertEquals(409, call("DELETE", "/api/platform/tenants/lifea?confirm=lifea", "X-Admin-Key", OP, null).statusCode());   // not closing yet
 		assertEquals(200, call("POST", "/api/platform/tenants/lifea/status", "X-Admin-Key", OP, "{\"status\":\"closing\",\"reason\":\"contract ended\"}").statusCode());
@@ -165,7 +166,7 @@ class LifecycleTest {
 	/** Runs a script in a postgres:16 container so the client tools match the server version (a newer pg_dump writes dumps 16 cannot restore). */
 	String inDocker(Path out, String script, String... args) throws Exception {
 		Path scripts = Path.of("..", "scripts").toAbsolutePath().normalize();
-		var cmd = new java.util.ArrayList<>(java.util.List.of("docker", "run", "--rm", "-v", scripts + ":/s:ro", "-v", out + ":/out", "-e", "PGHOST=host.docker.internal",
+		var cmd = new java.util.ArrayList<>(java.util.List.of("docker", "run", "--rm", "-v", scripts + ":/s:ro", "-v", out + ":/out", "--add-host=host.docker.internal:host-gateway", "-e", "PGHOST=host.docker.internal",
 			"-e", "PGPORT=" + PG.getMappedPort(5432), "-e", "PGUSER=" + PG.getUsername(), "-e", "PGPASSWORD=" + PG.getPassword(), "postgres:16", "bash", "/s/" + script));
 		cmd.addAll(java.util.List.of(args));
 		var p = new ProcessBuilder(cmd).redirectErrorStream(true).start();
