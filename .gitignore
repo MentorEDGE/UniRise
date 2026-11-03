@@ -17,3 +17,6 @@ rms-docs/RMS_DOCS_BUNDLE.md
 !*.tfvars.example
 infra/envs/dev/backend.hcl
 .terraform.lock.hcl.bak
+
+# backend
+target/

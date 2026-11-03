@@ -25,12 +25,15 @@ variable "enable_bastion" {
 }
 
 variable "ses_sender_email" {
-  description = "Address UniRise sends mail from while there is no domain. Must be one you can open."
+  description = "Address UniRise sends mail from while there is no domain. Must be one you can open. Empty skips SES."
   type        = string
+  default     = ""
 }
 
 variable "budget_email" {
-  type = string
+  description = "Where cost alerts go. Empty skips the budget."
+  type        = string
+  default     = ""
 }
 
 variable "monthly_budget_usd" {

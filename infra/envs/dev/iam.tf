@@ -89,10 +89,13 @@ data "aws_iam_policy_document" "developer" {
     actions   = ["s3:GetObject", "s3:PutObject", "s3:DeleteObject", "s3:AbortMultipartUpload", "s3:ListMultipartUploadParts"]
     resources = [for b in aws_s3_bucket.b : "${b.arn}/*"]
   }
-  statement {
-    sid       = "SendMailFromUniRiseIdentity"
-    actions   = ["ses:SendEmail", "ses:SendRawEmail"]
-    resources = [aws_sesv2_email_identity.sender.arn, aws_sesv2_configuration_set.main.arn]
+  dynamic "statement" {
+    for_each = local.ses_on ? [1] : []
+    content {
+      sid       = "SendMailFromUniRiseIdentity"
+      actions   = ["ses:SendEmail", "ses:SendRawEmail"]
+      resources = [aws_sesv2_email_identity.sender[0].arn, aws_sesv2_configuration_set.main[0].arn]
+    }
   }
   statement {
     sid       = "ConnectToDatabaseAsDeveloperUser"
