@@ -31,15 +31,8 @@ public class AdminController {
 	@GetMapping("/org-units")
 	List<Unit> units(HttpServletRequest req) {
 		Actor a = access.actor(req);
-		String cols = "SELECT id, parent_id AS parentId, type, name FROM org_unit ";
-		if (a.isAdmin() || a.grants().stream().anyMatch(g -> g.scopeUnitId() == null)) return db.sql(cols + "ORDER BY id").query(Unit.class).list();
-		// everyone else: subtrees they hold a scope for, plus the units they are appointed to
-		return db.sql(cols + """
-			 WHERE id IN (
-			   SELECT c.descendant_id FROM org_unit_closure c JOIN role_grant g ON g.scope_unit_id = c.ancestor_id
-			   WHERE g.app_user_id = :u AND g.valid_from <= current_date AND (g.valid_to IS NULL OR g.valid_to >= current_date)
-			   UNION SELECT org_unit_id FROM appointment WHERE researcher_id = :r AND valid_from <= current_date AND (valid_to IS NULL OR valid_to >= current_date))
-			 ORDER BY id""").param("u", a.userId()).param("r", a.researcherId() == null ? -1L : a.researcherId()).query(Unit.class).list();
+		var ids = access.visibleUnitIds(a);
+		return db.sql("SELECT id, parent_id AS parentId, type, name FROM org_unit ORDER BY id").query(Unit.class).list().stream().filter(u -> ids == null || ids.contains(u.id())).toList();
 	}
 
 	@PostMapping("/org-units")

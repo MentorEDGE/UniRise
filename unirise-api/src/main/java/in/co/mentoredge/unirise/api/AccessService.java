@@ -80,4 +80,14 @@ public class AccessService {
 		return mentorId != null && db.sql("SELECT count(*) FROM relationship WHERE mentor_id = :m AND mentee_id = :s AND" + CURRENT)
 			.param("m", mentorId).param("s", scholarId).query(Long.class).single() > 0;
 	}
+
+	/** Org units the caller may see: null means all; otherwise the subtrees they hold a scope for plus the units they are appointed to. */
+	public Set<Long> visibleUnitIds(Actor a) {
+		if (a.isAdmin() || a.grants().stream().anyMatch(g -> g.scopeUnitId() == null)) return null;
+		return new HashSet<>(db.sql("""
+			SELECT c.descendant_id FROM org_unit_closure c JOIN role_grant g ON g.scope_unit_id = c.ancestor_id
+			WHERE g.app_user_id = :u AND g.valid_from <= current_date AND (g.valid_to IS NULL OR g.valid_to >= current_date)
+			UNION SELECT org_unit_id FROM appointment WHERE researcher_id = :r AND valid_from <= current_date AND (valid_to IS NULL OR valid_to >= current_date)""")
+			.param("u", a.userId()).param("r", a.researcherId() == null ? -1L : a.researcherId()).query(Long.class).list());
+	}
 }

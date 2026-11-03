@@ -123,6 +123,11 @@ class WorkflowTest {
 		String id = field(created.body(), "id");
 		assertEquals(200, call("POST", "/api/publications/" + id + "/submit", hod, null).statusCode());
 		assertEquals(403, call("POST", "/api/publications/" + id + "/review", hod, "{\"action\":\"approve\"}").statusCode());
+		// owner who is not listed as an author is still the owner
+		String noSelf = PUB.formatted(rRavi).replace("10.1000/xyz1", "10.1000/hari2");
+		String id2 = field(call("POST", "/api/publications", hod, noSelf).body(), "id");
+		assertEquals(200, call("POST", "/api/publications/" + id2 + "/submit", hod, null).statusCode());
+		assertEquals(403, call("POST", "/api/publications/" + id2 + "/review", hod, "{\"action\":\"approve\"}").statusCode());
 	}
 
 	@Test

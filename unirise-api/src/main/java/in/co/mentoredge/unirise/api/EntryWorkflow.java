@@ -68,6 +68,7 @@ public class EntryWorkflow {
 		if (action == null || !ACTIONS.contains(action)) throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "action");
 		Head h = head(a, k, id);
 		if (!mayReview(a, h.ownerId())) throw new ResponseStatusException(HttpStatus.FORBIDDEN);
+		if (a.researcherId() != null && a.researcherId() == h.ownerId()) throw new ResponseStatusException(HttpStatus.FORBIDDEN, "own entry"); // admins too; only the tenant service key is exempt
 		if (isParticipant(a, k, id)) throw new ResponseStatusException(HttpStatus.FORBIDDEN, "own entry"); // not only the owner: any author or investigator
 		if (!h.status().equals("submitted")) throw new ResponseStatusException(HttpStatus.CONFLICT, "not submitted");
 		if (!action.equals("approve") && (comment == null || comment.isBlank())) throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "comment");
