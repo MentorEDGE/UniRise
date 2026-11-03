@@ -112,7 +112,7 @@ class WorkflowTest {
 		assertEquals("approved", field(ok.body(), "entryStatus"));
 
 		var list = call("GET", "/api/publications?status=approved", hod, null);
-		assertTrue(list.body().contains("\"total\":1"), list.body());
+		assertTrue(list.body().contains("A better study"), list.body()); // other tests may approve more papers by the same owner
 		assertEquals(0, call("GET", "/api/publications?status=approved", otherHod, null).body().split("A better study", -1).length - 1);
 	}
 
@@ -162,5 +162,31 @@ class WorkflowTest {
 		assertEquals(200, call("POST", "/api/seed-money/" + id + "/submit", ravi, null).statusCode());
 		assertEquals("approved", field(call("POST", "/api/seed-money/" + id + "/review", hod, "{\"action\":\"approve\"}").body(), "status"));
 		assertEquals(400, call("POST", "/api/seed-money/" + field(call("POST", "/api/seed-money", ravi, proposal.replace("\"isLeadPI\":true", "\"isLeadPI\":false")).body(), "id") + "/submit", ravi, null).statusCode());
+	}
+
+	@Test
+	void seeingSomeoneIsNotEnoughToReviewTheirWork() throws Exception {
+		setup();
+		// Olga heads Chemistry and mentors Ravi (Physics): she can see his work but has no review authority over Physics.
+		// A fresh mentee keeps the other tests' visibility expectations intact.
+		long tara = svcCreate("/api/researchers", "{\"name\":\"Tara\"}");
+		svcCreate("/api/appointments", "{\"researcherId\":" + tara + ",\"orgUnitId\":" + field(call("GET", "/api/org-units", service, null).body(), "id") + "}");
+		String taraToken = login("tara@d.example", tara, null, null);
+		svcCreate("/api/relationships", "{\"mentorId\":" + rOtherId() + ",\"menteeId\":" + tara + ",\"type\":\"co\"}");
+		String id = field(call("POST", "/api/publications", taraToken, PUB.formatted(tara).replace("10.1000/xyz1", "10.1000/scope1")).body(), "id");
+		assertEquals(200, call("POST", "/api/publications/" + id + "/submit", taraToken, null).statusCode());
+		assertEquals(200, call("GET", "/api/publications/" + id, otherHod, null).statusCode());
+		assertEquals(403, call("POST", "/api/publications/" + id + "/review", otherHod, "{\"action\":\"approve\"}").statusCode());
+
+		// Hari heads Physics but is a co-author, so he cannot approve this paper either.
+		String co = PUB.formatted(rRavi).replace("10.1000/xyz1", "10.1000/coauth1").replace("{\"kind\":\"external\"", "{\"researcherId\":" + rHari + ",\"kind\":\"internal-faculty\",\"name\":\"Hari\"},{\"kind\":\"external\"");
+		String id2 = field(call("POST", "/api/publications", ravi, co).body(), "id");
+		assertEquals(200, call("POST", "/api/publications/" + id2 + "/submit", ravi, null).statusCode());
+		assertEquals(403, call("POST", "/api/publications/" + id2 + "/review", hod, "{\"action\":\"approve\"}").statusCode());
+		assertEquals(200, call("POST", "/api/publications/" + id2 + "/review", service, "{\"action\":\"approve\"}").statusCode()); // an admin can
+	}
+
+	long rOtherId() throws Exception {
+		return Long.parseLong(field(call("GET", "/api/me", otherHod, null).body(), "researcherId"));
 	}
 }

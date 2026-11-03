@@ -67,9 +67,8 @@ public class EntryWorkflow {
 	public String review(Actor a, Kind k, long id, String action, String comment) {
 		if (action == null || !ACTIONS.contains(action)) throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "action");
 		Head h = head(a, k, id);
-		boolean reviewer = a.isAdmin() || a.hasRole("HOD", "DEAN", "EXECUTIVE");
-		if (!reviewer) throw new ResponseStatusException(HttpStatus.FORBIDDEN);
-		if (!a.service() && a.researcherId() != null && a.researcherId() == h.ownerId()) throw new ResponseStatusException(HttpStatus.FORBIDDEN, "own entry");
+		if (!mayReview(a, h.ownerId())) throw new ResponseStatusException(HttpStatus.FORBIDDEN);
+		if (isParticipant(a, k, id)) throw new ResponseStatusException(HttpStatus.FORBIDDEN, "own entry"); // not only the owner: any author or investigator
 		if (!h.status().equals("submitted")) throw new ResponseStatusException(HttpStatus.CONFLICT, "not submitted");
 		if (!action.equals("approve") && (comment == null || comment.isBlank())) throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "comment");
 		String status = switch (action) {
@@ -81,6 +80,27 @@ public class EntryWorkflow {
 		db.sql("UPDATE " + k.table() + " SET " + k.statusCol() + " = :s, review_comment = :c WHERE id = :id").param("s", status).param("c", comment).param("id", id).update();
 		event(k, id, action, a, comment);
 		return status;
+	}
+
+	/** Review authority comes from a HOD, DEAN or EXECUTIVE grant covering the owner's unit (or an admin). Being able to see the owner is not enough. */
+	private boolean mayReview(Actor a, long ownerId) {
+		if (a.isAdmin()) return true;
+		if (a.userId() == null) return false;
+		return db.sql("""
+			SELECT count(*) FROM role_grant g WHERE g.app_user_id = :u AND g.role IN ('HOD','DEAN','EXECUTIVE')
+			AND g.valid_from <= current_date AND (g.valid_to IS NULL OR g.valid_to >= current_date)
+			AND (g.scope_unit_id IS NULL OR EXISTS (
+			  SELECT 1 FROM appointment ap JOIN org_unit_closure c ON c.descendant_id = ap.org_unit_id
+			  WHERE c.ancestor_id = g.scope_unit_id AND ap.researcher_id = :o AND ap.valid_from <= current_date AND (ap.valid_to IS NULL OR ap.valid_to >= current_date)))""")
+			.param("u", a.userId()).param("o", ownerId).query(Long.class).single() > 0;
+	}
+
+	private boolean isParticipant(Actor a, Kind k, long id) {
+		if (a.researcherId() == null) return false;
+		String sql = k.grant() ? "SELECT count(*) FROM grant_investigator WHERE grant_id = :id AND researcher_id = :r"
+			: k.type().equals("seed") ? "SELECT count(*) FROM seed_investigator WHERE proposal_id = :id AND researcher_id = :r"
+			: "SELECT count(*) FROM publication_author WHERE publication_id = :id AND researcher_id = :r";
+		return db.sql(sql).param("id", id).param("r", a.researcherId()).query(Long.class).single() > 0;
 	}
 
 	private void event(Kind k, long id, String action, Actor a, String comment) {

@@ -74,4 +74,10 @@ public class AccessService {
 			db.sql("INSERT INTO access_log(actor_user_id, action, target_researcher_id) VALUES (:u, 'view.person', :t)").param("u", a.userId()).param("t", researcherId).update();
 		}
 	}
+
+	/** True when the researcher is currently a supervisor of the scholar (any relationship type). */
+	public boolean isActiveMentor(Long mentorId, long scholarId) {
+		return mentorId != null && db.sql("SELECT count(*) FROM relationship WHERE mentor_id = :m AND mentee_id = :s AND" + CURRENT)
+			.param("m", mentorId).param("s", scholarId).query(Long.class).single() > 0;
+	}
 }
