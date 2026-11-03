@@ -77,7 +77,7 @@ Side-by-side comparison of two probable duplicate publications, choose the survi
 Users and roles, SSO setup and status, tenant settings (logo, accent colour, currency, fiscal year, classification lists), CSV import of people and org structure with preview, ORCID/OpenAlex harvest status and last run, API keys (create, rotate, revoke; key shown once with a copy button), audit log viewer.
 
 ### 4.9 Platform admin (internal)
-Separate internal console, never exposed to tenant users: create a sandbox or pilot tenant (shows the API key once), change its status, suspend, export and delete a tenant (each with confirmation), see active researcher counts, and open logged support access.
+Separate internal console, never exposed to tenant users: create a sandbox or pilot tenant (shows the API key once), change its status, suspend, export and delete a tenant (each with confirmation), see active researcher counts, each tenant's database status and schema version, and open logged support access.
 
 ### 4.10 Scholar progress *(planned, Phase 2)*
 Timeline of stages (registration, coursework, proposal, progress reviews, thesis submission, viva) with due dates, status, approvals and feedback addressed to the scholar. A "next due" card on Home. A scholar sees only their own data.

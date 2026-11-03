@@ -150,5 +150,5 @@ Proposed model (extends TRD §4; today only `department`, `researcher`, `publica
 - India-specific points (UGC-CARE, NAAC, NIRF, DPDP) are assumptions about the target market and are not verified. Confirm the launch region.
 - Applied: PRD R23–R30, TRD §3–§7 (roles, data model, API, counting, snapshots) and FRONTEND_SPEC §3–§4 (scholar, supervisor and executive screens).
 - Phase 2 sign-in is OIDC SSO (SAML in Phase 3); email links are only for sandbox tenants. See PRD R4.
-- Tenancy isolation (schema per tenant vs shared schema) is proposed in ARCHITECTURE.md ADR 11 and decided after the first customer conversation.
+- Tenancy isolation is decided: each institution has its own database (ARCHITECTURE.md ADR 11, MULTI_TENANCY_DESIGN.md). Access rules in this document apply inside one tenant database.
 - Still unverified: the India-specific points, and whether a shared hosted service is acceptable to the first customer.

@@ -1,6 +1,6 @@
 # RMS – System Architecture Document
 
-Status: Draft v0.3 · Companions: PRD.md, TRD.md, FRONTEND_SPEC.md, ACCESS_AND_VISIBILITY_MODEL.md, PRIOR_ART_STUDY.md · Last updated: 2026-11-02
+Status: Draft v0.4 · Companions: MULTI_TENANCY_DESIGN.md, PRD.md, TRD.md, FRONTEND_SPEC.md, ACCESS_AND_VISIBILITY_MODEL.md, PRIOR_ART_STUDY.md · Last updated: 2026-11-02
 Legend: **[built]** exists in `src/` (not yet compiled or tested), **[planned]** designed but not built.
 
 ## 1. Purpose and scope
@@ -9,7 +9,7 @@ Describes how RMS is structured, deployed and secured, and why. It is the system
 ## 2. Architectural drivers
 | Driver | Source | Consequence |
 |---|---|---|
-| Strict tenant isolation (a university must never see another's data) | PRD G4 | Tenant derived only from credentials, enforced in every query, then RLS as a second layer |
+| Strict tenant isolation (a university must never see another's data) | PRD G4 | Tenant derived only from credentials; a separate database per institution (ADR 11, MULTI_TENANCY_DESIGN.md) |
 | Small team, fast pilot | PRD §8 | Modular monolith, one database, no message broker initially |
 | Low faculty effort via harvesting | PRD G1 | Background jobs, external API integrations, human verification state |
 | Trustworthy reports | PRD G2 | Provenance and verification stored per record; effective-dated affiliations |
@@ -40,7 +40,8 @@ External systems are reached outbound only, through an allowlist of hosts.
 | Web UI | React + TypeScript SPA, static files | All user screens | planned |
 | RMS Service | Spring Boot 3.3, Java 21 | REST API, auth, business rules, reports | built (API subset) |
 | Harvest Worker | Same codebase, separate process/profile | Scheduled and on-demand pulls from ORCID/OpenAlex/Crossref, matching, claim suggestions; also milestone reminders, rollup refresh and period snapshots | planned |
-| PostgreSQL 16 | Managed instance | System of record, job queue (`SKIP LOCKED`), audit log | built (schema auto-created) |
+| PostgreSQL 16, tenant databases | Managed instance(s) | One database per institution: system of record, job queue (`SKIP LOCKED`), audit log | built as a single shared schema; to be replaced (ADR 11) |
+| PostgreSQL 16, control plane | Managed instance | Institution registry (database location, secret, status, schema version), platform users, usage counters | planned |
 | Object storage | S3-compatible | Generated CSV/PDF exports with expiry | planned |
 | Ingress / TLS | Reverse proxy or cloud LB | TLS termination, HSTS, rate limiting, serves SPA + `/api` on one origin | planned |
 | Platform console | Internal admin UI, same service | Tenant lifecycle (create sandbox or pilot, suspend, export, delete), usage counts, logged support access | planned |
@@ -65,6 +66,7 @@ The Service and Worker ship as one image run with different profiles, so there i
 | Supervision and milestones | Relationships (incl. backup), milestones, meeting logs, reminders | planned |
 | Period close | Snapshots of reported figures per period and org unit | planned |
 | Tenant lifecycle | Provisioning, CSV import with preview, sandbox/pilot, suspend, export, delete, per-tenant settings and metering | planned |
+| Tenant router, provisioner and migrator | Pick the tenant's connection pool per request; create and prepare tenant databases; apply schema changes to every tenant database | planned |
 | Harvest, Matching, Claims | Source adapters, scoring, claim state machine | planned |
 | Export | Async CSV/PDF jobs | planned |
 | Audit | Append-only write/export log | planned |
@@ -72,7 +74,7 @@ The Service and Worker ship as one image run with different profiles, so there i
 Rule: controllers never call repositories without a tenant id, and entities never accept `institutionId` from clients.
 
 ## 6. Data architecture
-- **Store:** one PostgreSQL database, shared schema, `institution_id` on every domain table. Table list and planned additions are in TRD §4.
+- **Store:** one PostgreSQL database per institution plus a small control-plane database (ADR 11, MULTI_TENANCY_DESIGN.md). Table list and planned additions are in TRD §4.
 - **Provenance:** each publication keeps its sources and raw payloads; each author link has a claim state (`suggested`, `verified`, `rejected`). Official reports count verified claims only.
 - **History:** appointments, role grants and supervision relationships are effective-dated so past reports do not change when people move or leave. Closing a period writes a snapshot, so submitted figures stay fixed.
 - **Org tree:** units form a tree inside a tenant (institution → school → department → group). Rollups count each item once at higher levels. Subtree queries use a closure table (or `ltree`). Rollups for unit and executive dashboards are precomputed per unit and period and refreshed by the worker, not aggregated per request.
@@ -81,7 +83,7 @@ Rule: controllers never call repositories without a tenant id, and entities neve
 - **Retention and deletion:** researcher export/delete for privacy requests; exports expire; audit log retained per contract.
 
 ## 7. Key runtime flows
-**Tenant request [built]:** client sends key → TenantFilter hashes it, looks up the institution, sets `tid` → controller passes `tid` to the repository → response contains only that tenant's rows. Missing or wrong key: 401. Foreign id: 404 (existence not revealed).
+**Tenant request [built]:** client sends key → TenantFilter hashes it, looks up the institution in the control plane, sets `tid` and selects that institution's database → controller passes `tid` to the repository → response contains only that tenant's rows. Missing or wrong key: 401. Foreign id: 404 (existence not revealed).
 
 **DOI import [built]:** validate DOI format → reject duplicate for tenant (409) → call Crossref on the fixed host → map title, venue, type, year → save with tenant id → admin links authors later. Crossref failure: 502.
 
@@ -92,8 +94,8 @@ Rule: controllers never call repositories without a tenant id, and entities neve
 ## 8. Security architecture
 - **Trust boundary:** everything from clients and external APIs is untrusted; external titles are data, rendered as text.
 - **Identity:** now an API key per tenant (hash stored); target OIDC SSO in Phase 2 and SAML in Phase 3, with roles `PLATFORM_ADMIN`, `RESEARCH_ADMIN`, `DEAN`, `RESEARCHER`, `VIEWER`.
-- **Isolation, three layers:** (1) tenant id from credential only, (2) repository methods require it, (3) PostgreSQL Row-Level Security via `SET LOCAL app.tenant_id` [planned]. An automated test fails if a table lacks `institution_id` [planned; exemptions listed in TRD §2].
-- **Access component:** one place turns the viewer's role grants, mentor relationships and the record's sensitivity into a query condition used by every read. RLS handles tenant isolation only. It is tested for leaks before any scoped endpoint ships.
+- **Isolation, three layers:** (1) tenant id from credential only, (2) repository methods require it, (3) a separate database per institution (ADR 11), so no query can reach another tenant's rows; Row-Level Security is not used for tenant isolation. An automated test checks that a request for tenant A can never obtain tenant B's connection or data [planned; see MULTI_TENANCY_DESIGN.md §12].
+- **Access component:** one place turns the viewer's role grants, mentor relationships and the record's sensitivity into a query condition used by every read. The separate database per institution handles tenant isolation. It is tested for leaks before any scoped endpoint ships.
 - **Network:** TLS everywhere; DB not publicly reachable (dev compose binds to localhost); outbound allowlist against SSRF.
 - **Secrets:** environment or secret manager only; the application refuses to start the admin endpoint without `RMS_ADMIN_KEY`.
 - **Data protection:** encryption at rest (managed disk/DB), minimal personal data, no student data, GDPR export/delete.
@@ -104,7 +106,7 @@ Rule: controllers never call repositories without a tenant id, and entities neve
 - **Production shape:** LB/ingress → 2+ Service instances (stateless) → managed PostgreSQL with automated backups and point-in-time recovery; Worker as a separate deployment (1+ replicas); object storage bucket for exports.
 - **Scaling:** Service scales horizontally (stateless; sessions in cookies/JWT). Worker scales by job concurrency. Database scales vertically first, then read replica for reports. Split Worker/reports into their own services only when measurements justify it.
 - **Release:** CI builds and tests, scans dependencies, builds one container image; staging on merge, production by tag; schema migrations run before rollout and are backward compatible.
-- **Tenant onboarding:** the operator creates a sandbox or pilot institution, the customer configures OIDC SSO and imports org structure and people by CSV; no per-tenant infrastructure by default, though ADR 11 may change that.
+- **Tenant onboarding:** the operator creates a sandbox or pilot institution, the customer configures OIDC SSO and imports org structure and people by CSV; each institution gets its own database (ADR 11); a large or in-region tenant may get its own database server.
 
 ## 10. Quality attributes
 | Attribute | Target | Approach |
@@ -125,19 +127,20 @@ Targets are goals to validate by load test, not measured results.
 | 1 | Greenfield build | Fork VIVO; thin layer over VIVO/DSpace | RDF stack and hosting burden, poor SaaS multi-tenancy |
 | 2 | Spring Boot + PostgreSQL | Next.js, Django | Chosen by the product owner; matches the DSpace/VIVO Java ecosystem |
 | 3 | Modular monolith | Microservices | Team size; operational simplicity |
-| 4 | Shared schema with `institution_id` | Schema or DB per tenant | Cheapest to run; per-tenant DB kept as escape hatch. **Under review, see ADR 11.** |
+| 4 | ~~Shared schema with `institution_id`~~ **Superseded by ADR 11 (2026-11-03)** | Schema or DB per tenant | Was the cheapest to run. Replaced because B2B customers need per-tenant restore, deletion and isolation. |
 | 5 | Postgres as job queue | Kafka/RabbitMQ | Fewer moving parts at pilot scale |
 | 6 | Human-verified claims | Fully automatic matching | Author disambiguation errors would undermine report trust |
 | 7 | Open data sources first (ORCID, OpenAlex, Crossref) | Scopus/WoS first | No licence or key dependency for the pilot |
 | 8 | Org tree inside one tenant per customer | Sub-tenant per college | Colleges need delegated admin, not separate isolation; keeps rollups simple |
 | 9 | Access = role + scope + sensitivity, checked in the service layer | Role-only; UI-level hiding | Supervisors, HoDs and executives need different slices; UI-only hiding leaks data (VIVO's known flaw) |
 | 10 | Milestones and supervision in v1 | Outputs only | Progress tracking is the product goal; a paid market exists for it (PRIOR_ART_STUDY.md) |
-| 11 | **Proposed:** schema-per-tenant by default (database-per-tenant for large or in-region customers); shared schema with RLS only for sandbox and pilot tenants | Shared schema for all tenants (ADR 4) | B2B means tens to low hundreds of large tenants. Per-tenant restore, contract-end deletion, data residency and noisy-neighbour control are simple per schema and hard in a shared one. Cost: migrations run per schema. **Status: proposed. ADR 4 stands until the first customer conversation decides it.** |
+| 11 | **Accepted:** a separate database per institution on shared database servers, a dedicated server for large or in-region tenants, and a small control-plane database; sandbox and pilot tenants use the same model | Shared schema for all tenants (ADR 4) | B2B means tens to low hundreds of large tenants. Per-tenant restore, contract-end deletion, data residency and noisy-neighbour control are simple per database and hard in a shared one. Cost: migrations, backups and connections are managed per database. **Status: accepted 2026-11-03 (the institution asked for a separate database per institution). Full design: MULTI_TENANCY_DESIGN.md.** |
 | 12 | OIDC SSO in Phase 2, SAML in Phase 3 | Email links until Phase 3 | University IT will not approve email-link login for real staff |
+| 14 | AWS in `ap-south-1` (Mumbai) for the shared dev environment, defined in Terraform (`infra/`); Docker Compose on laptops for the inner loop; dev lives in the existing AWS account with UniRise-scoped IAM | Local-only dev; a separate AWS account for dev | Environment parity with production (RDS, S3, SES, IAM) from the start. Staging and production should use separate accounts. Decided 2026-11-03; infrastructure code is written but not yet applied |
 | 13 | Tenant lifecycle is a first-class component | Operator scripts | Onboarding in two weeks, sandbox-to-paid conversion and suspend/export/delete are sales and contract needs |
 
 ## 12. Risks and open items
-- Single shared database is a blast-radius risk; mitigate with RLS, backups, and the per-tenant DB option. Restoring or deleting a single tenant is hard in a shared schema; ADR 11 proposes schema-per-tenant for that reason.
+- A shared database server hosts many tenant databases, so a server failure affects all of them; mitigate with Multi-AZ, backups and a dedicated server for large tenants. Restoring or deleting a single tenant was hard in a shared schema; ADR 11 (a database per institution) removes that. Its new risks (connection exhaustion, a code path without tenant context, untested restores) are in MULTI_TENANCY_DESIGN.md §15.
 - Harvest quality and rate limits of external APIs; mitigate with caching, backoff, and raw payload retention.
 - The MVP has never been built or tested in this environment; verify before relying on any of the above.
-- Open: hosting provider and region (and whether the first customer accepts shared hosting); whether the first customer needs SAML before Phase 3; SPA chosen in RMS_FRONTEND_ARCHITECTURE.md, confirm; data-source licensing beyond open sources; whether public profile pages are in scope for the first customer.
+- Open: production region and AWS account (dev is `ap-south-1`, ADR 14), and whether the first customer accepts shared hosting; whether the first customer needs SAML before Phase 3; SPA chosen in RMS_FRONTEND_ARCHITECTURE.md, confirm; data-source licensing beyond open sources; whether public profile pages are in scope for the first customer.

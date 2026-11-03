@@ -1,6 +1,6 @@
 # RMS – Product Requirements Document
 
-Status: Draft v0.3 (adds B2B tenant lifecycle and SSO in Phase 2) · Owner: TBD · Last updated: 2026-11-02 · v0.2 adds the org hierarchy, supervision and milestones, and visibility rules (see ACCESS_AND_VISIBILITY_MODEL.md)
+Status: Draft v0.4 (adds a database per institution; B2B tenant lifecycle and SSO in Phase 2) · Owner: TBD · Last updated: 2026-11-02 · v0.2 adds the org hierarchy, supervision and milestones, and visibility rules (see ACCESS_AND_VISIBILITY_MODEL.md)
 
 ## 1. Summary
 RMS is a multi-tenant SaaS that gives a university a single, current system of record for its researchers, publications, grants and projects, and produces the reports the research office is asked for (accreditation, rankings, funders, annual faculty review) without manual spreadsheet assembly.
@@ -37,7 +37,7 @@ Research output is scattered across Scopus, Web of Science, ORCID, department sp
 Priority: P0 = pilot-blocking, P1 = needed to sell, P2 = later.
 
 ### 5.1 Tenancy and access
-- R1 (P0). Each university is an isolated tenant; no cross-tenant read or write, including via references between records. *Implemented in MVP (API key per tenant).*
+- R1 (P0). Each university is an isolated tenant; no cross-tenant read or write, including via references between records. *Implemented in MVP (API key per tenant).* From v0.4 each institution has its own database (ARCHITECTURE.md ADR 11, MULTI_TENANCY_DESIGN.md).
 - R2 (P0). Operator-only tenant creation. *MVP.*
 - R3 (P1). Per-user authentication. Access is role + scope + sensitivity (ACCESS_AND_VISIBILITY_MODEL.md §1). Roles: Researcher/Scholar (self), Supervisor (own mentees), HoD (department), Dean (school), Executive (whole tenant, aggregates by default), Research Admin, IT Admin (access settings, no research content), Guest (time-limited, narrow), Read-only. Role grants are time-bound and can be delegated (acting HoD). Sign-in in Phase 2 is OIDC single sign-on (R4); an invitation-based email one-time link is for sandbox and demo tenants only.
 - R4 (P1). SSO via OIDC (Google Workspace, Microsoft 365) in Phase 2 and SAML 2.0 in Phase 3. University IT will not approve email-link login for real staff.
@@ -130,4 +130,4 @@ Source: a research data management system used at a large Indian university (scr
 - Slow university sales cycles → free pilot with a research-office champion.
 - Privacy law differs by region (GDPR, FERPA) → decide launch region(s).
 - Decided (ACCESS_AND_VISIBILITY_MODEL.md §7): one tenant per legal customer with colleges as org units; PhD scholars have accounts; HR system or CSV is the source of truth for people and org structure; milestones and supervision are in v1.
-- Open: tenancy isolation model (schema per tenant vs shared schema; ARCHITECTURE.md ADR 11). Which report format does the pilot customer need first? Does the first customer accept a shared hosted service, and where may data be stored? Who owns data after contract end (export guarantees)? What counts as a paid seat (leavers, students, guests)? Pricing tiers by researcher count to be validated.
+- Decided: each institution has its own database (ADR 11). Open: which report format does the pilot customer need first? Does the first customer accept a shared hosted service, and where may data be stored? Who owns data after contract end (export guarantees)? What counts as a paid seat (leavers, students, guests)? Pricing tiers by researcher count to be validated.

@@ -1,6 +1,6 @@
 # RMS – Technical Requirements Document
 
-Status: Draft v0.3 · Companion to PRD.md and ACCESS_AND_VISIBILITY_MODEL.md · Last updated: 2026-11-02
+Status: Draft v0.4 · Companion to PRD.md, ACCESS_AND_VISIBILITY_MODEL.md and MULTI_TENANCY_DESIGN.md · Last updated: 2026-11-02
 "MVP" below means what exists in `src/` today; it has not yet been compiled or tested in CI.
 
 ## 1. Architecture
@@ -16,12 +16,12 @@ Client (web UI / API) ──HTTPS──> Spring Boot API ──> PostgreSQL
 Modules: `tenancy/auth`, `directory` (org units, people, appointments), `supervision` (relationships, milestones, meeting logs), `publications`, `grants`, `reports`, `harvest` (Phase 2), `integrations` (Phase 3).
 
 ## 2. Multi-tenancy
-- Model: shared database, shared schema, `institution_id` column on every domain table.
+- Model (v0.4, ARCHITECTURE.md ADR 11): **a separate PostgreSQL database per institution**, plus a small control-plane database with the institution registry. There is no `institution_id` filtering inside tenant data. Full design: MULTI_TENANCY_DESIGN.md (tenant router, provisioning, per-tenant migrations, backup, restore, deletion, connection pools).
 - Enforcement (MVP): the tenant id is derived only from the authenticated credential, stored in a request attribute, and passed to every repository call (`findByIdAndInstitutionId`, `findByInstitutionId`). `institutionId` is `@JsonIgnore`d so clients cannot set it. Cross-references (department, researcher, author IDs) are re-validated against the tenant before save. Reports filter by tenant in every query.
-- Hardening (Phase 2–3): PostgreSQL Row-Level Security with `SET LOCAL app.tenant_id` per transaction as defence in depth; tests that fail if any table lacks `institution_id`, with an explicit exemption list (`institution` itself and join tables such as `publication_authors`).
+- Hardening (Phase 2–3): Row-Level Security is no longer needed for tenant isolation. Instead: an isolation test that a user of tenant A cannot reach tenant B through any endpoint, a test that background jobs fail without a tenant context, and caches keyed by tenant (MULTI_TENANCY_DESIGN.md §4 and §12). The service layer still asserts the tenant on every record as a second guard.
 - Isolation test (exists): `TenantIsolationTest` checks cross-tenant read, cross-tenant author reference, bootstrap auth, and report scoping. Extend per new endpoint.
 - Escape hatch: tenant-per-schema or per-database for customers with residency or contractual isolation needs.
-- Under review (ARCHITECTURE.md ADR 11, proposed): B2B means tens to low hundreds of large tenants, so schema-per-tenant (database-per-tenant for large or in-region customers) may become the default, with shared schema and RLS kept for sandbox and pilot tenants. It makes per-tenant restore, contract-end deletion and residency simple, at the cost of running migrations per schema. Keep every repository call tenant-scoped so either model works. Decide after the first customer conversation.
+- Decided (ADR 11): each institution has its own database; large or in-region tenants may have their own database server. The MVP's shared-schema code (`institution_id` filtering in repositories) is replaced by the tenant router and must be migrated before any real data (§11 item 9).
 
 ## 3. Authentication and authorization
 - MVP: per-tenant API key in `X-API-Key` (256-bit random, SHA-256 hash stored, shown once). Tenant creation requires `X-Admin-Key` (env `RMS_ADMIN_KEY`, constant-time compare; endpoint disabled if unset).
@@ -34,8 +34,8 @@ Modules: `tenancy/auth`, `directory` (org units, people, appointments), `supervi
 - Rate limiting and lockout on key failures (Phase 2).
 
 ## 4. Data model
-Current tables (all carry `institution_id`):
-- `institution(id, name, key_hash unique)`
+From v0.4 these tables live in each **tenant database** and do not carry `institution_id`; ignore that column in the definitions below (it remains only in the MVP's shared-schema code). The `institution` table moves to the control plane with its connection details (MULTI_TENANCY_DESIGN.md §3). Current tables:
+- Control plane: `institution(id, slug, name, key_hash unique, status, plan, region, db_host, db_port, db_name, secret_arn, schema_version)`; each tenant database also keeps one `institution` row of its own (name, locale, currency, fiscal year, branding)
 - `department(id, institution_id, name)`
 - `researcher(id, institution_id, name, email, title, orcid, department_id)`
 - `publication(id, institution_id, title, doi, venue, type, pub_year)` + `publication_authors(publication_id, authors_id)`
@@ -109,29 +109,30 @@ Planned: `/api/grants`, `/api/seed-money` (with `/window`), `/api/{publications|
 - **Provisioning:** the operator creates a sandbox or pilot tenant, sets its plan and status, and the customer configures OIDC. Pilot converts to active by changing status, with no data migration.
 - **Onboarding:** CSV import of org units, people and appointments with a preview and per-row errors before commit; imports are idempotent and re-runnable (HR is the source of truth).
 - **Contract exit:** export of all tenant data in open formats (CSV plus JSON); delete-all with confirmation and a written deletion record; both are platform-admin actions and are logged.
-- **Backup and restore:** daily backups with a tested restore. Restoring a single tenant must be possible; this is the main reason ADR 11 proposes schema-per-tenant.
+- **Backup and restore:** daily backups with a tested restore. Restoring a single tenant must be possible: nightly per-tenant `pg_dump` to S3 plus instance-level RDS backups, with scheduled restore drills (MULTI_TENANCY_DESIGN.md §8).
 - **Per-tenant limits:** rate limits and job concurrency per tenant so one large tenant cannot starve the others.
 - **Metering:** monthly active-researcher counts. No billing engine in v1.
 - **Support access:** platform console with break-glass access to a tenant, time-limited and recorded in `access_log`.
 - **Observability:** logs and metrics carry the tenant id and never personal data.
 
 ## 10. Delivery and environments
-- Repo: Maven build, JUnit tests (H2 in PostgreSQL mode for unit/integration; Testcontainers Postgres for RLS and index tests).
+- Repo: Maven build, JUnit tests (H2 in PostgreSQL mode for unit/integration; Testcontainers Postgres for tenant-routing, per-tenant migration and index tests).
 - CI: build, test, dependency scan, container build. CD to staging on merge, production by tag.
-- Packaging: container image; managed PostgreSQL; schema migrations via Flyway (replace the MVP `ddl-auto=update` before any real data).
-- Environments: local (docker compose), staging (synthetic data), production per region.
+- Packaging: container image; managed PostgreSQL; schema migrations via Flyway, applied **per tenant database** by the migrator, plus a separate migration set for the control plane (replace the MVP `ddl-auto=update` before any real data).
+- Environments: local (docker compose: PostgreSQL 16, MinIO, Mailpit), shared dev on AWS `ap-south-1` (RDS, S3, SES, ECR; Terraform in `infra/`), staging (synthetic data), production per region. Staging and production should live in separate AWS accounts.
 
 ## 11. Known gaps in the MVP (to close, in order)
 1. Build and test run not yet verified (Maven not available on the dev machine).
 2. Replace `ddl-auto=update` with Flyway migrations.
 3. Per-user auth and roles; SSO.
-4. Postgres RLS as second isolation layer.
+4. Control plane, tenant router, provisioner and per-tenant migrator (replaces the earlier Postgres RLS plan; MULTI_TENANCY_DESIGN.md).
 5. Pagination uses unsorted page requests; add stable ordering.
 6. Crossref calls lack timeout/retry configuration.
 7. No UI, CSV/PDF export, audit log, or harvest jobs.
 8. The flat `department` table and five-role model must become the org tree, role grants and relationships in §3–§4 before a pilot.
+9. The MVP's shared-schema tenancy must be replaced by the control plane, tenant router, provisioner and migrator (MULTI_TENANCY_DESIGN.md).
 
 ## 12. Decisions and open questions
 - Decided: greenfield (not a VIVO/DSpace fork), Java/Spring Boot + PostgreSQL, shared-schema multi-tenancy.
 - Accepted (ACCESS_AND_VISIBILITY_MODEL.md §7): one tenant per legal customer with colleges as org units; PhD scholars have accounts; HR or CSV is the source of truth for people and org structure; milestones and supervision are in v1.
-- Open: hosting provider and region (and whether the first customer accepts shared hosting); whether the first customer needs SAML before Phase 3; confirm the SPA choice in RMS_FRONTEND_ARCHITECTURE.md; licence for any third-party bibliographic data used; Kuali or other grants systems are CSV import only until an API is confirmed with the customer.
+- Open: production region and AWS account (dev is on AWS `ap-south-1`), and whether the first customer accepts shared hosting; whether the first customer needs SAML before Phase 3; confirm the SPA choice in RMS_FRONTEND_ARCHITECTURE.md; licence for any third-party bibliographic data used; Kuali or other grants systems are CSV import only until an API is confirmed with the customer.

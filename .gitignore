@@ -8,3 +8,12 @@ dist/
 graphify-out/
 rms-docs.zip
 rms-docs/RMS_DOCS_BUNDLE.md
+
+# Terraform
+.terraform/
+*.tfstate
+*.tfstate.*
+*.tfvars
+!*.tfvars.example
+infra/envs/dev/backend.hcl
+.terraform.lock.hcl.bak

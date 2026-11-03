@@ -1,0 +1,10 @@
+# Copy to terraform.tfvars (git-ignored) and fill in.
+region             = "ap-south-1"
+ses_sender_email   = "you@example.com"   # SES sends a verification link to this address
+budget_email       = "you@example.com"   # cost alerts go here
+monthly_budget_usd = 50
+enable_bastion     = true
+
+# IAM user names (sign-in emails). Users are created without passwords or access keys; see infra/README.md.
+developers = []
+admins     = []
