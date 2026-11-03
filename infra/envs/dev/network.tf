@@ -66,14 +66,8 @@ resource "aws_vpc_endpoint" "s3" {
 
 resource "aws_security_group" "bastion" {
   name        = "${local.name}-bastion"
-  description = "No inbound. Reached through SSM Session Manager only."
+  description = "No inbound. Reached through SSM Session Manager only. Egress: PostgreSQL to the database and HTTPS only."
   vpc_id      = aws_vpc.main.id
-  egress {
-    from_port   = 0
-    to_port     = 0
-    protocol    = "-1"
-    cidr_blocks = ["0.0.0.0/0"]
-  }
 }
 
 resource "aws_security_group" "db" {
@@ -89,4 +83,24 @@ resource "aws_vpc_security_group_ingress_rule" "db_from_bastion" {
   to_port                      = 5432
   ip_protocol                  = "tcp"
   description                  = "bastion"
+}
+
+# Egress is limited so the tunnel cannot be used to reach anything but the database: PostgreSQL to the DB security group, plus
+# HTTPS for the SSM agent and package repositories (there are no VPC endpoints for SSM, to avoid their hourly cost).
+resource "aws_vpc_security_group_egress_rule" "bastion_to_db" {
+  security_group_id            = aws_security_group.bastion.id
+  referenced_security_group_id = aws_security_group.db.id
+  from_port                    = 5432
+  to_port                      = 5432
+  ip_protocol                  = "tcp"
+  description                  = "PostgreSQL to the database"
+}
+
+resource "aws_vpc_security_group_egress_rule" "bastion_https" {
+  security_group_id = aws_security_group.bastion.id
+  cidr_ipv4         = "0.0.0.0/0"
+  from_port         = 443
+  to_port           = 443
+  ip_protocol       = "tcp"
+  description       = "HTTPS for the SSM agent"
 }

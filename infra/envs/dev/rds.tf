@@ -23,10 +23,11 @@ resource "aws_db_instance" "main" {
   publicly_accessible    = false
   multi_az               = false # dev only; production uses Multi-AZ
 
-  backup_retention_period    = 7
-  auto_minor_version_upgrade = true
-  copy_tags_to_snapshot      = true
-  apply_immediately          = true
+  backup_retention_period             = 7
+  auto_minor_version_upgrade          = true
+  iam_database_authentication_enabled = true
+  copy_tags_to_snapshot               = true
+  apply_immediately                   = true
 
   deletion_protection       = false # dev only; turn on for staging and production
   skip_final_snapshot       = false

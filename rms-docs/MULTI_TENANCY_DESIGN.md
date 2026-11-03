@@ -125,6 +125,7 @@ Moving a tenant between servers: put the tenant in `closing` (read-only), `pg_du
 ## 13. Development environment (infra/)
 - The shared dev RDS instance (Terraform in `infra/`) holds several databases: `unirise_control` and one per test tenant (`tenant_demo`, `tenant_sandbox`). **The application creates tenant databases, not Terraform.**
 - Local Docker (PostgreSQL 16) works the same way: a control-plane database plus test tenant databases.
+- Developers reach the dev RDS instance through a fixed SSM tunnel and sign in with IAM authentication as a limited user (`unirise_dev`). The master user is for admins and the provisioner only.
 - Not yet in `infra/`: a Secrets Manager path and IAM policy for tenant credentials (`unirise/dev/tenants/*`), an S3 prefix per tenant, and RDS Proxy.
 
 ## 14. Effect on the other documents

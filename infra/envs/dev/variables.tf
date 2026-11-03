@@ -49,3 +49,9 @@ variable "admins" {
   type        = list(string)
   default     = []
 }
+
+variable "developer_db_user" {
+  description = "PostgreSQL user developers sign in as with IAM authentication. Created once by an admin (see infra/README.md); it is NOT the master user."
+  type        = string
+  default     = "unirise_dev"
+}

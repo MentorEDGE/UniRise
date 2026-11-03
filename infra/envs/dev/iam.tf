@@ -95,9 +95,9 @@ data "aws_iam_policy_document" "developer" {
     resources = [aws_sesv2_email_identity.sender.arn, aws_sesv2_configuration_set.main.arn]
   }
   statement {
-    sid       = "ReadDatabaseSecret"
-    actions   = ["secretsmanager:GetSecretValue", "secretsmanager:DescribeSecret"]
-    resources = [aws_db_instance.main.master_user_secret[0].secret_arn]
+    sid       = "ConnectToDatabaseAsDeveloperUser"
+    actions   = ["rds-db:connect"]
+    resources = ["arn:aws:rds-db:${var.region}:${local.account_id}:dbuser:${aws_db_instance.main.resource_id}/${var.developer_db_user}"]
   }
   statement {
     sid       = "DescribeDatabase"
@@ -132,30 +132,29 @@ data "aws_iam_policy_document" "developer" {
     actions   = ["ec2:DescribeInstances", "ssm:DescribeInstanceInformation", "ssm:GetConnectionStatus"]
     resources = ["*"]
   }
-  statement {
-    sid       = "StartTunnelToTaggedInstancesOnly"
-    actions   = ["ssm:StartSession"]
-    resources = ["arn:aws:ec2:${var.region}:${local.account_id}:instance/*"]
-    condition {
-      test     = "StringEquals"
-      variable = "ssm:resourceTag/Project"
-      values   = ["UniRise"]
-    }
-    # Make SSM check the caller's access to the session document too, so only the two port-forwarding documents below
-    # can be used. Without this, a plain shell on the bastion would be allowed.
-    condition {
-      test     = "BoolIfExists"
-      variable = "ssm:SessionDocumentAccessCheck"
-      values   = ["true"]
+  dynamic "statement" {
+    for_each = var.enable_bastion ? [1] : []
+    content {
+      sid       = "StartTunnelToTheBastionOnly"
+      actions   = ["ssm:StartSession"]
+      resources = [aws_instance.bastion[0].arn]
+      condition {
+        test     = "StringEquals"
+        variable = "ssm:resourceTag/Project"
+        values   = ["UniRise"]
+      }
+      # Make SSM check the caller's access to the session document too, so only the document below can be used.
+      condition {
+        test     = "BoolIfExists"
+        variable = "ssm:SessionDocumentAccessCheck"
+        values   = ["true"]
+      }
     }
   }
   statement {
-    sid     = "UsePortForwardingDocuments"
-    actions = ["ssm:StartSession"]
-    resources = [
-      "arn:aws:ssm:${var.region}::document/AWS-StartPortForwardingSession",
-      "arn:aws:ssm:${var.region}::document/AWS-StartPortForwardingSessionToRemoteHost",
-    ]
+    sid       = "UseTheDatabaseTunnelDocumentOnly"
+    actions   = ["ssm:StartSession"]
+    resources = [aws_ssm_document.db_tunnel.arn]
   }
   statement {
     sid       = "ManageOwnSessions"
