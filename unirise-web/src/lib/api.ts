@@ -8,6 +8,7 @@ import * as extAccess from "@/mock/ext/access";
 import * as extTenant from "@/mock/ext/tenant";
 import * as extReporting from "@/mock/ext/reporting";
 import { stageNames } from "@/mock/seed";
+import { sampleAnalytics, type AnalyticsDataset } from "@/mock/analytics";
 import type {
   Award, Department, DepartmentRow, EntryStatus, Grant, GrantStatus, LookupResult, MenteeDetail, MenteeRow, Milestone, MilestoneView, OrgUnit,
   OrgUnitType, Page, Publication, PublicationFilters, ReportParams, ReportTable, Researcher, ReviewAction, SeedProposal, SeedWindow, Suggestion,
@@ -163,6 +164,9 @@ const mock = {
       };
     }));
   },
+
+  /** Analytics dashboard dataset. Sample figures until the reporting service serves real ones. */
+  analytics: (): Promise<AnalyticsDataset> => wait(sampleAnalytics()),
 
   departments: (): Promise<Department[]> => wait(departmentsOf()),
   orgUnits: (): Promise<OrgUnit[]> => wait([...visibleUnits(mockUser())]),
@@ -399,6 +403,7 @@ const real: typeof mock = {
   byYear: () => http("/reports/publications-by-year"),
   topResearchers: () => http("/reports/top-researchers"),
   departmentReport: () => http("/reports/departments"),
+  analytics: () => http("/reports/analytics"), // planned endpoint
   departments: async () => (await http<Page<Department>>("/departments?size=200")).items,
   // The calls below target planned endpoints (TRD §5): org tree, milestones, supervision, unit rollups.
   orgUnits: async () => (await http<Page<OrgUnit>>("/org-units?size=200")).items,

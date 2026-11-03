@@ -1,6 +1,6 @@
 import { NavLink, Outlet, useNavigate } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
-import { Award, BarChart3, BookOpen, CheckSquare, Coins, FolderKanban, GitMerge, GraduationCap, Home, LayoutDashboard, LogOut, Network, Server, Settings, ShieldCheck, Sprout, UserCog, UserRoundSearch, Users, UsersRound } from "lucide-react";
+import { Award, BarChart3, BookOpen, CheckSquare, Coins, FolderKanban, GitMerge, GraduationCap, Home, LayoutDashboard, LogOut, Network, Server, Settings, ShieldCheck, Sprout, TrendingUp, UserCog, UserRoundSearch, Users, UsersRound } from "lucide-react";
 import { Logo } from "./Logo";
 import { ThemeToggle } from "./ThemeToggle";
 import { Button } from "@/components/ui/button";
@@ -23,6 +23,7 @@ const items: Item[] = [
   { to: "/awards", label: "Awards", icon: Award, roles: roleSets.research },
   { to: "/projects", label: "Projects", icon: FolderKanban, roles: roleSets.research },
   { to: "/lookup", label: "Find researcher", icon: UserRoundSearch, roles: roleSets.research },
+  { to: "/analytics", label: "Analytics", icon: TrendingUp, roles: roleSets.overview },
   { to: "/reports", label: "Reports", icon: BarChart3, roles: roleSets.overview },
   { to: "/review", label: "Review", icon: CheckSquare, roles: [...roleSets.claimants, "HOD", "DEAN"], badge: true },
   { to: "/supervision", label: "Supervision", icon: UserCog, roles: ["RESEARCH_ADMIN", "HOD", "DEAN"] },

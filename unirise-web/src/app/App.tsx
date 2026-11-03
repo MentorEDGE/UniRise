@@ -24,6 +24,7 @@ const Awards = lazy(() => import("@/features/awards/Awards"));
 const Review = lazy(() => import("@/features/review/ReviewQueue"));
 const ReportList = lazy(() => import("@/features/reports/Reports").then((m) => ({ default: m.ReportList })));
 const ReportView = lazy(() => import("@/features/reports/Reports").then((m) => ({ default: m.ReportView })));
+const Analytics = lazy(() => import("@/features/analytics/Analytics"));
 const Grants = lazy(() => import("@/features/grants/Grants"));
 const GrantWizard = lazy(() => import("@/features/grants/GrantWizard"));
 const SeedMoney = lazy(() => import("@/features/seedmoney/SeedMoney"));
@@ -102,6 +103,7 @@ export default function App() {
                   <Route path="lookup" element={<RequireAuth roles={R}><Lookup /></RequireAuth>} />
                   <Route path="awards" element={<RequireAuth roles={R}><Awards /></RequireAuth>} />
                   <Route path="review" element={<RequireAuth roles={[...roleSets.claimants, "HOD", "DEAN"]}><Review /></RequireAuth>} />
+                  <Route path="analytics" element={<RequireAuth roles={roleSets.overview}><Analytics /></RequireAuth>} />
                   <Route path="reports" element={<RequireAuth roles={roleSets.overview}><ReportList /></RequireAuth>} />
                   <Route path="reports/:slug" element={<RequireAuth roles={roleSets.overview}><ReportView /></RequireAuth>} />
                   <Route path="settings" element={<RequireAuth roles={roleSets.accessAdmin}><Settings /></RequireAuth>} />

@@ -1,6 +1,6 @@
 import { Link } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
-import { Award, BookOpen, Building2, CheckSquare, GraduationCap, Users } from "lucide-react";
+import { Award, BookOpen, CheckSquare, GraduationCap } from "lucide-react";
 import { Bar, BarChart, CartesianGrid, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
 import { api } from "@/lib/api";
 import { useAuth, can } from "@/app/auth";
@@ -8,9 +8,10 @@ import { PageHeader } from "@/components/layout/PageHeader";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { ErrorBanner, Skeleton } from "@/components/ui/feedback";
 import { Table, TBody, TD, TH, THead, TR } from "@/components/ui/table";
-import { formatMoney, formatNumber } from "@/lib/utils";
+import { formatNumber } from "@/lib/utils";
 import { RemindersCard } from "@/features/progress/RemindersCard";
 import { MenteesAttention, NextDueCard, UnitProgress, YourStanding } from "./RoleSections";
+import { OverviewHome } from "./OverviewHome";
 
 export default function Dashboard() {
   const { user } = useAuth();
@@ -20,24 +21,16 @@ export default function Dashboard() {
   const isHead = (role === "HOD" || role === "DEAN" || role === "EXECUTIVE") && user?.scopeUnitId !== undefined;
 
   const summary = useQuery({ queryKey: ["summary"], queryFn: api.summary });
-  const years = useQuery({ queryKey: ["by-year"], queryFn: api.byYear });
-  const top = useQuery({ queryKey: ["top"], queryFn: api.topResearchers, enabled: !isOwnView });
-  const depts = useQuery({ queryKey: ["dept-report"], queryFn: api.departmentReport, enabled: !isOwnView });
+  const years = useQuery({ queryKey: ["by-year"], queryFn: api.byYear, enabled: isOwnView });
   const mentees = useQuery({ queryKey: ["mentees"], queryFn: api.mentees, enabled: role === "SUPERVISOR" });
 
   const s = summary.data;
-  const tiles = isOwnView
-    ? [
-      ...(role === "SUPERVISOR" ? [{ label: "Mentees", value: mentees.data?.length, icon: GraduationCap, to: "/mentees", loading: mentees.isLoading }] : []),
-      { label: "Verified publications", value: s?.publications, icon: BookOpen, to: "/publications?state=verified", loading: summary.isLoading },
-      { label: "Awards", value: s?.awards, icon: Award, to: "/awards", loading: summary.isLoading },
-    ]
-    : [
-      { label: "Departments", value: s?.departments, icon: Building2, to: "/people", loading: summary.isLoading },
-      { label: "Researchers", value: s?.researchers, icon: Users, to: "/people", loading: summary.isLoading },
-      { label: "Verified publications", value: s?.publications, icon: BookOpen, to: "/publications?state=verified", loading: summary.isLoading },
-      { label: "Awards", value: s?.awards, icon: Award, to: "/awards", loading: summary.isLoading },
-    ];
+  // Overview roles get the analytics overview instead (OverviewHome).
+  const tiles = [
+    ...(role === "SUPERVISOR" ? [{ label: "Mentees", value: mentees.data?.length, icon: GraduationCap, to: "/mentees", loading: mentees.isLoading }] : []),
+    { label: "Verified publications", value: s?.publications, icon: BookOpen, to: "/publications?state=verified", loading: summary.isLoading },
+    { label: "Awards", value: s?.awards, icon: Award, to: "/awards", loading: summary.isLoading },
+  ];
   const canReview = can.edit(role);
   const isEmpty = s && s.researchers === 0;
 
@@ -59,7 +52,7 @@ export default function Dashboard() {
       {isScholar && <div className="mb-6 grid gap-6 lg:grid-cols-2"><NextDueCard /><RemindersCard limit={3} description="Stages due soon or late, and who was told." /></div>}
       {role === "SUPERVISOR" && <div className="mb-6 grid gap-6 lg:grid-cols-2"><MenteesAttention /><RemindersCard limit={4} title="Mentee reminders" /></div>}
 
-      <div className={`grid grid-cols-2 gap-4 ${isOwnView ? "lg:grid-cols-3" : "lg:grid-cols-4"}`}>
+      {isOwnView && <div className="grid grid-cols-2 gap-4 lg:grid-cols-3">
         {tiles.map((t) => (
           <Link key={t.label} to={t.to} className="rounded-2xl">
             <Card hover className="h-full p-5 md:p-6">
@@ -69,16 +62,18 @@ export default function Dashboard() {
             </Card>
           </Link>
         ))}
-      </div>
+      </div>}
       {role === "SUPERVISOR" && <p className="mt-2 text-xs text-muted-foreground">Publication and award counts cover you and your mentees.</p>}
 
       {canReview && (s?.pendingReview ?? 0) > 0 && (
-        <Card className="mt-6 flex flex-wrap items-center justify-between gap-4 border-violet-200 bg-secondary/60 p-5 md:px-8">
+        <Card className={`${isOwnView ? "mt-6" : "mb-6"} flex flex-wrap items-center justify-between gap-4 border-violet-200 bg-secondary/60 p-5 md:px-8`}>
           <div className="flex items-center gap-3"><CheckSquare className="size-6 text-primary" aria-hidden />
             <p className="font-medium">{s!.pendingReview} suggestions awaiting review</p></div>
           <Link to="/review" className="inline-flex h-10 items-center rounded-full bg-primary px-5 text-sm font-semibold text-primary-foreground shadow-lg shadow-primary/30 transition-transform active:scale-[0.98]">Review now</Link>
         </Card>
       )}
+
+      {!isOwnView && <OverviewHome />}
 
       {isHead && (
         <div className="mt-6 space-y-6">
@@ -87,7 +82,7 @@ export default function Dashboard() {
         </div>
       )}
 
-      <div className="mt-6 grid gap-6 lg:grid-cols-[1.4fr_1fr]">
+      {isOwnView && <div className="mt-6 grid gap-6 lg:grid-cols-[1.4fr_1fr]">
         <Card>
           <CardHeader><CardTitle>Publications by year</CardTitle><CardDescription>Verified publications only. Updated when claims are confirmed.</CardDescription></CardHeader>
           <CardContent>
@@ -111,39 +106,8 @@ export default function Dashboard() {
           </CardContent>
         </Card>
 
-        {isOwnView ? <YourStanding /> : (
-          <Card>
-            <CardHeader><CardTitle>Top researchers</CardTitle><CardDescription>By verified publications.</CardDescription></CardHeader>
-            <CardContent>
-              {top.isLoading ? <Skeleton className="h-48 w-full" /> : top.isError ? <ErrorBanner error={top.error} onRetry={() => top.refetch()} /> : (
-                <ol className="space-y-3">
-                  {top.data?.map((r, i) => (
-                    <li key={r.researcherId} className="flex items-center gap-3">
-                      <span className="grid size-7 place-items-center rounded-full bg-secondary text-xs font-bold text-primary">{i + 1}</span>
-                      <Link to={`/people/${r.researcherId}`} className="flex-1 truncate font-medium hover:text-primary">{r.name}</Link>
-                      <span className="text-sm text-muted-foreground">{r.publications}</span>
-                    </li>
-                  ))}
-                </ol>
-              )}
-            </CardContent>
-          </Card>
-        )}
-      </div>
-
-      {!isOwnView && (
-        <Card className="mt-6">
-          <CardHeader><CardTitle>Departments</CardTitle><CardDescription>Output and funding by department.</CardDescription></CardHeader>
-          <CardContent className="px-0 pb-0 md:px-0 md:pb-2">
-            {depts.isLoading ? <div className="p-6"><Skeleton className="h-32 w-full" /></div> : (
-              <Table><THead><tr><TH>Department</TH><TH>Publications</TH><TH>Awards</TH><TH className="text-right">Funding</TH></tr></THead>
-                <TBody>{depts.data?.map((d) => (
-                  <TR key={d.departmentId}><TD className="font-medium">{d.name}</TD><TD>{d.publications}</TD><TD>{d.awards}</TD><TD className="text-right">{formatMoney(d.funding)}</TD></TR>
-                ))}</TBody></Table>
-            )}
-          </CardContent>
-        </Card>
-      )}
+        <YourStanding />
+      </div>}
     </div>
   );
 }

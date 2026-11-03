@@ -2,7 +2,7 @@ import { useState } from "react";
 import { Link, useParams, useSearchParams } from "react-router-dom";
 import { lazy, Suspense } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { BarChart3, Building2, Download, Play, Printer, Trash2, Trophy, TrendingUp } from "lucide-react";
+import { ArrowRight, BarChart3, Building2, Download, LineChart, Play, Printer, Trash2, Trophy, TrendingUp } from "lucide-react";
 import { Bar, BarChart, CartesianGrid, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
 import { api } from "@/lib/api";
 import { formatMoney } from "@/lib/utils";
@@ -31,6 +31,14 @@ export function ReportList() {
   return (
     <div>
       <PageHeader eyebrow="Reporting" title="Reports" description="Core reports, templates, analytics and the publication and grant catalogue. Save a report with its filters to run it again." />
+      <Link to="/analytics" className="mb-6 block rounded-2xl">
+        <Card hover className="flex flex-wrap items-center gap-5 border-violet-200 bg-secondary/60 px-8 py-6">
+          <div className="grid size-11 place-items-center rounded-xl bg-primary text-primary-foreground"><LineChart className="size-5" aria-hidden /></div>
+          <div className="min-w-0 flex-1"><h3 className="text-lg font-semibold tracking-tight md:text-xl">Analytics dashboard</h3>
+            <p className="text-muted-foreground">Interactive charts for output, quality, funding and PhD progress. Filter by period, school and department.</p></div>
+          <span className="inline-flex items-center gap-1 text-sm font-semibold text-primary">Open <ArrowRight className="size-4" aria-hidden /></span>
+        </Card>
+      </Link>
       <div className="grid gap-6 sm:grid-cols-2">
         {catalogue.map((r) => (
           <Link key={r.slug} to={`/reports/${r.slug}`} className="rounded-2xl">

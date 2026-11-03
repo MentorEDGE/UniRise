@@ -13,7 +13,11 @@ export const formatNumber = (n: number) => new Intl.NumberFormat().format(n);
 export const formatMoney = (n: number, currency: string = getCurrency()) =>
   new Intl.NumberFormat(currency === "INR" ? "en-IN" : "en-US", { style: "currency", currency, maximumFractionDigits: 0 }).format(n);
 
-export const formatDate = (iso: string) =>
+/** Short amounts for chart axes and tiles, e.g. ₹4.2 Cr. */
+export const formatMoneyCompact = (n: number, currency: string = getCurrency()) =>
+  new Intl.NumberFormat(currency === "INR" ? "en-IN" : "en-US", { style: "currency", currency, notation: "compact", maximumFractionDigits: 1 }).format(n);
+
+export const formatDate =(iso: string) =>
   new Date(iso).toLocaleDateString("en-IN", { day: "numeric", month: "short", year: "numeric" });
 
 /** DOI/ORCID links are only built for the two trusted hosts. */
