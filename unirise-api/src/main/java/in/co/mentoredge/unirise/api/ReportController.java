@@ -29,7 +29,7 @@ public class ReportController {
 		ru AS (SELECT ap.researcher_id, ou.name AS dept,
 		  (SELECT cu.name FROM org_unit_closure c JOIN org_unit cu ON cu.id = c.ancestor_id WHERE c.descendant_id = ou.id AND cu.type = 'campus' ORDER BY c.depth DESC LIMIT 1) AS institute
 		  FROM appointment ap JOIN org_unit ou ON ou.id = ap.org_unit_id WHERE ap.valid_from <= current_date AND (ap.valid_to IS NULL OR ap.valid_to >= current_date))""";
-	private static final String AU = "au AS (SELECT DISTINCT a.publication_id, a.researcher_id, a.kind FROM publication_author a JOIN pubs ON pubs.id = a.publication_id WHERE a.researcher_id IS NOT NULL)";
+	private static final String AU = "au AS (SELECT DISTINCT a.publication_id, a.researcher_id, a.kind FROM publication_author a JOIN pubs ON pubs.id = a.publication_id WHERE a.researcher_id IS NOT NULL{AU})";
 
 	private static final Map<String, Spec> CATALOGUE = Map.ofEntries(
 		pub("pub-university", List.of("Year", "Publications"), "SELECT pub_year, count(*) FROM pubs GROUP BY 1 ORDER BY 1"),
@@ -67,7 +67,7 @@ public class ReportController {
 		grant("grant-sanctioned", List.of("Grant", "Agency", "Sanctioned on", "Amount", "Months"),
 			"SELECT gr.title, COALESCE(gr.agency, ''), gr.sanctioned_on, gr.sanctioned_amount, gr.duration_months FROM gr WHERE gr.status = 'sanctioned' ORDER BY gr.sanctioned_on, gr.id"),
 		grant("grant-employee", List.of("Employee ID", "Investigator", "Grants", "Applied"),
-			"SELECT COALESCE(r.employee_id, ''), gi.name, count(DISTINCT gr.id), sum(gr.applied_amount) FROM gr JOIN grant_investigator gi ON gi.grant_id = gr.id LEFT JOIN researcher r ON r.id = gi.researcher_id GROUP BY 1, 2 ORDER BY 3 DESC, 1"));
+			"SELECT COALESCE(r.employee_id, ''), gi.name, count(DISTINCT gr.id), sum(gr.applied_amount) FROM gr JOIN grant_investigator gi ON gi.grant_id = gr.id LEFT JOIN researcher r ON r.id = gi.researcher_id WHERE true{GI} GROUP BY 1, 2 ORDER BY 3 DESC, 1"));
 
 	private static Map.Entry<String, Spec> pub(String slug, List<String> cols, String sql) { return Map.entry(slug, new Spec(false, cols, sql)); }
 
@@ -112,9 +112,9 @@ public class ReportController {
 		} else {
 			with = "WITH pubs AS (SELECT p.* FROM publication p WHERE p.entry_status = 'approved'"
 				+ (v.all() ? "" : " AND (p.owner_id IN (:ids) OR p.id IN (SELECT publication_id FROM publication_author WHERE researcher_id IN (:ids)))")
-				+ (from == null ? "" : " AND p.pub_year >= :fy") + (to == null ? "" : " AND p.pub_year <= :ty") + "), " + AU + ", " + RU;
+				+ (from == null ? "" : " AND p.pub_year >= :fy") + (to == null ? "" : " AND p.pub_year <= :ty") + "), " + AU.replace("{AU}", v.all() ? "" : " AND a.researcher_id IN (:ids)") + ", " + RU; // co-authors outside the caller's slice are not listed
 		}
-		var q = db.sql(with + " " + spec.sql());
+		var q = db.sql(with + " " + spec.sql().replace("{GI}", v.all() ? "" : " AND (gi.researcher_id IS NULL OR gi.researcher_id IN (:ids))"));
 		if (!v.all()) q = q.param("ids", v.ids().isEmpty() ? java.util.Set.of(-1L) : v.ids());
 		if (from != null) q = q.param("from", from).param("fy", from.getYear());
 		if (to != null) q = q.param("to", to).param("ty", to.getYear());

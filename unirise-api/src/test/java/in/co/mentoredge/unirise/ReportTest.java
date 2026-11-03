@@ -121,6 +121,20 @@ class ReportTest {
 	}
 
 	@Test
+	void personReportsDoNotNameCoAuthorsOutsideTheCallersSlice() throws Exception {
+		setup();
+		String forB = call("GET", "/api/reports/pub-employee", tokB, null).body();
+		assertTrue(forB.contains("E2") && !forB.contains("E1") && !forB.contains("Asha"), forB);   // p2 is co-authored by Asha, who Bala cannot see
+		assertFalse(call("GET", "/api/reports/grant-employee", tokB, null).body().contains("E1"));
+		// a user with only an IT_ADMIN grant has no research scope at all
+		var inv = call("POST", "/api/auth/invitations", service, "{\"email\":\"it@z.example\"}");
+		create("/api/role-grants", service, "{\"userId\":" + field(inv.body(), "userId") + ",\"role\":\"IT_ADMIN\"}");
+		String it = field(call("POST", "/api/auth/redeem", null, "{\"token\":\"" + field(inv.body(), "token") + "\"}").body(), "token");
+		assertEquals("[]", call("GET", "/api/org-units", it, null).body());
+		assertEquals("[]", call("GET", "/api/researchers", it, null).body());
+	}
+
+	@Test
 	void grantReportsUseTheChosenDateBasisAndIgnoreDrafts() throws Exception {
 		setup();
 		String byType = call("GET", "/api/reports/grant-type", service, null).body();

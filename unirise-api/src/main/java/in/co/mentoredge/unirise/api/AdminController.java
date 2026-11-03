@@ -22,8 +22,10 @@ public class AdminController {
 
 	private final JdbcClient db;
 	private final AccessService access;
+	private final OrgTree tree;
 
-	public AdminController(@Qualifier("tenantJdbc") JdbcClient db, AccessService access) {
+	public AdminController(@Qualifier("tenantJdbc") JdbcClient db, AccessService access, OrgTree tree) {
+		this.tree = tree;
 		this.db = db;
 		this.access = access;
 	}
@@ -40,11 +42,7 @@ public class AdminController {
 	Map<String, Long> addUnit(@RequestBody NewUnit u, HttpServletRequest req) {
 		access.requireAdmin(access.actor(req));
 		if (u.name() == null || u.name().isBlank() || u.type() == null) throw new ResponseStatusException(HttpStatus.BAD_REQUEST);
-		long id = db.sql("INSERT INTO org_unit(parent_id, type, name) VALUES (:p, :t, :n) RETURNING id").param("p", u.parentId()).param("t", u.type()).param("n", u.name()).query(Long.class).single();
-		db.sql("INSERT INTO org_unit_closure VALUES (:i, :i, 0)").param("i", id).update();
-		if (u.parentId() != null) {
-			db.sql("INSERT INTO org_unit_closure SELECT ancestor_id, :i, depth + 1 FROM org_unit_closure WHERE descendant_id = :p").param("i", id).param("p", u.parentId()).update();
-		}
+		long id = tree.add(u.parentId(), u.type(), u.name());
 		return Map.of("id", id);
 	}
 
