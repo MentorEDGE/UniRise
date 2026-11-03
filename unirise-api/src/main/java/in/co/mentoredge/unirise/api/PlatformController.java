@@ -22,8 +22,17 @@ public class PlatformController {
 	/** The API key in the response is shown once; only its hash is stored. */
 	@PostMapping("/tenants")
 	@ResponseStatus(HttpStatus.CREATED)
-	Provisioner.Created create(@RequestBody NewTenant body) { return provisioner.provision(body.slug(), body.name()); }
+	Provisioner.Created create(@RequestBody NewTenant body, jakarta.servlet.http.HttpServletRequest req) {
+		operatorOnly(req);
+		return provisioner.provision(body.slug(), body.name()); }
 
 	@PostMapping("/migrations")
-	List<Migrator.Result> migrateAll() { return migrator.migrateAll(); }
+	List<Migrator.Result> migrateAll(jakarta.servlet.http.HttpServletRequest req) {
+		operatorOnly(req);
+		return migrator.migrateAll(); }
+
+	/** Second guard behind the filter: the handler itself refuses a request the filter did not mark as the operator's. */
+	private static void operatorOnly(jakarta.servlet.http.HttpServletRequest req) {
+		if (req.getAttribute("platform") == null) throw new org.springframework.web.server.ResponseStatusException(HttpStatus.UNAUTHORIZED);
+	}
 }

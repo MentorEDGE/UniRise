@@ -73,7 +73,7 @@ public class Provisioner {
 		return new Created(slug, apiKey);
 	}
 
-	static String randomHex(int bytes) {
+	public static String randomHex(int bytes) {
 		byte[] b = new byte[bytes];
 		RANDOM.nextBytes(b);
 		return HexFormat.of().formatHex(b);

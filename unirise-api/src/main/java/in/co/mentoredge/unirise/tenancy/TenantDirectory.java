@@ -24,6 +24,16 @@ public class TenantDirectory {
 			.param("h", keyHash).query(TenantDirectory::map).optional();
 	}
 
+	public record TokenHit(TenantInfo tenant, long userId) {}
+
+	/** A live token of the given kind; an invitation token is marked used by the caller. */
+	public Optional<TokenHit> byToken(String tokenHash, String kind) {
+		return control.sql(SELECT + " JOIN user_token t ON t.institution_id = i.id WHERE t.token_hash = :h AND t.kind = :k AND t.expires_at > now() AND (t.kind = 'session' OR t.used_at IS NULL)")
+			.param("h", tokenHash).param("k", kind)
+			.query((r, n) -> new TokenHit(map(r, n), 0)).optional()
+			.map(h -> new TokenHit(h.tenant(), control.sql("SELECT app_user_id FROM user_token WHERE token_hash = :h").param("h", tokenHash).query(Long.class).single()));
+	}
+
 	public java.util.List<TenantInfo> all() {
 		return control.sql(SELECT + " WHERE i.status NOT IN ('provisioning','closed') ORDER BY i.slug").query(TenantDirectory::map).list();
 	}
