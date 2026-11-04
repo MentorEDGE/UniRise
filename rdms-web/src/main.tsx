@@ -1,5 +1,6 @@
 import { StrictMode } from 'react';
 import { createRoot } from 'react-dom/client';
+import './lib/theme';
 import App from './App';
 import '@fontsource-variable/figtree';
 import './styles.css';

@@ -1,6 +1,6 @@
 import { useMemo } from 'react';
 import { Link } from 'react-router-dom';
-import { BarCard, LineCard, QUARTILE_COLORS, RankList } from '../../components/charts';
+import { BarCard, LineCard, RankList, useQuartileColors } from '../../components/charts';
 import { Attainment, DataTable, PageTitle, Panel } from '../../components/ui';
 import type { Column } from '../../components/ui';
 import {
@@ -41,6 +41,7 @@ export function InstitutionAnalytics() {
   const student = u.pubs.filter((p) => p.authors.some((a) => a.kind === 'Student' || a.kind === 'Ex-Student')).length;
 
   // Monthly activity inside the selected range.
+  const quartileColors = useQuartileColors();
   const monthly = useMemo(() => {
     if (!filter.from) return [];
     const out: Record<string, Record<string, number | string>> = {};
@@ -76,7 +77,7 @@ export function InstitutionAnalytics() {
         <BarCard title="Publications by type" sub="Per academic year; a co-authored paper counts once" data={rows} xKey="ay" xLabel="Academic year" stacked
           series={[{ key: 'journal', label: 'Journal' }, { key: 'confPaper', label: 'Conference paper' }, { key: 'bookChapter', label: 'Book / chapter' }, { key: 'report', label: 'Tech report' }]} />
         <BarCard title="Journal quality (quartile)" sub="Journal articles per academic year" data={rows} xKey="ay" xLabel="Academic year" stacked
-          series={(['q1', 'q2', 'q3', 'q4', 'unranked'] as const).map((k, i) => ({ key: k, label: k === 'unranked' ? 'Unranked' : k.toUpperCase(), color: QUARTILE_COLORS[i] }))} />
+          series={(['q1', 'q2', 'q3', 'q4', 'unranked'] as const).map((k, i) => ({ key: k, label: k === 'unranked' ? 'Unranked' : k.toUpperCase(), color: quartileColors[i] }))} />
         <BarCard title="Grant funding (₹ lakh)" sub="Applied vs sanctioned, by year the proposal was applied" data={rows} xKey="ay" xLabel="Academic year" fmt={nf}
           series={[{ key: 'appliedL', label: 'Applied' }, { key: 'sanctionedL', label: 'Sanctioned' }, { key: 'receivedL', label: 'Received' }]} />
         <BarCard title="FDP hours" sub="Total hours of approved FDPs, workshops and courses" data={rows} xKey="ay" xLabel="Academic year" series={[{ key: 'fdpHours', label: 'FDP hours' }]} />

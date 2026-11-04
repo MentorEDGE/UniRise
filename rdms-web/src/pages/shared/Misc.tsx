@@ -8,6 +8,7 @@ import type { Settings, Targets, Weights } from '../../lib/types';
 import { MONTHS } from '../../lib/types';
 import { fmtDate } from '../../lib/analytics';
 import { Logo } from '../../components/Logo';
+import { ThemeToggle } from '../../components/ThemeToggle';
 
 // ---------------- View researcher profile ----------------
 
@@ -74,7 +75,7 @@ export function InstitutionSettings() {
         </div>
       </Panel>
       <Panel title="Departments" size="wide">
-        <table className="tbl" style={{ background: '#fff' }}>
+        <table className="tbl">
           <thead><tr><th>Department</th><th className="num">Faculty</th><th /></tr></thead>
           <tbody>{s.departments.map((d) => (
             <tr key={d}><td>{d}</td><td className="num">{db.faculty.filter((f) => f.department === d).length}</td>
@@ -190,7 +191,7 @@ function IntroPage({ children }: { children: React.ReactNode }) {
   return (
     <div className="intro">
       <div className="intro-bg" aria-hidden><div className="intro-blob a" /><div className="intro-blob b" /></div>
-      <header className="intro-head"><Logo /></header>
+      <header className="intro-head"><Logo /><ThemeToggle /></header>
       <main className="intro-main">
         <section className="intro-hero">
           <p className="eyebrow">UniRise · For Universities &amp; Research Institutions</p>
@@ -332,7 +333,7 @@ export function AdminLogin() {
   };
   return (
     <div className="intro">
-      <header className="intro-head"><Logo /><span className="role-chip">Platform administration</span></header>
+      <header className="intro-head"><Logo /><span style={{ display: 'flex', gap: 10, alignItems: 'center' }}><span className="role-chip">Platform administration</span><ThemeToggle /></span></header>
       <main className="login-wrap" style={{ display: 'grid', placeItems: 'center', flex: 1, padding: 24 }}>
         <div className="login-box" style={{ width: 'min(420px, 100%)' }}>
           <div className="panel">

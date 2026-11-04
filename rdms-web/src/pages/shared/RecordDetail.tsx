@@ -60,7 +60,7 @@ export function RecordDetail({ kind, id, onClose }: { kind: EntityKind; id: stri
       )}
 
       {isMgmt && r.status === 'Submitted' && (
-        <div className="panel" style={{ marginTop: 12, background: '#fff' }}>
+        <div className="panel" style={{ marginTop: 12 }}>
           <h3 className="panel-title">Review</h3>
           {kind === 'seedMoney' && (
             <Field label="Sanctioned amount (₹)" hint={`Requested ₹${(r as SeedMoney).requestedAmount.toLocaleString('en-IN')}`}>
@@ -79,7 +79,7 @@ export function RecordDetail({ kind, id, onClose }: { kind: EntityKind; id: stri
       )}
 
       {isMgmt && kind === 'grants' && r.status === 'Approved' && (
-        <div className="panel" style={{ marginTop: 12, background: '#fff' }}>
+        <div className="panel" style={{ marginTop: 12 }}>
           <h3 className="panel-title">Funding outcome</h3>
           <div className="grid">
             <Field label="Outcome"><Select value={outcome.outcome} onChange={(v) => setOutcome({ ...outcome, outcome: v as Grant['outcome'] })} options={GRANT_OUTCOMES} /></Field>

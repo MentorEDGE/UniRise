@@ -82,7 +82,7 @@ function ReviewRequest({ account: a, institutions, onClose, onDone }: { account:
         <dt>Designation</dt><dd>{a.designation || '—'}</dd>
         <dt>Their note</dt><dd>{a.note || '—'}</dd>
       </dl>
-      <div className="panel" style={{ marginTop: 14, background: '#fff' }}>
+      <div className="panel" style={{ marginTop: 14 }}>
         <h3 className="panel-title">Assign and approve</h3>
         <div className="grid g2">
           <Field label="Institution" required><Select value={form.institutionId} onChange={(v) => setForm({ ...form, institutionId: v, department: '' })} options={institutions.filter((i) => i.status === 'active').map((i) => ({ value: i.id, label: i.name }))} placeholder="--Select--" /></Field>
@@ -103,7 +103,7 @@ function ReviewRequest({ account: a, institutions, onClose, onDone }: { account:
           <button className="btn ok" disabled={busy || !form.affiliationVerified} onClick={() => act(`/admin/requests/${a.id}/approve`, form, `${a.name} approved as ${ROLE[form.role]}.`)}>Approve</button>
         </div>
       </div>
-      <div className="panel" style={{ marginTop: 14, background: '#fff' }}>
+      <div className="panel" style={{ marginTop: 14 }}>
         <h3 className="panel-title">Reject</h3>
         <Field label="Reason" hint="Recorded in the audit log"><TextArea value={reason} onChange={setReason} /></Field>
         <div className="btn-row"><button className="btn danger" disabled={busy} onClick={() => act(`/admin/requests/${a.id}/reject`, { reason }, `Request from ${a.name} rejected.`)}>Reject request</button></div>
@@ -168,7 +168,7 @@ export function AdminUsers() {
             <dt>Approved</dt><dd>{open.reviewedBy ?? '—'} {fmtDate(open.reviewedAt ?? '')}</dd>
           </dl>
           {open.role !== 'it_admin' && (
-            <div className="panel" style={{ marginTop: 14, background: '#fff' }}>
+            <div className="panel" style={{ marginTop: 14 }}>
               <Field label="Reason" hint="Needed to suspend or deactivate; recorded in the audit log"><Input value={reason} onChange={setReason} /></Field>
               <div className="btn-row">
                 {open.status !== 'active' && <button className="btn ok" onClick={() => act(`/admin/users/${open.id}/status`, { status: 'active', reason }, `${open.name} reactivated.`)}>Activate</button>}
