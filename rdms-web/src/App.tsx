@@ -90,9 +90,7 @@ export default function App() {
             <Route path="conferences" element={<Only role={INST}><RecordView kind="conferences" /></Only>} />
             <Route path="reports/annual" element={<Only role="management"><AnnualReport /></Only>} />
             <Route path="reports/:group" element={<Only role={INST}><ReportsPage /></Only>} />
-            <Route path="profile-search" element={<Only role={INST}><ProfileSearch /></Only>} />
-            <Route path="profile/:id" element={<Only role={INST}><ProfileRoute /></Only>} />
-            <Route path="profile/:id/biodata" element={<Only role={INST}><BiodataView /></Only>} />
+            <Route path="profile-search" element={<Only role="management"><ProfileSearch /></Only>} />
             <Route path="account" element={<Account />} />
 
             {/* faculty */}

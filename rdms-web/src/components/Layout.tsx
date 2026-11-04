@@ -28,7 +28,7 @@ export function menusFor(role: Role, pending: number): MenuDef[] {
       { label: 'Seed Money', items: [{ label: 'Seed Money Entry', to: '/seed-money/entry' }, { label: 'Seed Money Status', to: '/seed-money' }] },
       { label: 'FDP', items: [{ label: 'My FDPs', to: '/fdp' }, { label: 'FDP Entry', to: '/fdp/entry' }] },
       { label: 'Conference', items: [{ label: 'My Conferences', to: '/conferences' }, { label: 'Conference Entry', to: '/conferences/entry' }] },
-      { label: 'Profile', items: [{ label: 'My Profile / Print CV', to: '/biodata' }, { label: 'Edit Profile', to: '/biodata/edit' }, 'sep', { label: 'Search Faculty Profiles', to: '/profile-search' }] },
+      { label: 'Profile', items: [{ label: 'My Profile / Print CV', to: '/biodata' }, { label: 'Edit Profile', to: '/biodata/edit' }] },
       { label: 'Reports', items: [{ label: 'My Performance', to: '/performance' }, 'sep', { label: 'Publication Reports', to: '/reports/publications' }, { label: 'Grant Reports', to: '/reports/grants' }, { label: 'FDP Reports', to: '/reports/fdps' }, { label: 'Conference Reports', to: '/reports/conferences' }] },
       { label: 'Account', items: [{ label: 'Change Password', to: '/account' }, 'sep', LOGOUT] },
     ];

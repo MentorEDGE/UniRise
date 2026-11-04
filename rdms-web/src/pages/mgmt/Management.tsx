@@ -222,10 +222,9 @@ export function Faculty360({ facultyId: given }: { facultyId?: string }) {
   if (!f) return <Panel><Alert kind="error">Faculty member not found.</Alert></Panel>;
   const isMgmt = user?.role === 'management';
   const isSelf = user?.facultyId === facultyId;
-  const showScores = isMgmt || isSelf;
-  // A colleague's FDPs, conferences, grants and biodata are private: faculty only see their approved publications.
-  const colleague = !isMgmt && !isSelf;
-  const kinds: EntityKind[] = colleague ? ['publications'] : KINDS;
+  // Faculty see only their own profile; management sees everyone in the institution.
+  if (!isMgmt && !isSelf) return <Panel><Alert kind="error">You can only view your own profile.</Alert></Panel>;
+  const kinds: EntityKind[] = KINDS;
   const dept = (v: string) => (isMgmt ? ` · dept. avg ${v}` : '');
   const deptStats = facultyStats(db, { ...filter, department: f.department });
   const avg = (k: 'publications' | 'fdpHours' | 'conferences' | 'score') => deptStats.reduce((a, x) => a + x[k], 0) / (deptStats.length || 1);
@@ -244,7 +243,7 @@ export function Faculty360({ facultyId: given }: { facultyId?: string }) {
             <div className="muted">{f.id} · {f.email}{f.orcid && <> · ORCID <a href={`https://orcid.org/${f.orcid}`} target="_blank" rel="noreferrer">{f.orcid}</a></>}{f.scopusId && ` · Scopus ${f.scopusId}`} · joined {fmtDate(f.joiningDate)}</div>
           </div>
           <div className="row-actions" style={{ alignItems: 'start' }}>
-            {!colleague && <Link className="btn sm" to={isMgmt ? `/faculty/${f.id}/biodata` : '/biodata'}>Profile / CV</Link>}
+            <Link className="btn sm" to={isMgmt ? `/faculty/${f.id}/biodata` : '/biodata'}>Profile / CV</Link>
             {isMgmt && <Link className="btn sm secondary" to={`/faculty/${f.id}/edit`}>Edit details</Link>}
           </div>
         </div>
@@ -253,20 +252,20 @@ export function Faculty360({ facultyId: given }: { facultyId?: string }) {
       {s && (
         <div style={{ maxWidth: 1180, margin: '0 auto 14px' }}>
           <div className="tiles">
-            {showScores && <Tile label="Score" value={s.score} sub={isMgmt ? `Dept. avg ${avg('score').toFixed(1)}` : 'Weighted score'} />}
-            <Tile label="Publications" value={s.publications} sub={colleague ? 'Approved publications' : `Target ${t.publicationsPerFaculty}${dept(avg('publications').toFixed(1))}`} />
+            <Tile label="Score" value={s.score} sub={isMgmt ? `Dept. avg ${avg('score').toFixed(1)}` : 'Weighted score'} />
+            <Tile label="Publications" value={s.publications} sub={`Target ${t.publicationsPerFaculty}${dept(avg('publications').toFixed(1))}`} />
             <Tile label="Q1 + Q2" value={s.q1q2} sub={`${s.scopusWos} Scopus/WoS indexed`} />
-            {!colleague && <Tile label="Grants" value={`${s.grantsApplied} / ${s.grantsSanctioned}`} sub={`applied / sanctioned · ${lakh(s.sanctionedAmount)} share`} />}
-            {!colleague && <Tile label="FDP hours" value={s.fdpHours} sub={`Target ${t.fdpHoursPerFaculty}${dept(avg('fdpHours').toFixed(0))}`} />}
-            {!colleague && <Tile label="Conferences" value={s.conferences} sub={`${s.confPresented} presented`} />}
-            {showScores && <Tile label="Profile" value={`${s.biodata}%`} sub="complete" />}
+            <Tile label="Grants" value={`${s.grantsApplied} / ${s.grantsSanctioned}`} sub={`applied / sanctioned · ${lakh(s.sanctionedAmount)} share`} />
+            <Tile label="FDP hours" value={s.fdpHours} sub={`Target ${t.fdpHoursPerFaculty}${dept(avg('fdpHours').toFixed(0))}`} />
+            <Tile label="Conferences" value={s.conferences} sub={`${s.confPresented} presented`} />
+            <Tile label="Profile" value={`${s.biodata}%`} sub="complete" />
           </div>
         </div>
       )}
       <div className="cards" style={{ marginBottom: 14 }}>
         <BarCard title="Publications by year" data={rows} xKey="ay" xLabel="Academic year" stacked series={[{ key: 'journal', label: 'Journal' }, { key: 'confPaper', label: 'Conference paper' }, { key: 'bookChapter', label: 'Book / chapter' }, { key: 'report', label: 'Tech report' }]} height={200} />
-        {!colleague && <BarCard title="FDP hours by year" data={rows} xKey="ay" xLabel="Academic year" series={[{ key: 'fdpHours', label: 'FDP hours' }]} height={200} />}
-        {!colleague && <BarCard title="Conferences by year" data={rows} xKey="ay" xLabel="Academic year" stacked series={[{ key: 'national', label: 'National' }, { key: 'international', label: 'International' }]} height={200} />}
+        <BarCard title="FDP hours by year" data={rows} xKey="ay" xLabel="Academic year" series={[{ key: 'fdpHours', label: 'FDP hours' }]} height={200} />
+        <BarCard title="Conferences by year" data={rows} xKey="ay" xLabel="Academic year" stacked series={[{ key: 'national', label: 'National' }, { key: 'international', label: 'International' }]} height={200} />
       </div>
       <Panel size="wide" title={`Records${ay === 'all' ? '' : ` in AY ${ay}`}`}>
         <Tabs value={tab} onChange={setTab} tabs={kinds.map((k) => ({ id: k, label: ENTITY_LABEL[k] }))} />

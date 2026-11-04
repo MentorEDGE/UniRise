@@ -31,7 +31,6 @@ export function BiodataView() {
       <div className="panel wide no-print" style={{ display: 'flex', gap: 12, alignItems: 'center', flexWrap: 'wrap' }}>
         <div style={{ flex: 1, minWidth: 220 }}><b>Profile completeness</b><Attainment value={pct} target={100} /></div>
         {canEdit && <Link className="btn" to={editPath}>Edit Profile</Link>}
-        {user?.role === 'faculty' && <Link className="btn secondary" to="/profile-search">Search Faculty Profiles</Link>}
         <button className="btn secondary" onClick={() => window.print()}>Print / Save as PDF</button>
       </div>
       <article className="cv">

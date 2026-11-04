@@ -13,7 +13,7 @@ import { ThemeToggle } from '../../components/ThemeToggle';
 // ---------------- View researcher profile ----------------
 
 export function ProfileSearch() {
-  const { db, user } = useStore();
+  const { db } = useStore();
   const nav = useNavigate();
   const [by, setBy] = useState<'id' | 'orcid' | 'scopus'>('id');
   const [q, setQ] = useState('');
@@ -23,7 +23,7 @@ export function ProfileSearch() {
     const s = q.trim().toLowerCase();
     const f = db.faculty.find((x) => (by === 'id' ? x.id.toLowerCase() === s : by === 'orcid' ? x.orcid.toLowerCase() === s : x.scopusId === s));
     if (!f) { setError('No researcher found for that ID.'); return; }
-    nav(user?.role === 'management' ? `/faculty/${f.id}` : `/profile/${f.id}`);
+    nav(`/faculty/${f.id}`);
   };
   return (
     <>
