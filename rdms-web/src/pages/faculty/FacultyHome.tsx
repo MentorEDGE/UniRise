@@ -48,7 +48,7 @@ export function FacultyHome() {
             <Tile label="Conferences" value={s.conferences} sub={<Attainment value={s.conferences} target={t.conferencesPerFaculty} />} to="/conferences" />
             <Tile label="Grant proposals" value={s.grantsApplied} sub={`${s.grantsSanctioned} sanctioned`} to="/grants" />
             <Tile label="Score" value={s.score} sub="See My Performance" to="/performance" />
-            <Tile label="Biodata" value={`${bio}%`} sub={<Attainment value={bio} target={100} />} to="/biodata/edit" />
+            <Tile label="Profile" value={`${bio}%`} sub={<Attainment value={bio} target={100} />} to="/biodata/edit" />
           </div>
           <p className="note" style={{ textAlign: 'center' }}>Approved entries in AY {ay}. Targets are set by management. {coauthored > 0 && `${coauthored} approved publications credit you as a co-author.`}</p>
         </div>
@@ -64,7 +64,7 @@ export function FacultyHome() {
               </tr>
             ))}</tbody></table>
           ) : <p className="muted">Nothing needs your action.</p>}
-          {bio < 80 && <p className="note">Your biodata is {bio}% complete. <Link to="/biodata/edit">Complete it</Link> for accreditation records.</p>}
+          {bio < 80 && <p className="note">Your profile is {bio}% complete. <Link to="/biodata/edit">Complete it</Link> for accreditation records.</p>}
         </section>
         <section className="card">
           <h3>Notices</h3>

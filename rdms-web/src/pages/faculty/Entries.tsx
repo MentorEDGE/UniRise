@@ -161,7 +161,7 @@ export function GrantEntry() {
               <Field label="Source Of Grant Call"><Select value={r.callSource} onChange={(v) => u({ callSource: v })} options={['Agency website', 'Research office circular', 'Email from agency', 'Other']} placeholder="--Select--" /></Field>
             </div>
             <fieldset style={{ border: '1px solid var(--line)', marginTop: 14, borderRadius: 12, padding: '10px 14px 14px' }}>
-              <legend style={{ fontWeight: 600, fontSize: 13, padding: '0 6px' }}>Agency Details</legend>
+              <legend style={{ fontWeight: 600, fontSize: 14.5, padding: '0 6px' }}>Agency Details</legend>
               <div className="grid g2">
                 <Field label="Grant Agency" required error={x.agency}><Input value={r.agency} onChange={(v) => u({ agency: v })} list="agencies" /></Field>
                 <Field label="Agency Comment"><TextArea value={r.agencyComment} onChange={(v) => u({ agencyComment: v })} /></Field>

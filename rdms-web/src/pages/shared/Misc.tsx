@@ -190,19 +190,15 @@ function IntroPage({ children }: { children: React.ReactNode }) {
   return (
     <div className="intro">
       <div className="intro-bg" aria-hidden><div className="intro-blob a" /><div className="intro-blob b" /></div>
-      <header className="intro-head"><Logo /><span className="role-chip">Research Data Management System</span></header>
+      <header className="intro-head"><Logo /></header>
       <main className="intro-main">
         <section className="intro-hero">
           <p className="eyebrow">UniRise · For Universities &amp; Research Institutions</p>
           <h1>A connected framework for institutional research growth</h1>
-          <p className="lead">One platform for colleges and universities. Each institution gets its own secure space for its faculty's publications, grants, seed money, FDPs, conferences and biodata, with approvals and analytics for management.</p>
-          <ul className="intro-features">
-            {['Customized Research Support', 'Industry Partnerships', 'Analytics & Insights', 'Research Management System'].map((t) => <li key={t}>{t}</li>)}
-          </ul>
+          <p className="lead">One platform for colleges and universities. Each institution gets its own secure space for its faculty's publications, grants, seed money, FDPs, conferences and profiles, with approvals and analytics for management.</p>
         </section>
         <section className="login-box">{children}</section>
       </main>
-      <footer className="ftr"><span /><span className="mid">UniRise · Research Data Management System</span><span className="right">Best viewed on Google Chrome</span></footer>
     </div>
   );
 }
@@ -241,14 +237,14 @@ export function Login() {
         </form>
         <p className="login-sub" style={{ marginTop: 14, textAlign: 'center' }}>New to UniRise? <Link to="/register">Request access</Link></p>
         <div className="demo-list">
-          <p className="eyebrow" style={{ fontSize: 11, marginBottom: 4 }}>Demo · sample accounts</p>
+          <p className="eyebrow" style={{ fontSize: 12.5, marginBottom: 4 }}>Demo · sample accounts</p>
           {DEMO.map((d) => (
             <button key={d.email} type="button" className="demo-pick" onClick={() => submit(undefined, d.email, d.pw)}>
               <span><b>{d.label}</b><small>{d.note}</small></span>
               <span className="arrow" aria-hidden>→</span>
             </button>
           ))}
-          <p className="muted" style={{ fontSize: 12, marginTop: 12 }}>Sample passwords: Admin@1234 (management), Faculty@123 (faculty, e.g. anita.rao@sit.edu.in). Each institution sees only its own data.</p>
+          <p className="muted" style={{ fontSize: 13.5, marginTop: 12 }}>Sample passwords: Admin@1234 (management), Faculty@123 (faculty, e.g. anita.rao@sit.edu.in). Each institution sees only its own data.</p>
         </div>
       </div>
     </IntroPage>

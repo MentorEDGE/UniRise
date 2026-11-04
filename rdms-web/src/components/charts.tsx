@@ -8,7 +8,7 @@ export const SERIES = ['#7c3aed', '#db2777', '#d97706', '#0d9488'];
 /** One violet ramp for journal quartiles (strongest = Q1), plus slate for unranked. */
 export const QUARTILE_COLORS = ['#3b0f8c', '#5b21b6', '#7c3aed', '#a78bfa', '#94a3b8'];
 const GRID = 'hsl(248 100% 95%)';
-const AXIS = { fontSize: 12, fill: 'hsl(220 9% 46%)' };
+const AXIS = { fontSize: 13.5, fill: 'hsl(220 9% 46%)' };
 
 export interface Series { key: string; label: string; color?: string }
 const colorOf = (series: Series[], i: number) => series[i]?.color ?? SERIES[i];
@@ -32,7 +32,7 @@ function TableView<T extends object>({ data, xKey, xLabel, series, fmt }: { data
 function TooltipBox({ active, payload, label, fmt, series }: { active?: boolean; payload?: { dataKey: string; value: number }[]; label?: string; fmt: (n: number) => string; series: Series[] }) {
   if (!active || !payload?.length) return null;
   return (
-    <div style={{ background: '#fff', border: '1px solid hsl(248 100% 95%)', borderRadius: 12, padding: '8px 12px', fontSize: 12.5, boxShadow: '0 16px 48px rgba(91,33,182,0.12)' }}>
+    <div style={{ background: '#fff', border: '1px solid hsl(248 100% 95%)', borderRadius: 12, padding: '8px 12px', fontSize: 14, boxShadow: '0 16px 48px rgba(91,33,182,0.12)' }}>
       <b>{label}</b>
       {payload.map((p) => {
         const i = series.findIndex((s) => s.key === p.dataKey);

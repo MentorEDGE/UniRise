@@ -172,7 +172,7 @@ export function DepartmentAnalytics() {
           <p className="sub">Share of faculty in each department who met the per-faculty targets for the period ({db.settings.targets.publicationsPerFaculty} publications, {db.settings.targets.fdpHoursPerFaculty} FDP hours, {db.settings.targets.conferencesPerFaculty} conference)</p>
           <div className="tbl-wrap">
             <table className="tbl">
-              <thead><tr><th>Department</th><th>Publications target</th><th>FDP hours target</th><th>Conference target</th><th>Biodata complete</th></tr></thead>
+              <thead><tr><th>Department</th><th>Publications target</th><th>FDP hours target</th><th>Conference target</th><th>Profile complete</th></tr></thead>
               <tbody>{rows.map((r) => (
                 <tr key={r.dept}><td>{r.dept} <span className="muted">({r.short})</span></td><td><Attainment value={r.pubAtt} target={100} /></td><td><Attainment value={r.fdpAtt} target={100} /></td><td><Attainment value={r.confAtt} target={100} /></td><td><Attainment value={r.biodata} target={100} /></td></tr>
               ))}</tbody>
@@ -247,7 +247,7 @@ export function ParticipationAnalytics() {
     { label: 'Participated in a conference', ...share((s) => s.conferences > 0) },
     { label: 'Applied for an external grant', ...share((s) => s.grantsApplied > 0) },
     { label: 'Holds a sanctioned grant', ...share((s) => s.grantsSanctioned > 0) },
-    { label: 'Biodata ≥ 80% complete', ...share((s) => s.biodata >= 80) },
+    { label: 'Profile ≥ 80% complete', ...share((s) => s.biodata >= 80) },
   ];
   const yearAgo = new Date(Date.now() - 365 * 86400000).toISOString().slice(0, 10);
   const inactive = stats.filter((s) => !s.lastActivity || s.lastActivity < yearAgo);
@@ -293,8 +293,8 @@ export function ParticipationAnalytics() {
           <DataTable rows={noFdp} columns={[...simple, { key: 'h', label: 'Hours', value: (r) => r.fdpHours, num: true }, { key: 'gap', label: 'Short by', value: (r) => t.fdpHoursPerFaculty - r.fdpHours, num: true }]} rowKey={(r) => r.faculty.id} pageSize={8} exportName="fdp_shortfall" empty="All faculty met the FDP target." />
         </section>
         <section className="card">
-          <h3>Incomplete biodata ({lowBio.length})</h3><p className="sub">Below 80% — needed for accreditation files</p>
-          <DataTable rows={lowBio} columns={[...simple, { key: 'b', label: 'Complete', value: (r) => r.biodata, render: (r) => <Attainment value={r.biodata} target={100} />, num: true }]} rowKey={(r) => r.faculty.id} pageSize={8} exportName="incomplete_biodata" empty="All biodata are at least 80% complete." />
+          <h3>Incomplete profiles ({lowBio.length})</h3><p className="sub">Below 80% — needed for accreditation files</p>
+          <DataTable rows={lowBio} columns={[...simple, { key: 'b', label: 'Complete', value: (r) => r.biodata, render: (r) => <Attainment value={r.biodata} target={100} />, num: true }]} rowKey={(r) => r.faculty.id} pageSize={8} exportName="incomplete_profiles" empty="All profiles are at least 80% complete." />
         </section>
         <section className="card">
           <h3>Approvals waiting over 7 days ({stale.length})</h3><p className="sub">Submitted entries not yet reviewed</p>

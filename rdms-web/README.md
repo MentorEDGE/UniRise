@@ -33,7 +33,7 @@ IT Admin accounts are created only on the server: `npm run admin -- create <emai
 |---|---|---|
 | **IT Admin** | Platform | Approve or reject access requests, assign institution and role, confirm affiliation, activate / suspend / deactivate accounts, reset passwords, change roles, add and suspend institutions, read the audit log. **Cannot read any institution's research data.** Separate sign-in route (`/#/admin`), not shown on the public pages; 30-minute idle timeout. |
 | **Top-Level Management** | Institution | Everything inside its own institution: dashboard (departments, faculty, biodata, FDPs, conferences), analytics, approvals, faculty directory and profiles, all reports, settings, notices. |
-| **Faculty** | Institution | Own profile, biodata, publications, grants, seed money, FDPs, conferences, own statistics and reports. Sees colleagues' **approved publications** and directory entries only; never their biodata, FDPs, conferences, grants or contact details. |
+| **Faculty** | Institution | Own profile (biodata and CV), publications, grants, seed money, FDPs, conferences, own statistics and reports. Sees colleagues' **approved publications** and directory entries only; never their biodata, FDPs, conferences, grants or contact details. |
 
 **Access flow:** someone requests access at `/#/register` (institution, role, details) → the request is pending →
 IT Admin checks it (the email domain is compared with the institution's; a mismatch is flagged) and must tick
@@ -64,6 +64,6 @@ Following `rms-docs/MULTI_TENANCY_DESIGN.md`, at small scale:
 ```
 server/         app.ts (API and permission checks), storage.ts (platform DB + one DB per institution), auth.ts, demo.ts, seed.ts, admin.ts (IT Admin CLI)
 src/lib/        domain.ts (rules, shared with the server), store.ts (API client), types, seed (sample data), analytics, reports, entities, csv
-src/components/ Layout (header, menu bar, footer), ui, charts, Logo
+src/components/ Layout (header, menu bar), ui, charts, Logo
 src/pages/      admin/ (IT Admin console), faculty/, mgmt/, shared/ (views, biodata, reports, settings, sign-in, request access)
 ```

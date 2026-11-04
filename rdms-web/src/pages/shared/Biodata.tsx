@@ -16,7 +16,7 @@ function useTarget() {
 
 export function BiodataView() {
   const { db, f, b, canEdit, facultyId, user } = useTarget();
-  if (user?.role === 'faculty' && facultyId !== user.facultyId) return <Panel><Alert kind="error">Biodata is private. You can only see your own.</Alert></Panel>;
+  if (user?.role === 'faculty' && facultyId !== user.facultyId) return <Panel><Alert kind="error">Profile details are private. You can only see your own.</Alert></Panel>;
   if (!f) return <Panel><Alert kind="error">Faculty member not found.</Alert></Panel>;
   const approved = <T extends { status: string }>(xs: T[]) => xs.filter((x) => x.status === 'Approved');
   const pubs = approved(db.publications).filter((p) => creditedFaculty('publications', p).includes(facultyId)).sort((a, z) => z.year - a.year);
@@ -27,10 +27,11 @@ export function BiodataView() {
   const editPath = user?.role === 'management' ? `/faculty/${f.id}/biodata/edit` : '/biodata/edit';
   return (
     <>
-      <PageTitle>Biodata</PageTitle>
+      <PageTitle>{user?.role === 'faculty' ? 'My Profile' : 'Faculty Profile'}</PageTitle>
       <div className="panel wide no-print" style={{ display: 'flex', gap: 12, alignItems: 'center', flexWrap: 'wrap' }}>
-        <div style={{ flex: 1, minWidth: 220 }}><b>Biodata completeness</b><Attainment value={pct} target={100} /></div>
-        {canEdit && <Link className="btn" to={editPath}>Edit Biodata</Link>}
+        <div style={{ flex: 1, minWidth: 220 }}><b>Profile completeness</b><Attainment value={pct} target={100} /></div>
+        {canEdit && <Link className="btn" to={editPath}>Edit Profile</Link>}
+        {user?.role === 'faculty' && <Link className="btn secondary" to="/profile-search">Search Faculty Profiles</Link>}
         <button className="btn secondary" onClick={() => window.print()}>Print / Save as PDF</button>
       </div>
       <article className="cv">
@@ -39,7 +40,7 @@ export function BiodataView() {
         <div className="muted" style={{ marginTop: 4 }}>
           Employee Code: {f.id} · {f.email} · {f.phone}{f.orcid && ` · ORCID ${f.orcid}`}{f.scopusId && ` · Scopus ID ${f.scopusId}`}
         </div>
-        {b?.summary && <><h2>Profile</h2><p style={{ margin: 0 }}>{b.summary}</p></>}
+        {b?.summary && <><h2>Summary</h2><p style={{ margin: 0 }}>{b.summary}</p></>}
         {b?.researchInterests && <p><b>Research interests:</b> {b.researchInterests}</p>}
         <h2>Personal Details</h2>
         <dl className="kv">
@@ -64,7 +65,7 @@ export function BiodataView() {
         {b?.awards.length ? <ol>{b.awards.map((a, i) => <li key={i}>{a.title}, {a.by} ({a.year})</li>)}</ol> : <p className="muted">Not entered.</p>}
         <h2>Professional Memberships</h2>
         {b?.memberships.length ? <ol>{b.memberships.map((m, i) => <li key={i}>{m.type}, {m.body} (since {m.since})</li>)}</ol> : <p className="muted">Not entered.</p>}
-        <p className="muted" style={{ marginTop: 18, fontSize: 11 }}>Generated {fmtDate(new Date().toISOString())}. Publications, grants, FDPs and conferences list approved entries only. Biodata last updated {fmtDate(b?.updatedAt ?? '')}.</p>
+        <p className="muted" style={{ marginTop: 18, fontSize: 11 }}>Generated {fmtDate(new Date().toISOString())}. Publications, grants, FDPs and conferences list approved entries only. Profile last updated {fmtDate(b?.updatedAt ?? '')}.</p>
       </article>
     </>
   );
@@ -101,7 +102,7 @@ export function BiodataEdit() {
   const [fac, setFac] = useState<Faculty | undefined>(() => (f ? { ...f } : undefined));
   const [error, setError] = useState('');
   if (!f || !fac) return <Panel><Alert kind="error">Faculty member not found.</Alert></Panel>;
-  if (!canEdit) return <Panel><Alert kind="error">You can only edit your own biodata.</Alert></Panel>;
+  if (!canEdit) return <Panel><Alert kind="error">You can only edit your own profile.</Alert></Panel>;
   const u = (p: Partial<Biodata>) => setBio({ ...bio, ...p });
   const save = async () => {
     if (fac.orcid && !/^\d{4}-\d{4}-\d{4}-\d{3}[\dX]$/.test(fac.orcid)) { setError('ORCID must look like 0000-0002-1825-0097.'); return; }
@@ -110,13 +111,13 @@ export function BiodataEdit() {
     try {
       await saveFaculty(fac);
       await saveBiodata({ ...bio, qualifications: bio.qualifications.filter((q) => q.degree.trim()), experience: bio.experience.filter((x) => x.organisation.trim()), awards: bio.awards.filter((a) => a.title.trim()), memberships: bio.memberships.filter((m) => m.body.trim()) });
-      toast('Biodata saved.');
+      toast('Profile saved.');
       nav(user?.role === 'management' ? `/faculty/${f.id}/biodata` : '/biodata');
     } catch (e) { setError((e as Error).message); }
   };
   return (
     <>
-      <PageTitle>Edit Biodata</PageTitle>
+      <PageTitle>Edit Profile</PageTitle>
       {error && <div className="panel wide"><Alert kind="error">{error}</Alert></div>}
       <Panel title="Official Details" size="wide">
         <div className="grid">
@@ -153,7 +154,7 @@ export function BiodataEdit() {
         cols={[{ key: 'body', label: 'Professional body' }, { key: 'type', label: 'Membership type' }, { key: 'since', label: 'Since (year)' }]} />
       <div className="btn-row">
         <button className="btn secondary" onClick={() => nav(-1)}>Cancel</button>
-        <button className="btn ok" onClick={save}>Save Biodata</button>
+        <button className="btn ok" onClick={save}>Save Profile</button>
       </div>
     </>
   );

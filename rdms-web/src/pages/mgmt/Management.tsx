@@ -146,7 +146,7 @@ export function FacultyDirectory() {
     { key: 'dept', label: 'Department', value: (f) => f.department },
     { key: 'email', label: 'Email', value: (f) => f.email },
     { key: 'score', label: `Score (AY)`, value: (f) => stats.get(f.id)?.score ?? 0, num: true },
-    { key: 'bio', label: 'Biodata', value: (f) => stats.get(f.id)?.biodata ?? 0, render: (f) => (stats.has(f.id) ? `${stats.get(f.id)!.biodata}%` : '—'), num: true },
+    { key: 'bio', label: 'Profile', value: (f) => stats.get(f.id)?.biodata ?? 0, render: (f) => (stats.has(f.id) ? `${stats.get(f.id)!.biodata}%` : '—'), num: true },
     { key: 'active', label: 'Status', value: (f) => (f.active ? 'Active' : 'Inactive'), render: (f) => <span className={`badge ${f.active ? 'Approved' : 'Draft'}`}>{f.active ? 'Active' : 'Inactive'}</span> },
   ];
   return (
@@ -239,12 +239,12 @@ export function Faculty360({ facultyId: given }: { facultyId?: string }) {
       <Panel size="wide">
         <div style={{ display: 'flex', justifyContent: 'space-between', gap: 10, flexWrap: 'wrap' }}>
           <div>
-            <div style={{ fontSize: 16, fontWeight: 700 }}>{f.title} {f.name} {!f.active && <span className="badge Draft">Inactive</span>}</div>
+            <div style={{ fontSize: 18, fontWeight: 700 }}>{f.title} {f.name} {!f.active && <span className="badge Draft">Inactive</span>}</div>
             <div>{f.designation}, {f.department}</div>
             <div className="muted">{f.id} · {f.email}{f.orcid && <> · ORCID <a href={`https://orcid.org/${f.orcid}`} target="_blank" rel="noreferrer">{f.orcid}</a></>}{f.scopusId && ` · Scopus ${f.scopusId}`} · joined {fmtDate(f.joiningDate)}</div>
           </div>
           <div className="row-actions" style={{ alignItems: 'start' }}>
-            {!colleague && <Link className="btn sm" to={isMgmt ? `/faculty/${f.id}/biodata` : '/biodata'}>Biodata / CV</Link>}
+            {!colleague && <Link className="btn sm" to={isMgmt ? `/faculty/${f.id}/biodata` : '/biodata'}>Profile / CV</Link>}
             {isMgmt && <Link className="btn sm secondary" to={`/faculty/${f.id}/edit`}>Edit details</Link>}
           </div>
         </div>
@@ -259,7 +259,7 @@ export function Faculty360({ facultyId: given }: { facultyId?: string }) {
             {!colleague && <Tile label="Grants" value={`${s.grantsApplied} / ${s.grantsSanctioned}`} sub={`applied / sanctioned · ${lakh(s.sanctionedAmount)} share`} />}
             {!colleague && <Tile label="FDP hours" value={s.fdpHours} sub={`Target ${t.fdpHoursPerFaculty}${dept(avg('fdpHours').toFixed(0))}`} />}
             {!colleague && <Tile label="Conferences" value={s.conferences} sub={`${s.confPresented} presented`} />}
-            {showScores && <Tile label="Biodata" value={`${s.biodata}%`} sub="complete" />}
+            {showScores && <Tile label="Profile" value={`${s.biodata}%`} sub="complete" />}
           </div>
         </div>
       )}
@@ -304,7 +304,7 @@ function InstitutionOverview({ filter }: { filter: { from: string; to: string; d
         <h3>Departments</h3><p className="sub">Faculty strength and approved activity in the period</p>
         <div className="tbl-wrap">
           <table className="tbl">
-            <thead><tr><th>Department</th><th className="num">Faculty</th><th className="num">Prof.</th><th className="num">Assoc.</th><th className="num">Asst.</th><th className="num">Publications</th><th className="num">FDP hours</th><th className="num">Conferences</th><th className="num">Biodata</th></tr></thead>
+            <thead><tr><th>Department</th><th className="num">Faculty</th><th className="num">Prof.</th><th className="num">Assoc.</th><th className="num">Asst.</th><th className="num">Publications</th><th className="num">FDP hours</th><th className="num">Conferences</th><th className="num">Profile</th></tr></thead>
             <tbody>{depts.map((d) => {
               const s = stats.filter((x) => x.faculty.department === d);
               const n = (k: string) => s.filter((x) => x.faculty.designation === k).length;
@@ -326,17 +326,17 @@ function InstitutionOverview({ filter }: { filter: { from: string; to: string; d
         <table className="tbl"><tbody>
           {desig.map((x) => <tr key={x.d}><td>{x.d}</td><td className="num">{x.n}</td></tr>)}
           {other > 0 && <tr><td>Other designations</td><td className="num">{other}</td></tr>}
-          <tr><td>Holding a Ph.D. (from biodata)</td><td className="num">{phd}</td></tr>
+          <tr><td>Holding a Ph.D. (from profiles)</td><td className="num">{phd}</td></tr>
           <tr><td>With ORCID</td><td className="num">{people.filter((f) => f.orcid).length}</td></tr>
         </tbody></table>
         <div className="btn-row left"><Link className="btn sm" to="/faculty">Faculty directory</Link></div>
       </section>
       <section className="card">
-        <h3>Faculty biodata</h3><p className="sub">Average completeness {avgBio}% · {stats.filter((x) => x.biodata >= 80).length} of {stats.length} at 80% or more</p>
+        <h3>Faculty profiles</h3><p className="sub">Average completeness {avgBio}% · {stats.filter((x) => x.biodata >= 80).length} of {stats.length} at 80% or more</p>
         <table className="tbl"><tbody>{bio.slice(0, 6).map((x) => (
           <tr key={x.faculty.id}><td>{who(x.faculty.id)}</td><td className="muted">{x.faculty.department}</td><td style={{ width: 140 }}><Attainment value={x.biodata} target={100} /></td></tr>
         ))}</tbody></table>
-        <div className="btn-row left"><Link className="btn sm" to="/analytics/participation">Incomplete biodata list</Link></div>
+        <div className="btn-row left"><Link className="btn sm" to="/analytics/participation">Incomplete profiles list</Link></div>
       </section>
       <section className="card">
         <h3>Faculty Development Programmes</h3><p className="sub">{fdps.length} approved in the period · {fdps.reduce((a, x) => a + x.hours, 0)} hours</p>

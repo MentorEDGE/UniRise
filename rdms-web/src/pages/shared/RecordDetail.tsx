@@ -46,7 +46,7 @@ export function RecordDetail({ kind, id, onClose }: { kind: EntityKind; id: stri
         {cfg.details(r).map(([k, v]) => <div key={k} style={{ display: 'contents' }}><dt>{k}</dt><dd>{v}</dd></div>)}
       </dl>
 
-      <h3 style={{ fontSize: 12.5, margin: '14px 0 4px' }}>History</h3>
+      <h3 style={{ fontSize: 14, margin: '14px 0 4px' }}>History</h3>
       <ul className="history">
         {r.history.map((h, i) => <li key={i}><b>{fmtDate(h.at)}</b> · {h.action} by {h.by}{h.remark && <> — <i>{h.remark}</i></>}</li>)}
       </ul>
