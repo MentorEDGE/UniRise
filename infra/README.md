@@ -35,7 +35,7 @@ terraform init && terraform apply           # note the bucket name it prints
 
 cd ../envs/dev
 cp backend.hcl.example backend.hcl          # put your account id in the bucket name
-cp terraform.tfvars.example terraform.tfvars  # set ses_sender_email, budget_email, developers
+cp terraform.tfvars.example terraform.tfvars  # set budget_email, admins, developers; leave ses_sender_email empty until the domain is verified
 terraform init -backend-config=backend.hcl
 terraform plan                              # read it
 terraform apply
@@ -45,15 +45,27 @@ terraform apply
 After apply:
 1. Open the SES verification email sent to `ses_sender_email` and click the link.
 2. To send to real users, ask AWS to move SES out of the sandbox (SES console, Account dashboard).
-3. **Once, an admin creates the developer database user** (developers cannot do this). Open the tunnel with `db_tunnel_command`, connect as `unirise_admin` with the master password from the Secrets Manager secret named by `rds_secret_arn`, and run:
+3. **Once, an admin creates the database logins** (developers cannot do this). Open the tunnel with `db_tunnel_command`, connect as `unirise_admin` with the master password from the Secrets Manager secret named by `rds_secret_arn`, and run:
    ```sql
+   -- for developers: IAM sign-in, connect to the control-plane database only
    CREATE USER unirise_dev;
    GRANT rds_iam TO unirise_dev;
    GRANT CONNECT ON DATABASE unirise TO unirise_dev;
-   -- then grant only what developers need, for example on the test tenant databases
+
+   -- for the API: may create institution databases, but is not a superuser (tested in NonSuperuserTest)
+   CREATE ROLE unirise_app LOGIN PASSWORD '<generate one, do not reuse>' CREATEROLE CREATEDB;
+   GRANT pg_signal_backend TO unirise_app;
+   ALTER DATABASE unirise OWNER TO unirise_app;
    ```
-   The master user is for admins and the application provisioner only. Never hand its password to developers.
+   Store the `unirise_app` password in Secrets Manager yourself (`aws secretsmanager create-secret --name unirise/dev/app-db ...`) so it never enters Terraform state. The control-plane database is `unirise`, the one RDS creates. The master user is for admins only; never hand its password to developers.
 4. **Developers** open the tunnel with `db_tunnel_command` (it listens on `localhost:15432`) and connect with `db_connect_command`, which signs in with a 15-minute IAM token instead of a stored password. It needs the AWS CLI, the Session Manager plugin and `psql`.
+
+## Running the API against this database
+Set `CONTROL_DB_URL=jdbc:postgresql://<rds_endpoint>:5432/unirise?sslmode=require`, `CONTROL_DB_USER=unirise_app`, `RMS_DB_PASSWORD` from the secret, `TENANT_DB_HOST=<rds_endpoint>` and `TENANT_DB_JDBC_PARAMS=sslmode=require` (RDS forces TLS). From a laptop use the tunnel (`localhost:15432`) for the first two instead of the endpoint, but keep `TENANT_DB_HOST` as the real address when the API runs inside AWS.
+`sslmode=require` encrypts but does not verify the server; move to `verify-full` with the RDS CA bundle before real data.
+
+## Domain (DNS stays in Hostinger)
+Set `domain_name = "dev.unirise.mentoredge.co.in"` and apply. Terraform creates the certificate for `api.<domain_name>` and the SES domain identity, then `tofu output dns_records` lists the CNAME records. Add them in the Hostinger DNS panel, check them with `dig CNAME <name>`, and wait for the certificate to show Issued and SES to show verified. A CNAME cannot share a name with another record, so check the names first. The record for the load balancer is added later, when the ECS stage exists.
 
 ## Local Docker
 ```bash
@@ -69,7 +81,7 @@ Add their sign-in email to `developers` in `terraform.tfvars`, run `terraform ap
 `terraform destroy` in `envs/dev`. The database keeps a final snapshot (`unirise-dev-final`); delete it manually if you do not want it.
 
 ## Not done yet
-- No ECS service, load balancer or deploy pipeline (waiting for the backend).
+- No ECS service, load balancer or deploy pipeline (the backend and its image exist; the ECS stage needs the VPC endpoints and the load balancer).
 - No staging or production. Use separate AWS accounts for those and turn on Multi-AZ, deletion protection and stricter ECR tag rules.
-- No domain, certificate or DNS.
-- No GitHub Actions workflow.
+- Domain: certificate and SES identity are in Terraform (`domain.tf`, off until `domain_name` is set); the DNS records are added by hand in Hostinger.
+- CI builds and tests the API (`.github/workflows/api.yml`); there is no deploy job yet.

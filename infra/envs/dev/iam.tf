@@ -94,7 +94,7 @@ data "aws_iam_policy_document" "developer" {
     content {
       sid       = "SendMailFromUniRiseIdentity"
       actions   = ["ses:SendEmail", "ses:SendRawEmail"]
-      resources = [aws_sesv2_email_identity.sender[0].arn, aws_sesv2_configuration_set.main[0].arn]
+      resources = concat(local.email_on ? [aws_sesv2_email_identity.sender[0].arn] : [], local.domain_on ? [aws_sesv2_email_identity.domain[0].arn] : [], [aws_sesv2_configuration_set.main[0].arn])
     }
   }
   statement {

@@ -12,16 +12,20 @@ public class TenantDirectory {
 		SELECT i.id, i.slug, i.status, i.db_host, i.db_port, i.db_name, i.db_user, s.db_password
 		FROM institution i JOIN institution_secret s ON s.institution_id = i.id""";
 	private final JdbcClient control;
+	private final String jdbcParams;
 
-	public TenantDirectory(@Qualifier("controlJdbc") JdbcClient control) { this.control = control; }
+	public TenantDirectory(@Qualifier("controlJdbc") JdbcClient control, AppProperties props) {
+		this.control = control;
+		this.jdbcParams = props.tenants().jdbcParams();
+	}
 
 	public Optional<TenantInfo> bySlug(String slug) {
-		return control.sql(SELECT + " WHERE i.slug = :slug").param("slug", slug).query(TenantDirectory::map).optional();
+		return control.sql(SELECT + " WHERE i.slug = :slug").param("slug", slug).query(this::map).optional();
 	}
 
 	public Optional<TenantInfo> byKeyHash(String keyHash) {
 		return control.sql(SELECT + " JOIN institution_credential c ON c.institution_id = i.id WHERE c.key_hash = :h AND c.revoked_at IS NULL")
-			.param("h", keyHash).query(TenantDirectory::map).optional();
+			.param("h", keyHash).query(this::map).optional();
 	}
 
 	public record TokenHit(TenantInfo tenant, long userId) {}
@@ -35,11 +39,11 @@ public class TenantDirectory {
 	}
 
 	public java.util.List<TenantInfo> all() {
-		return control.sql(SELECT + " WHERE i.status NOT IN ('provisioning','closed') ORDER BY i.slug").query(TenantDirectory::map).list();
+		return control.sql(SELECT + " WHERE i.status NOT IN ('provisioning','closed') ORDER BY i.slug").query(this::map).list();
 	}
 
-	private static TenantInfo map(java.sql.ResultSet r, int n) throws java.sql.SQLException {
+	private TenantInfo map(java.sql.ResultSet r, int n) throws java.sql.SQLException {
 		return new TenantInfo(r.getLong("id"), r.getString("slug"), r.getString("status"), r.getString("db_host"), r.getInt("db_port"),
-			r.getString("db_name"), r.getString("db_user"), r.getString("db_password"));
+			r.getString("db_name"), r.getString("db_user"), r.getString("db_password"), jdbcParams);
 	}
 }

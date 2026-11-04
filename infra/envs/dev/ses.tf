@@ -9,7 +9,7 @@ resource "aws_sesv2_configuration_set" "main" {
 }
 
 resource "aws_sesv2_email_identity" "sender" {
-  count                  = local.ses_on ? 1 : 0
+  count                  = local.email_on ? 1 : 0
   email_identity         = var.ses_sender_email
   configuration_set_name = aws_sesv2_configuration_set.main[0].configuration_set_name
 }
