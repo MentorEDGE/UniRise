@@ -59,12 +59,18 @@ variable "developer_db_user" {
   default     = "unirise_dev"
 }
 
+variable "api_host" {
+  description = "Host name of the API, Empty means api.<domain_name>; keep the default."
+  type        = string
+  default     = ""
+}
+
 variable "domain_name" {
-  description = "Dev subdomain, for example dev.unirise.mentoredge.co.in. DNS stays in Hostinger: Terraform prints the records to add (output dns_records). Empty skips certificate and SES domain."
+  description = "Dev subdomain, for example dev-unirise.mentoredge.co.in (the dev website). DNS stays in Hostinger: Terraform prints the records to add (output dns_records). Empty skips certificate and SES domain."
   type        = string
   default     = ""
   validation {
     condition     = var.domain_name == "" || can(regex("^([a-z0-9-]+\\.)+[a-z]{2,}$", var.domain_name))
-    error_message = "domain_name must be a lower-case host name such as dev.unirise.mentoredge.co.in."
+    error_message = "domain_name must be a lower-case host name such as dev-unirise.mentoredge.co.in."
   }
 }

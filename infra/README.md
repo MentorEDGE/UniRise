@@ -65,7 +65,7 @@ Set `CONTROL_DB_URL=jdbc:postgresql://<rds_endpoint>:5432/unirise?sslmode=requir
 `sslmode=require` encrypts but does not verify the server; move to `verify-full` with the RDS CA bundle before real data.
 
 ## Domain (DNS stays in Hostinger)
-Set `domain_name = "dev.unirise.mentoredge.co.in"` and apply. Terraform creates the certificate for `api.<domain_name>` and the SES domain identity, then `tofu output dns_records` lists the CNAME records. Add them in the Hostinger DNS panel, check them with `dig CNAME <name>`, and wait for the certificate to show Issued and SES to show verified. A CNAME cannot share a name with another record, so check the names first. The record for the load balancer is added later, when the ECS stage exists.
+Set `domain_name = "dev-unirise.mentoredge.co.in"` (the dev website) and apply; the API host defaults to `api.dev-unirise.mentoredge.co.in`. `dev-unirise` is only a record inside the `mentoredge.co.in` zone (it has no zone of its own, and the "external domain" entry in hPanel cannot take records: it says "Domain not found"), so add every record under **Domains > mentoredge.co.in > DNS records** and type the name relative to `mentoredge.co.in`, ending in `.dev-unirise` (for example `api.dev-unirise`). Terraform creates the certificate for the API host and the SES domain identity, then `tofu output dns_records` lists the CNAME records. Add them in the Hostinger DNS panel, check them with `dig CNAME <name>`, and wait for the certificate to show Issued and SES to show verified. A CNAME cannot share a name with another record, so check the names first. The record for the load balancer is added later, when the ECS stage exists.
 
 ## Local Docker
 ```bash

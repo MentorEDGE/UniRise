@@ -14,5 +14,6 @@ locals {
   azs        = slice(data.aws_availability_zones.available.names, 0, 2)
   email_on   = var.ses_sender_email != ""
   domain_on  = var.domain_name != ""
+  api_host   = var.api_host != "" ? var.api_host : "api.${var.domain_name}"
   ses_on     = local.email_on || local.domain_on
 }

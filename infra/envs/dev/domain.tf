@@ -3,7 +3,7 @@
 # until the record exists, then turns "Issued" by itself.
 resource "aws_acm_certificate" "api" {
   count             = local.domain_on ? 1 : 0
-  domain_name       = "api.${var.domain_name}"
+  domain_name       = local.api_host
   validation_method = "DNS"
   lifecycle { create_before_destroy = true }
 }
