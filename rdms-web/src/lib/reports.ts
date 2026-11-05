@@ -1,6 +1,6 @@
 import { academicYearOf, fmtDate, inr, isSanctioned } from './analytics';
 import { creditedFaculty } from './domain';
-import type { AnyRecord, Conference, DB, EntityKind, Faculty, Fdp, Grant, Publication } from './types';
+import type { AnyRecord, Conference, DB, EntityKind, Faculty, Fdp, Grant, Honour, Publication } from './types';
 
 export interface Ctx { db: DB; byId: Map<string, Faculty> }
 export interface ListCol { label: string; get: (r: AnyRecord, ctx: Ctx) => string | number; num?: boolean }
@@ -25,6 +25,7 @@ const pub = (r: AnyRecord) => r as Publication;
 const grant = (r: AnyRecord) => r as Grant;
 const fdp = (r: AnyRecord) => r as Fdp;
 const conf = (r: AnyRecord) => r as Conference;
+const award = (r: AnyRecord) => r as Honour;
 const owner = (r: AnyRecord, c: Ctx) => c.byId.get(r.facultyId);
 const credited = (kind: EntityKind) => (r: AnyRecord, c: Ctx) => creditedFaculty(kind, r).filter((id) => c.byId.has(id));
 const facultyKey = (kind: EntityKind) => (r: AnyRecord, c: Ctx) => credited(kind)(r, c).map((id) => `${id} – ${c.byId.get(id)!.name}`);
@@ -87,6 +88,19 @@ const CONF_LIST: ListCol[] = [
   { label: 'From', get: (r) => fmtDate(conf(r).fromDate) },
   { label: 'Claimed (₹)', get: (r) => conf(r).amountClaimed, num: true },
 ];
+const AWARD_LIST: ListCol[] = [
+  { label: 'Award ID', get: (r) => r.id },
+  { label: 'Faculty', get: (r, c) => owner(r, c)?.name ?? '' },
+  { label: 'Department', get: (r, c) => owner(r, c)?.department ?? '' },
+  { label: 'Category', get: (r) => award(r).category },
+  { label: 'Honour / Award', get: (r) => award(r).title },
+  { label: 'Conferred by', get: (r) => award(r).awardedBy },
+  { label: 'Level', get: (r) => award(r).level },
+  { label: 'Received', get: (r) => fmtDate(award(r).awardDate) },
+  { label: 'Prize (₹)', get: (r) => award(r).prizeAmount, num: true },
+];
+const AWARD_MEASURES: Measure[] = [count, countWhere('International', (r) => award(r).level === 'International'), countWhere('National', (r) => award(r).level === 'National'),
+  countWhere('State / Institutional', (r) => award(r).level === 'State' || award(r).level === 'Institutional'), sum('Prize (₹)', (r) => award(r).prizeAmount, true)];
 const PUB_MEASURES: Measure[] = [count, countWhere('Journal', (r) => pub(r).entryType === 'Journal Article'), countWhere('Conf. paper', (r) => pub(r).entryType === 'Conference Paper'),
   countWhere('Book / chapter', (r) => pub(r).entryType === 'Book' || pub(r).entryType === 'Book Chapter'), countWhere('Q1', (r) => pub(r).quartile === 'Q1'), countWhere('Q2', (r) => pub(r).quartile === 'Q2'),
   countWhere('Scopus/WoS', (r) => /Scopus|Web of Science/.test(pub(r).indexing))];
@@ -138,6 +152,15 @@ export const REPORTS: ReportDef[] = [
   { id: 'cnf-funding', group: 'conferences', title: 'Funding and Claims', kind: 'conferences', mode: 'group', groupLabel: 'Funding', keys: (r) => [conf(r).funding], measures: [count, sum('Registration fees (₹)', (r) => conf(r).registrationFee, true), sum('Claimed (₹)', (r) => conf(r).amountClaimed, true)] },
   { id: 'cnf-awards', group: 'conferences', title: 'Awards received', kind: 'conferences', mode: 'list', where: (r) => !!conf(r).award, columns: [...CONF_LIST.slice(0, 6), { label: 'Award', get: (r) => conf(r).award }] },
   { id: 'cnf-list', group: 'conferences', title: 'Conference Details – All', kind: 'conferences', mode: 'list', columns: CONF_LIST },
+  // Honours & Awards
+  { id: 'awd-faculty', group: 'awards', title: 'Faculty wise Honours & Awards', kind: 'awards', mode: 'group', groupLabel: 'Faculty', keys: facultyKey('awards'), measures: AWARD_MEASURES },
+  { id: 'awd-dept', group: 'awards', title: 'Department wise Honours & Awards', kind: 'awards', mode: 'group', groupLabel: 'Department', keys: deptKey('awards'), measures: AWARD_MEASURES },
+  { id: 'awd-level', group: 'awards', title: 'Level wise (International / National / State)', kind: 'awards', mode: 'group', groupLabel: 'Level', keys: (r) => [award(r).level], measures: AWARD_MEASURES },
+  { id: 'awd-category', group: 'awards', title: 'Category wise', kind: 'awards', mode: 'group', groupLabel: 'Category', keys: (r) => [award(r).category], measures: AWARD_MEASURES },
+  { id: 'awd-body', group: 'awards', title: 'Conferring Body wise', kind: 'awards', mode: 'group', groupLabel: 'Conferred by', keys: (r) => [award(r).awardedBy], measures: AWARD_MEASURES },
+  { id: 'awd-year', group: 'awards', title: 'Year wise', kind: 'awards', mode: 'group', groupLabel: 'Academic year', keys: ayKey((r) => award(r).awardDate), measures: AWARD_MEASURES },
+  { id: 'awd-international', group: 'awards', title: 'International Recognition', kind: 'awards', mode: 'list', where: (r) => award(r).level === 'International', columns: AWARD_LIST },
+  { id: 'awd-list', group: 'awards', title: 'Honours & Awards Details – All', kind: 'awards', mode: 'list', columns: AWARD_LIST },
 ];
 
 export interface ReportResult { header: string[]; rows: (string | number)[][]; numeric: boolean[]; money: boolean[]; total?: (string | number)[] }

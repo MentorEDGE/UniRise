@@ -83,6 +83,9 @@ button, input, select, textarea { font: inherit; transition-timing-function: var
   display: flex; flex-wrap: wrap; justify-content: center; gap: 4px; padding: 6px 20px; position: sticky; top: 0; z-index: 20;
 }
 .nav-item { position: relative; }
+/* the management bar has the most items: slightly tighter so it stays on one line on a laptop screen */
+.nav.compact { gap: 2px; }
+.nav.compact .nav-btn { padding: 9px 10px; font-size: 15px; }
 .nav-btn {
   background: none; border: 0; color: var(--fg-soft); font-weight: 500; font-size: 15.5px; padding: 9px 14px; border-radius: var(--radius);
   cursor: pointer; white-space: nowrap; transition: background-color .2s, color .2s; position: relative;
@@ -211,7 +214,7 @@ table.tbl { border-collapse: collapse; width: 100%; font-size: 14.5px; }
 .badge.neutral { color: var(--violet-700); border-color: var(--violet-200); background: var(--violet-50); }
 
 /* ---------- dashboard ---------- */
-.tiles { display: grid; grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)); gap: 12px; }
+.tiles { display: grid; grid-template-columns: repeat(auto-fit, minmax(146px, 1fr)); gap: 12px; }
 .tile {
   background: var(--card); border-radius: 16px; padding: 14px 16px; border: 1px solid var(--slate-200); box-shadow: var(--shadow-card);
   text-decoration: none; color: inherit; display: block; transition: transform .3s var(--ease-out-strong), box-shadow .3s, border-color .3s;
@@ -282,10 +285,54 @@ dl.kv dd { margin: 0; word-break: break-word; }
 .intro-hero { animation: fade-up .4s var(--ease-out-strong) both; }
 .eyebrow { font-size: 14.5px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.25em; color: var(--violet-600); margin: 0 0 16px; }
 .intro-hero h1 { font-size: clamp(36px, 4.4vw, 60px); line-height: 1.08; font-weight: 600; letter-spacing: -0.025em; color: var(--foreground); margin: 0; }
-.intro-hero .lead { margin: 24px 0 0; max-width: 42rem; font-size: 19px; line-height: 1.65; color: var(--slate-600); }
+.intro-hero .lead { margin: 20px 0 0; max-width: 42rem; font-size: 19px; line-height: 1.65; color: var(--slate-600); }
 .intro-rms { margin-top: 28px; font-size: 14.5px; color: var(--muted-fg); }
 .intro-rms b { color: var(--foreground); font-weight: 600; }
 .login-box { height: fit-content; }
+/* landing page: slogan, proof points and the sections below the sign-in fold */
+.hero-slogan { margin: 18px 0 0; font-size: clamp(19px, 1.7vw, 23px); font-weight: 600; letter-spacing: -0.01em; color: var(--primary-text); }
+.hero-proof { list-style: none; padding: 0; margin: 28px 0 0; display: grid; gap: 12px; }
+.hero-proof li { display: flex; align-items: center; gap: 12px; font-size: 15.5px; font-weight: 500; color: var(--slate-700); }
+.hero-proof svg, .rise-icon svg, .role-icon svg { fill: none; stroke: currentColor; stroke-width: 1.7; stroke-linecap: round; stroke-linejoin: round; }
+.hero-proof svg { flex: none; width: 34px; height: 34px; padding: 7px; border-radius: 10px; color: var(--primary-text); background: var(--secondary); border: 1px solid var(--border); }
+
+.showcase { position: relative; z-index: 1; width: 100%; max-width: 1152px; margin: 0 auto; padding: 8px 16px 72px; display: grid; gap: 88px; }
+.show-head { max-width: 46rem; margin-bottom: 32px; }
+.show-head .eyebrow { font-size: 13px; margin-bottom: 12px; }
+.show-head h2 { margin: 0; font-size: clamp(27px, 2.8vw, 38px); line-height: 1.15; font-weight: 600; letter-spacing: -0.025em; }
+.show-sub { margin: 14px 0 0; font-size: 17px; line-height: 1.6; color: var(--slate-600); }
+
+.rise-grid, .role-grid { list-style: none; padding: 0; margin: 0; display: grid; gap: 18px; }
+.rise-grid { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+.role-grid { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+.rise-card, .role-card {
+  background: var(--card); border: 1px solid var(--slate-200); border-radius: 18px; box-shadow: var(--shadow-card); padding: 22px 22px 24px;
+  transition: transform .35s var(--ease-out-strong), box-shadow .35s, border-color .35s;
+}
+.rise-card:hover, .role-card:hover { transform: translateY(-4px); border-color: var(--violet-200); box-shadow: var(--shadow-card-hover); }
+.rise-top { display: flex; align-items: center; justify-content: space-between; margin-bottom: 18px; }
+.rise-letter { font-size: 44px; line-height: 1; font-weight: 700; letter-spacing: -0.04em; color: var(--primary-text); }
+.rise-icon svg, .role-icon svg { width: 26px; height: 26px; color: var(--muted-fg); transition: color .3s; }
+.rise-card:hover .rise-icon svg, .role-card:hover .role-icon svg { color: var(--primary-text); }
+.rise-card h3, .role-card h3 { margin: 0 0 8px; font-size: 18.5px; font-weight: 600; letter-spacing: -0.01em; }
+.rise-card p { margin: 0; font-size: 15px; line-height: 1.6; color: var(--slate-600); }
+.role-icon { display: inline-grid; place-items: center; width: 48px; height: 48px; border-radius: 14px; background: var(--secondary); border: 1px solid var(--border); margin-bottom: 16px; }
+.role-icon svg { color: var(--primary-text); }
+.role-who { margin: 0 0 6px; font-size: 12.5px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.16em; color: var(--violet-600); }
+.role-card ul { list-style: none; padding: 0; margin: 14px 0 0; display: grid; gap: 8px; }
+.role-card li { position: relative; padding-left: 20px; font-size: 15px; color: var(--slate-600); }
+.role-card li::before { content: ''; position: absolute; left: 2px; top: 0.55em; width: 7px; height: 7px; border-radius: 2px; background: var(--primary-text); opacity: .7; }
+
+.show-close { text-align: center; padding: 56px 24px 8px; border-top: 1px solid var(--border); }
+.close-line { margin: 0 auto; max-width: 40rem; font-size: clamp(26px, 3vw, 40px); line-height: 1.2; font-weight: 600; letter-spacing: -0.025em; }
+.close-sign { margin: 16px 0 0; font-size: 13px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.22em; color: var(--muted-fg); }
+
+.reveal { opacity: 0; }
+/* 'backwards' fill: once the entrance ends, the element's own styles (and hover lift) apply again */
+.reveal.in { opacity: 1; animation: fade-up .7s var(--ease-out-strong) backwards; animation-delay: var(--d, 0ms); }
+@media (prefers-reduced-motion: reduce) { .reveal { opacity: 1; } }
+@media (max-width: 1000px) { .rise-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); } .role-grid { grid-template-columns: 1fr; } }
+@media (max-width: 560px) { .rise-grid { grid-template-columns: 1fr; } .showcase { gap: 64px; padding-bottom: 48px; } .show-close { padding: 40px 8px; } }
 .login-box .panel { margin: 0; padding: 28px 32px 32px; max-width: none; }
 .login-box .panel-title { font-size: 22.5px; letter-spacing: -0.02em; margin-bottom: 4px; }
 .login-sub { margin: 0 0 18px; font-size: 15px; color: var(--muted-fg); }

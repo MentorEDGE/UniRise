@@ -6,7 +6,7 @@
 import type {
   AnyRecord, Author, Biodata, DB, EntityKind, Faculty, Grant, Investigator, Notice, Publication, Settings, Status,
 } from './types';
-import { AUTHOR_KINDS, PUB_TYPES } from './types';
+import { AUTHOR_KINDS, AWARD_CATEGORIES, LEVELS, PUB_TYPES } from './types';
 
 export interface Actor { userId: string; name: string; role: 'management' | 'faculty'; facultyId?: string }
 
@@ -34,7 +34,7 @@ export const isEditable = (r: { status: Status }) => r.status === 'Draft' || r.s
 
 /**
  * Faculty see records they are credited on (any state) and other people's APPROVED publications (the RMS
- * Publication View). FDPs, conferences, grants, seed money and biodata of other faculty are private.
+ * Publication View). FDPs, conferences, grants, seed money, honours and biodata of other faculty are private.
  * Management sees everything in its own institution.
  */
 export function canView(actor: Actor, kind: EntityKind, r: AnyRecord) {
@@ -43,7 +43,7 @@ export function canView(actor: Actor, kind: EntityKind, r: AnyRecord) {
   return kind === 'publications' && r.status === 'Approved';
 }
 
-const KINDS: EntityKind[] = ['publications', 'grants', 'seedMoney', 'fdps', 'conferences'];
+const KINDS: EntityKind[] = ['publications', 'grants', 'seedMoney', 'fdps', 'conferences', 'awards'];
 
 /** The slice of the institution's data this actor may receive. */
 export function scopeFor(db: DB, actor: Actor): DB {
@@ -54,7 +54,7 @@ export function scopeFor(db: DB, actor: Actor): DB {
     // Directory entries of colleagues carry only what the RMS shows publicly (name, department, research IDs).
     faculty: db.faculty.map((f) => (f.id === me ? f : { ...f, phone: '', joiningDate: '' })),
     biodata: db.biodata.filter((b) => b.facultyId === me),
-    publications: [], grants: [], seedMoney: [], fdps: [], conferences: [],
+    publications: [], grants: [], seedMoney: [], fdps: [], conferences: [], awards: [],
   };
   for (const k of KINDS) (out[k] as AnyRecord[]) = (db[k] as AnyRecord[]).filter((r) => canView(actor, k, r));
   return out;
@@ -69,6 +69,7 @@ const SPECS: Record<EntityKind, Spec> = {
   seedMoney: { appliedDate: 'string', category: 'string', title: 'string', abstract: 'string', requestedAmount: 'number', investigators: 'investigators' },
   fdps: { role: 'string', programmeType: 'string', title: 'string', organiser: 'string', sponsoredBy: 'string', mode: 'string', level: 'string', fromDate: 'string', toDate: 'string', hours: 'number', outcome: 'string', certificateName: 'string' },
   conferences: { participation: 'string', conferenceName: 'string', paperTitle: 'string', organiser: 'string', venue: 'string', country: 'string', level: 'string', mode: 'string', fromDate: 'string', toDate: 'string', proceedingsIndexed: 'string', funding: 'string', registrationFee: 'number', amountClaimed: 'number', award: 'string', certificateName: 'string' },
+  awards: { category: 'string', title: 'string', awardedBy: 'string', level: 'string', awardDate: 'string', citation: 'string', prizeAmount: 'number', certificateName: 'string' },
 };
 const str = (v: unknown, max = 2000) => (typeof v === 'string' ? v.slice(0, max) : '');
 const num = (v: unknown) => (typeof v === 'number' && Number.isFinite(v) ? v : 0);
@@ -124,11 +125,19 @@ function validate(db: DB, kind: EntityKind, r: AnyRecord, submit: boolean) {
     if (x.toDate < x.fromDate) throw invalid('To date must be on or after the from date.');
     if (x.toDate > today) throw invalid('Enter it after it has taken place.');
   }
+  if (kind === 'awards') {
+    const a = r as unknown as { category: string; title: string; awardedBy: string; level: string; awardDate: string; prizeAmount: number };
+    if (!AWARD_CATEGORIES.includes(a.category)) throw invalid('Choose a category.');
+    need(a.title, 'Name of the honour or award'); need(a.awardedBy, 'Conferred by'); need(a.awardDate, 'Date received');
+    if (!LEVELS.includes(a.level)) throw invalid('Choose a level.');
+    if (a.awardDate > today) throw invalid('Enter an honour after it has been received.');
+    if (a.prizeAmount < 0) throw invalid('Prize amount cannot be negative.');
+  }
 }
 
 // ---------- workflow records ----------
 
-const PREFIX: Record<EntityKind, string> = { publications: 'PUB', grants: 'GRT', seedMoney: 'SM', fdps: 'FDP', conferences: 'CNF' };
+const PREFIX: Record<EntityKind, string> = { publications: 'PUB', grants: 'GRT', seedMoney: 'SM', fdps: 'FDP', conferences: 'CNF', awards: 'AWD' };
 
 function requireFaculty(actor: Actor, db: DB) {
   if (actor.role !== 'faculty' || !actor.facultyId) throw forbid('Entries are made by faculty members.');
@@ -261,7 +270,7 @@ export function saveFaculty(db: DB, actor: Actor, input: Faculty, isNew = false)
   }
 }
 
-/** Used by IT Admin approval: links a new faculty account to a profile, creating the profile if needed. */
+/** Used by the Office of Research approval: links a new faculty account to a profile, creating the profile if needed. */
 export function ensureFacultyProfile(db: DB, p: { id: string; title: string; name: string; designation: string; department: string; email: string }) {
   const existing = db.faculty.find((x) => x.id.toLowerCase() === p.id.toLowerCase());
   if (existing) return existing.id;

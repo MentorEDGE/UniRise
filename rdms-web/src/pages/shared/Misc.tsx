@@ -9,6 +9,7 @@ import { MONTHS } from '../../lib/types';
 import { fmtDate } from '../../lib/analytics';
 import { Logo } from '../../components/Logo';
 import { ThemeToggle } from '../../components/ThemeToggle';
+import { LandingHero, LandingShowcase } from './Landing';
 
 // ---------------- View researcher profile ----------------
 
@@ -97,6 +98,7 @@ const WEIGHT_LABELS: [keyof Weights, string][] = [
   ['confPaper', 'Conference paper'], ['techReport', 'Technical report'], ['grantSanctioned', 'Grant sanctioned (base)'], ['grantPerLakh', 'Grant – per ₹1 lakh (max +20)'], ['seedMoney', 'Seed money approved'],
   ['fdpAttended', 'FDP attended'], ['fdpOrganised', 'FDP organised'], ['fdpResource', 'FDP resource person'], ['confPresented', 'Conference – presented'], ['confInvited', 'Conference – invited talk'],
   ['confChair', 'Conference – session chair'], ['confAttended', 'Conference – attended'], ['confOrganised', 'Conference – organised'],
+  ['awardInternational', 'Honour / award – international'], ['awardNational', 'Honour / award – national'], ['awardOther', 'Honour / award – state / institutional'],
 ];
 const TARGET_LABELS: [keyof Targets, string][] = [['publicationsPerFaculty', 'Publications per faculty'], ['fdpHoursPerFaculty', 'FDP hours per faculty'], ['conferencesPerFaculty', 'Conferences per faculty'], ['grantAppliedPerFaculty', 'Grant proposals per faculty']];
 
@@ -166,7 +168,7 @@ export function Account() {
         <dl className="kv">
           <dt>Name</dt><dd>{user?.name}</dd>
           <dt>Email</dt><dd>{user?.email}</dd>
-          <dt>Role</dt><dd>{user?.role === 'management' ? 'Top-Level Management' : user?.role === 'faculty' ? 'Faculty' : 'IT Admin (platform)'}</dd>
+          <dt>Role</dt><dd>{user?.role === 'management' ? 'Top-Level Management' : user?.role === 'faculty' ? 'Faculty' : 'Office of Research (platform)'}</dd>
           {institution && <><dt>Institution</dt><dd>{institution.name}</dd></>}
         </dl>
         <p className="note">Your role and institution are assigned by the UniRise platform administrator. Ask them if either is wrong.</p>
@@ -186,20 +188,17 @@ export function Account() {
 
 // ---------------- Introduction + sign in ----------------
 
-/** The UniRise introduction page wrapped around a form. */
-function IntroPage({ children }: { children: React.ReactNode }) {
+/** The UniRise introduction page wrapped around a form; the sign-in page also shows the landing sections below it. */
+function IntroPage({ children, showcase = false }: { children: React.ReactNode; showcase?: boolean }) {
   return (
     <div className="intro">
       <div className="intro-bg" aria-hidden><div className="intro-blob a" /><div className="intro-blob b" /></div>
       <header className="intro-head"><Logo /><ThemeToggle /></header>
       <main className="intro-main">
-        <section className="intro-hero">
-          <p className="eyebrow">UniRise · For Universities &amp; Research Institutions</p>
-          <h1>A connected framework for institutional research growth</h1>
-          <p className="lead">One platform for colleges and universities. Each institution gets its own secure space for its faculty's publications, grants, seed money, FDPs, conferences and profiles, with approvals and analytics for management.</p>
-        </section>
+        <LandingHero />
         <section className="login-box">{children}</section>
       </main>
+      {showcase && <LandingShowcase />}
     </div>
   );
 }
@@ -225,7 +224,7 @@ export function Login() {
     if (err) setError(err);
   };
   return (
-    <IntroPage>
+    <IntroPage showcase>
       <div className="panel">
         <h2 className="panel-title">Sign in</h2>
         <p className="login-sub">Use the email and password registered with your institution.</p>
@@ -315,7 +314,7 @@ export function Register() {
   );
 }
 
-// ---------------- IT Admin sign in (separate route, not linked from the public pages) ----------------
+// ---------------- Office of Research sign in (separate route, not linked from the public pages) ----------------
 
 export function AdminLogin() {
   const { user } = useStore();
@@ -333,15 +332,15 @@ export function AdminLogin() {
   };
   return (
     <div className="intro">
-      <header className="intro-head"><Logo /><span style={{ display: 'flex', gap: 10, alignItems: 'center' }}><span className="role-chip">Platform administration</span><ThemeToggle /></span></header>
+      <header className="intro-head"><Logo /><span style={{ display: 'flex', gap: 10, alignItems: 'center' }}><span className="role-chip">Office of Research</span><ThemeToggle /></span></header>
       <main className="login-wrap" style={{ display: 'grid', placeItems: 'center', flex: 1, padding: 24 }}>
         <div className="login-box" style={{ width: 'min(420px, 100%)' }}>
           <div className="panel">
-            <h2 className="panel-title">IT Admin sign in</h2>
-            <p className="login-sub">For UniRise platform administrators only. Sessions end after 30 minutes without activity.</p>
+            <h2 className="panel-title">Office of Research sign in</h2>
+            <p className="login-sub">For Office of Research staff only. Sessions end after 30 minutes without activity.</p>
             {error && <Alert kind="error">{error}</Alert>}
             <form onSubmit={submit}>
-              <Field label="Admin email"><Input value={email} onChange={setEmail} type="email" autoComplete="username" autoFocus /></Field>
+              <Field label="Office of Research email"><Input value={email} onChange={setEmail} type="email" autoComplete="username" autoFocus /></Field>
               <div style={{ height: 12 }} />
               <Field label="Password"><input type="password" value={pw} onChange={(e) => setPw(e.target.value)} autoComplete="current-password" /></Field>
               <button className="btn" type="submit" disabled={busy} style={{ width: '100%', marginTop: 18, padding: '11px 18px' }}>{busy ? 'Signing in…' : 'Sign in'}</button>

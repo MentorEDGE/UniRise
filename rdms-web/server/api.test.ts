@@ -1,5 +1,5 @@
 /**
- * End-to-end tests of the HTTP API: institution isolation, role permissions, the IT Admin approval workflow
+ * End-to-end tests of the HTTP API: institution isolation, role permissions, the Office of Research approval workflow
  * and session handling. Each run uses a fresh data directory with two small demo institutions.
  */
 import fs from 'node:fs';
@@ -14,7 +14,7 @@ import { DEMO_PASSWORDS, seedDemo } from './demo';
 import { Storage } from './storage';
 
 let dir: string; let store: Storage; let server: Server; let base: string;
-const ADMIN = { email: 'it.admin@unirise.platform', password: 'Admin-Test-1' };
+const ADMIN = { email: 'research.office@unirise.platform', password: 'Admin-Test-1' };
 
 beforeAll(async () => {
   dir = fs.mkdtempSync(path.join(os.tmpdir(), 'rdms-test-'));
@@ -85,6 +85,7 @@ describe('faculty access', () => {
     const data = (await c.get('/api/data')).body;
     expect(data.fdps.every((x) => x.facultyId === me.id)).toBe(true);
     expect(data.conferences.every((x) => x.facultyId === me.id)).toBe(true);
+    expect(data.awards.every((x) => x.facultyId === me.id)).toBe(true);
     expect(data.biodata.map((b) => b.facultyId)).toEqual([me.id]);
     expect(data.publications.every((p) => p.status === 'Approved' || p.facultyId === me.id || p.authors.some((a) => a.code === me.id))).toBe(true);
   });
@@ -109,9 +110,25 @@ describe('faculty access', () => {
     expect((await m.post(`/api/records/fdps/${id}/review`, { decision: 'Approved', remark: '' })).status).toBe(200);
     expect(store.tenant('sit').fdps.find((x) => x.id === id)!.status).toBe('Approved');
   });
+
+  it('honours and awards are saved, checked and approved through the API', async () => {
+    const me = facultyOf('sit', 0);
+    const f = await signedIn(me.email, DEMO_PASSWORDS.faculty);
+    const record = { category: 'Award', title: 'API test award', awardedBy: 'IEEE', level: 'International', awardDate: '2026-07-01', citation: '', prizeAmount: 0, certificateName: 'c.pdf' };
+    expect((await f.post('/api/records/awards', { record: { ...record, category: 'Made up' }, submit: false })).status).toBe(400);
+    const saved = await f.post('/api/records/awards', { record, submit: true });
+    expect(saved.status).toBe(200);
+    const id = saved.body.result as unknown as string;
+    const m = await signedIn('dean@sit.edu.in', DEMO_PASSWORDS.management);
+    expect((await m.post(`/api/records/awards/${id}/review`, { decision: 'Approved', remark: '' })).status).toBe(200);
+    expect(store.tenant('sit').awards.find((x) => x.id === id)!.status).toBe('Approved');
+    // another institution cannot see or act on it
+    const g = await signedIn('vc@greenfield.ac.in', DEMO_PASSWORDS.management);
+    expect((await g.post(`/api/records/awards/${id}/review`, { decision: 'Rejected', remark: 'x' })).status).toBe(404);
+  });
 });
 
-describe('IT Admin', () => {
+describe('Office of Research', () => {
   it('cannot use the regular sign-in, and others cannot use the admin one', async () => {
     expect((await client().post('/api/login', ADMIN)).status).toBe(401);
     expect((await client().post('/api/admin/login', { email: 'director@sit.edu.in', password: DEMO_PASSWORDS.management })).status).toBe(401);

@@ -9,7 +9,7 @@ import { STATUSES } from '../../lib/types';
 import { RecordDetail } from './RecordDetail';
 
 const TITLES: Record<EntityKind, string> = {
-  publications: 'Publication View', grants: 'Grant Entry/Update', seedMoney: 'Seed Money Status', fdps: 'Faculty Development Programmes', conferences: 'Conference Participation',
+  publications: 'Publication View', grants: 'Grant Entry/Update', seedMoney: 'Seed Money Status', fdps: 'Faculty Development Programmes', conferences: 'Conference Participation', awards: 'Honours & Awards',
 };
 
 export function RecordView({ kind }: { kind: EntityKind }) {
@@ -66,7 +66,7 @@ export function RecordView({ kind }: { kind: EntityKind }) {
           ]} />
         )}
         <form className="grid" onSubmit={(e) => { e.preventDefault(); setApplied(form); }}>
-          <Field label={kind === 'conferences' ? 'Participation' : kind === 'seedMoney' ? 'Category' : `${cfg.label} Entry Type`}>
+          <Field label={kind === 'conferences' ? 'Participation' : kind === 'seedMoney' || kind === 'awards' ? 'Category' : `${cfg.label} Entry Type`}>
             <Select value={form.type} onChange={set('type')} options={cfg.typeOptions} placeholder="ALL" />
           </Field>
           <Field label={`${cfg.label} ID`}><Input value={form.id} onChange={set('id')} /></Field>

@@ -1,7 +1,7 @@
 import type {
-  Author, Biodata, Conference, DB, Faculty, Fdp, Grant, HistoryItem, Investigator, Publication, SeedMoney, Status,
+  Author, Biodata, Conference, DB, Faculty, Fdp, Grant, HistoryItem, Honour, Investigator, Publication, SeedMoney, Status,
 } from './types';
-import { MONTHS } from './types';
+import { AWARD_WEIGHT_DEFAULTS, MONTHS } from './types';
 
 /** Deterministic PRNG so the sample data is identical on every machine. */
 function mulberry32(seed: number) {
@@ -28,6 +28,7 @@ export const DEFAULT_WEIGHTS = {
   grantSanctioned: 10, grantPerLakh: 0.5, seedMoney: 3,
   fdpAttended: 2, fdpOrganised: 4, fdpResource: 3,
   confPresented: 3, confInvited: 4, confChair: 2, confAttended: 1, confOrganised: 4,
+  ...AWARD_WEIGHT_DEFAULTS,
 };
 
 const FIRST = ['Anita', 'Rahul', 'Priya', 'Suresh', 'Kavya', 'Arjun', 'Meera', 'Vikram', 'Divya', 'Karthik', 'Lakshmi', 'Nikhil',
@@ -304,6 +305,39 @@ export function createSeed(opts: SeedOptions = DEFAULT_SEED): DB {
     }
   }
 
+  // Honours & Awards. Generated after everything else so the earlier sample data stays the same.
+  // Awards first noted in profiles become workflow records, and active researchers get a few more.
+  const LEVEL_OF: Record<string, string> = { Institution: 'Institutional', IEEE: 'International', ISTE: 'National', DST: 'National' };
+  const CATEGORY_OF: Record<string, string> = { 'Best Paper Award': 'Best Paper / Presentation', 'Best Teacher Award': 'Award', 'Young Scientist Award': 'Award', 'Research Excellence Award': 'Award' };
+  const EXTRA: [string, string, string, string][] = [
+    ['Fellow of the Institution of Engineers (FIE)', 'Fellowship of a Learned Society', 'Institution of Engineers (India)', 'National'],
+    ['Senior Member, IEEE', 'Academic or Editorial Recognition', 'IEEE', 'International'],
+    ['Outstanding Reviewer Award', 'Academic or Editorial Recognition', 'Elsevier', 'International'],
+    ['SERB International Travel Support', 'Scholarship / Travel Grant', 'SERB, DST', 'National'],
+    ['State Award for Excellence in Teaching', 'Honour / Distinction', 'State Council of Higher Education', 'State'],
+    ['Best Faculty Researcher', 'Award', INST, 'Institutional'],
+  ];
+  const awards: Honour[] = [];
+  const addAward = (f: Faculty, at: string, title: string, category: string, awardedBy: string, level: string) => {
+    awards.push({
+      ...base(f, at), id: nextId('AWD'), category, title, awardedBy, level, awardDate: at,
+      citation: `In recognition of contributions to ${topicsOf(f.department)[0].toLowerCase()}.`, prizeAmount: level === 'Institutional' ? 0 : pick([0, 0, 10000, 25000, 50000]),
+      certificateName: `AWARD_${f.id}_${at.slice(0, 4)}.pdf`,
+    });
+  };
+  for (const b of biodata) {
+    const f = faculty.find((x) => x.id === b.facultyId)!;
+    for (const a of b.awards) addAward(f, `${a.year}-${pick(['02', '04', '08', '11'])}-15`, a.title, CATEGORY_OF[a.title] ?? 'Award', a.by === 'Institution' ? INST : a.by, LEVEL_OF[a.by] ?? 'National');
+    b.awards = [];
+  }
+  for (const f of faculty) {
+    if (rnd() < (activity.get(f.id)! > 0.9 ? 0.6 : 0.2)) {
+      const [title, category, by, level] = pick(EXTRA);
+      addAward(f, dateIn(pick([2023, 2024, 2025, 2026]), 1, 9), title, category, by, level);
+    }
+  }
+  awards.sort((a, z) => a.awardDate.localeCompare(z.awardDate));
+
   return {
     version: 1,
     settings: {
@@ -315,10 +349,10 @@ export function createSeed(opts: SeedOptions = DEFAULT_SEED): DB {
       targets: { publicationsPerFaculty: 2, fdpHoursPerFaculty: 30, conferencesPerFaculty: 1, grantAppliedPerFaculty: 0.5 },
       weights: { ...DEFAULT_WEIGHTS },
     },
-    faculty, biodata, publications, grants, seedMoney, fdps, conferences,
+    faculty, biodata, publications, grants, seedMoney, fdps, conferences, awards,
     notices: [
       { id: 'N1', at: '2026-10-20T09:00:00.000Z', title: 'Seed money window open', body: 'Applications for the Q3 seed money cycle are open until 30 November 2026.' },
-      { id: 'N2', at: '2026-10-05T09:00:00.000Z', title: 'Update your biodata', body: 'All faculty must complete their biodata before the NAAC peer team visit in January 2027.' },
+      { id: 'N2', at: '2026-10-05T09:00:00.000Z', title: 'Update your profile', body: 'All faculty must complete their profiles before the NAAC peer team visit in January 2027.' },
       { id: 'N3', at: '2026-09-15T09:00:00.000Z', title: 'FDP target', body: 'Each faculty member is expected to complete at least 30 hours of FDP in AY 2026-27.' },
     ],
     seq,
@@ -334,6 +368,6 @@ export function emptyInstitution(name: string, tagline: string, departments: str
       targets: { publicationsPerFaculty: 2, fdpHoursPerFaculty: 30, conferencesPerFaculty: 1, grantAppliedPerFaculty: 0.5 },
       weights: { ...DEFAULT_WEIGHTS },
     },
-    faculty: [], biodata: [], publications: [], grants: [], seedMoney: [], fdps: [], conferences: [], notices: [], seq: 1000,
+    faculty: [], biodata: [], publications: [], grants: [], seedMoney: [], fdps: [], conferences: [], awards: [], notices: [], seq: 1000,
   };
 }

@@ -34,7 +34,7 @@ export const DEMO_INSTITUTIONS: DemoInstitution[] = [
 
 /**
  * Creates the demo platform: two institutions, each with its own database, their management and faculty accounts,
- * a few pending access requests, and one IT Admin with a random password (returned, never stored in clear).
+ * a few pending access requests, and one Office of Research account with a random password (returned, never stored in clear).
  * `small` keeps tests fast.
  */
 export function seedDemo(store: Storage, opts: { small?: boolean; adminEmail?: string; adminPassword?: string } = {}) {
@@ -67,15 +67,15 @@ export function seedDemo(store: Storage, opts: { small?: boolean; adminEmail?: s
   const pending = [
     { email: 'neha.kapoor@sit.edu.in', role: 'faculty', inst: 'sit', name: 'Neha Kapoor', title: 'Dr.', designation: 'Assistant Professor', department: 'Computer Science & Engineering', code: 'EMP2001', note: 'New joinee, Nov 2026.' },
     { email: 'arjun.physics@gmail.com', role: 'faculty', inst: 'greenfield', name: 'Arjun Menon', title: 'Dr.', designation: 'Assistant Professor', department: 'Physics', code: 'EMP1101', note: 'Using personal email until IT issues an institutional one.' },
-    { email: 'iqac@greenfield.ac.in', role: 'management', inst: 'greenfield', name: 'Dr. P. Sharma', title: 'Dr.', designation: 'IQAC Coordinator', department: '', code: '', note: 'Needs institution-wide reports for NAAC.' },
+    { email: 'iqac@greenfield.ac.in', role: 'management', inst: 'greenfield', name: 'P. Sharma', title: 'Dr.', designation: 'IQAC Coordinator', department: '', code: '', note: 'Needs institution-wide reports for NAAC.' },
   ];
   for (const p of pending) {
     insert.run({ id: id(), email: p.email, hash: facHash, role: p.role, inst: p.inst, fac: null, status: 'pending', name: p.name, title: p.title, designation: p.designation, department: p.department, code: p.code, note: p.note, at: now, by: null, at2: null, verified: 0 });
   }
 
-  const adminEmail = opts.adminEmail ?? 'it.admin@unirise.platform';
+  const adminEmail = opts.adminEmail ?? 'research.office@unirise.platform';
   const adminPassword = opts.adminPassword ?? randomPassword();
-  insert.run({ id: id(), email: adminEmail, hash: hashPassword(adminPassword), role: 'it_admin', inst: null, fac: null, status: 'active', name: 'UniRise IT Admin', title: '', designation: 'Platform IT Administrator', department: '', code: '', note: '', at: now, by: 'Platform setup', at2: now, verified: 1 });
+  insert.run({ id: id(), email: adminEmail, hash: hashPassword(adminPassword), role: 'it_admin', inst: null, fac: null, status: 'active', name: 'UniRise Office of Research', title: '', designation: 'Office of Research', department: '', code: '', note: '', at: now, by: 'Platform setup', at2: now, verified: 1 });
   store.audit({ actorName: 'Platform setup', action: 'Demo platform created', detail: DEMO_INSTITUTIONS.map((d) => d.inst.name).join(', ') });
   return { adminEmail, adminPassword };
 }

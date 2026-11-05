@@ -12,7 +12,7 @@ import { RecordDetail } from '../shared/RecordDetail';
 import { departmentRows, Tile } from './Analytics';
 import { useAnalyticsFilter } from './filters';
 
-const KINDS: EntityKind[] = ['publications', 'grants', 'seedMoney', 'fdps', 'conferences'];
+const KINDS: EntityKind[] = ['publications', 'grants', 'seedMoney', 'fdps', 'conferences', 'awards'];
 
 // ---------------- Dashboard ----------------
 
@@ -57,6 +57,7 @@ export function ManagementDashboard() {
           <Tile label="Sanctioned funding" value={lakh(u.sanctionedAmount)} sub={`${u.sanctioned.length} of ${u.grants.length} proposals`} to="/reports/grants" />
           <Tile label="FDP hours" value={u.fdpHours.toLocaleString('en-IN')} sub={prevU ? delta(prevU.fdpHours, u.fdpHours) : ''} to="/analytics/participation" />
           <Tile label="Conferences" value={u.confs.length} sub={prevU ? delta(prevU.confs.length, u.confs.length) : ''} to="/conferences" />
+          <Tile label="Honours & Awards" value={u.awards.length} sub={prevU ? delta(prevU.awards.length, u.awards.length) : `${u.awards.filter((a) => a.level === 'International').length} international`} to="/awards" />
           <Tile label="Inactive faculty" value={inactive} sub="No approved activity in 12 months" to="/analytics/participation" />
         </div>
       </div>
@@ -258,6 +259,7 @@ export function Faculty360({ facultyId: given }: { facultyId?: string }) {
             <Tile label="Grants" value={`${s.grantsApplied} / ${s.grantsSanctioned}`} sub={`applied / sanctioned · ${lakh(s.sanctionedAmount)} share`} />
             <Tile label="FDP hours" value={s.fdpHours} sub={`Target ${t.fdpHoursPerFaculty}${dept(avg('fdpHours').toFixed(0))}`} />
             <Tile label="Conferences" value={s.conferences} sub={`${s.confPresented} presented`} />
+            <Tile label="Honours & Awards" value={s.awards} sub="approved" />
             <Tile label="Profile" value={`${s.biodata}%`} sub="complete" />
           </div>
         </div>
@@ -291,6 +293,7 @@ function InstitutionOverview({ filter }: { filter: { from: string; to: string; d
   const mine = (id: string) => !filter.department || byId.get(id)?.department === filter.department;
   const fdps = db.fdps.filter((x) => x.status === 'Approved' && inPeriod(x.fromDate) && mine(x.facultyId)).sort((a, b) => b.fromDate.localeCompare(a.fromDate));
   const confs = db.conferences.filter((x) => x.status === 'Approved' && inPeriod(x.fromDate) && mine(x.facultyId)).sort((a, b) => b.fromDate.localeCompare(a.fromDate));
+  const honours = db.awards.filter((x) => x.status === 'Approved' && inPeriod(x.awardDate) && mine(x.facultyId)).sort((a, b) => b.awardDate.localeCompare(a.awardDate));
   const phd = people.filter((f) => db.biodata.find((b) => b.facultyId === f.id)?.qualifications.some((q) => q.degree.toLowerCase().includes('ph'))).length;
   const desig = ['Professor', 'Associate Professor', 'Assistant Professor'].map((d) => ({ d, n: people.filter((f) => f.designation === d).length }));
   const other = people.length - desig.reduce((a, x) => a + x.n, 0);
@@ -352,6 +355,14 @@ function InstitutionOverview({ filter }: { filter: { from: string; to: string; d
         ))}</tbody></table>
         {!confs.length && <p className="muted">No approved conference participation in this period.</p>}
         <div className="btn-row left"><Link className="btn sm" to="/conferences">All conferences</Link><Link className="btn sm secondary" to="/reports/conferences?r=cnf-faculty">Conference reports</Link></div>
+      </section>
+      <section className="card">
+        <h3>Honours &amp; Awards</h3><p className="sub">{honours.length} approved in the period · {honours.filter((a) => a.level === 'International').length} international</p>
+        <table className="tbl"><tbody>{honours.slice(0, 6).map((a) => (
+          <tr key={a.id}><td>{who(a.facultyId)}</td><td className="title-cell">{a.title} <span className="muted">· {a.awardedBy}</span></td><td className="muted">{a.level}</td></tr>
+        ))}</tbody></table>
+        {!honours.length && <p className="muted">No approved honours or awards in this period.</p>}
+        <div className="btn-row left"><Link className="btn sm" to="/awards">All honours &amp; awards</Link><Link className="btn sm secondary" to="/reports/awards?r=awd-faculty">Honours &amp; awards reports</Link></div>
       </section>
     </>
   );

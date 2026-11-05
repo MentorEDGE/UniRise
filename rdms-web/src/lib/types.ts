@@ -1,4 +1,4 @@
-/** Institution-level roles plus the platform-level IT Admin. */
+/** Institution-level roles plus the platform-level Office of Research. */
 export type Role = 'it_admin' | 'management' | 'faculty';
 export type InstitutionRole = Exclude<Role, 'it_admin'>;
 export type AccountStatus = 'pending' | 'active' | 'rejected' | 'suspended' | 'deactivated';
@@ -21,7 +21,7 @@ export interface User {
   name: string;
   role: Role;
   status: AccountStatus;
-  institutionId: string | null; // null only for IT Admin
+  institutionId: string | null; // null only for Office of Research
   facultyId?: string; // set for faculty accounts: the employee code inside the institution's database
   designation?: string;
 }
@@ -214,13 +214,28 @@ export interface Conference extends Base {
   certificateName: string;
 }
 
-export type EntityKind = 'publications' | 'grants' | 'seedMoney' | 'fdps' | 'conferences';
+export const AWARD_CATEGORIES = ['Award', 'Honour / Distinction', 'Fellowship of a Learned Society', 'Best Paper / Presentation', 'Academic or Editorial Recognition', 'Scholarship / Travel Grant'];
+
+/** An honour or award received by a faculty member. */
+export interface Honour extends Base {
+  category: string;
+  title: string; // name of the honour or award
+  awardedBy: string; // conferring body
+  level: string; // LEVELS
+  awardDate: string; // yyyy-mm-dd
+  citation: string; // what it recognises
+  prizeAmount: number; // ₹, 0 if none
+  certificateName: string;
+}
+
+export type EntityKind = 'publications' | 'grants' | 'seedMoney' | 'fdps' | 'conferences' | 'awards';
 export const ENTITY_LABEL: Record<EntityKind, string> = {
   publications: 'Publication',
   grants: 'Grant',
   seedMoney: 'Seed Money',
   fdps: 'FDP',
   conferences: 'Conference',
+  awards: 'Honour / Award',
 };
 
 export interface Weights {
@@ -229,7 +244,11 @@ export interface Weights {
   grantSanctioned: number; grantPerLakh: number; seedMoney: number;
   fdpAttended: number; fdpOrganised: number; fdpResource: number;
   confPresented: number; confInvited: number; confChair: number; confAttended: number; confOrganised: number;
+  awardInternational: number; awardNational: number; awardOther: number;
 }
+
+/** Score weights for honours and awards; also fills them in for institutions created before the feature existed. */
+export const AWARD_WEIGHT_DEFAULTS = { awardInternational: 6, awardNational: 4, awardOther: 2 };
 
 export interface Targets {
   publicationsPerFaculty: number; // per academic year
@@ -266,8 +285,9 @@ export interface DB {
   seedMoney: SeedMoney[];
   fdps: Fdp[];
   conferences: Conference[];
+  awards: Honour[];
   notices: Notice[];
   seq: number;
 }
 
-export type AnyRecord = Publication | Grant | SeedMoney | Fdp | Conference;
+export type AnyRecord = Publication | Grant | SeedMoney | Fdp | Conference | Honour;

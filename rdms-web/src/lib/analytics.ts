@@ -1,10 +1,10 @@
 import { creditedFaculty } from './domain';
 import type {
-  AnyRecord, Biodata, Conference, DB, EntityKind, Faculty, Fdp, Grant, Publication, SeedMoney, Weights,
+  AnyRecord, Biodata, Conference, DB, EntityKind, Faculty, Fdp, Grant, Honour, Publication, SeedMoney, Weights,
 } from './types';
 import { MONTHS } from './types';
 
-export const KINDS: EntityKind[] = ['publications', 'grants', 'seedMoney', 'fdps', 'conferences'];
+export const KINDS: EntityKind[] = ['publications', 'grants', 'seedMoney', 'fdps', 'conferences', 'awards'];
 
 /** The date an activity is counted on. */
 export function dateOf(kind: EntityKind, r: AnyRecord): string {
@@ -18,6 +18,7 @@ export function dateOf(kind: EntityKind, r: AnyRecord): string {
     case 'seedMoney': return (r as SeedMoney).appliedDate;
     case 'fdps': return (r as Fdp).fromDate;
     case 'conferences': return (r as Conference).fromDate;
+    case 'awards': return (r as Honour).awardDate;
   }
 }
 
@@ -83,6 +84,10 @@ export function scoreRecord(kind: EntityKind, r: AnyRecord, w: Weights): number 
       if (c.participation.includes('Presented')) return w.confPresented;
       return ({ 'Invited Talk / Keynote': w.confInvited, 'Session Chair': w.confChair, Attended: w.confAttended, Organised: w.confOrganised } as Record<string, number>)[c.participation] ?? 0;
     }
+    case 'awards': {
+      const level = (r as Honour).level;
+      return level === 'International' ? w.awardInternational : level === 'National' ? w.awardNational : w.awardOther;
+    }
   }
 }
 
@@ -102,6 +107,7 @@ export interface FacultyStats {
   fdpHours: number;
   conferences: number;
   confPresented: number;
+  awards: number;
   score: number;
   pending: number;
   lastActivity: string; // latest approved activity date ever (not range-limited), '' if none
@@ -115,7 +121,7 @@ export function facultyStats(db: DB, f: Filter): FacultyStats[] {
   const people = db.faculty.filter((x) => x.active && (!f.department || x.department === f.department));
   const map = new Map<string, FacultyStats>(people.map((p) => [p.id, {
     faculty: p, publications: 0, journals: 0, q1q2: 0, scopusWos: 0, grantsApplied: 0, grantsSanctioned: 0, sanctionedAmount: 0,
-    seedMoney: 0, fdps: 0, fdpHours: 0, conferences: 0, confPresented: 0, score: 0, pending: 0, lastActivity: '',
+    seedMoney: 0, fdps: 0, fdpHours: 0, conferences: 0, confPresented: 0, awards: 0, score: 0, pending: 0, lastActivity: '',
     biodata: biodataCompleteness(db.biodata.find((b) => b.facultyId === p.id), p),
   }]));
 
@@ -148,6 +154,7 @@ export function facultyStats(db: DB, f: Filter): FacultyStats[] {
         } else if (kind === 'seedMoney') s.seedMoney++;
         else if (kind === 'fdps') { s.fdps++; s.fdpHours += (r as Fdp).hours; }
         else if (kind === 'conferences') { s.conferences++; if ((r as Conference).participation.includes('Presented')) s.confPresented++; }
+        else if (kind === 'awards') s.awards++;
       }
     }
   }
@@ -173,9 +180,10 @@ export function uniqueCounts(db: DB, f: Filter) {
   const seed = approvedIn(db, 'seedMoney', f).filter((r) => inDept('seedMoney', r));
   const fdps = approvedIn(db, 'fdps', f).filter((r) => inDept('fdps', r));
   const confs = approvedIn(db, 'conferences', f).filter((r) => inDept('conferences', r));
+  const awards = approvedIn(db, 'awards', f).filter((r) => inDept('awards', r));
   const sanctioned = grants.filter(isSanctioned);
   return {
-    pubs, grants, seed, fdps, confs, sanctioned,
+    pubs, grants, seed, fdps, confs, awards, sanctioned,
     sanctionedAmount: sanctioned.reduce((a, g) => a + g.sanctionedAmount, 0),
     receivedAmount: sanctioned.reduce((a, g) => a + g.receivedAmount, 0),
     appliedAmount: grants.reduce((a, g) => a + g.appliedAmount, 0),

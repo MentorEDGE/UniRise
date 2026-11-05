@@ -28,8 +28,9 @@ export function menusFor(role: Role, pending: number): MenuDef[] {
       { label: 'Seed Money', items: [{ label: 'Seed Money Entry', to: '/seed-money/entry' }, { label: 'Seed Money Status', to: '/seed-money' }] },
       { label: 'FDP', items: [{ label: 'My FDPs', to: '/fdp' }, { label: 'FDP Entry', to: '/fdp/entry' }] },
       { label: 'Conference', items: [{ label: 'My Conferences', to: '/conferences' }, { label: 'Conference Entry', to: '/conferences/entry' }] },
+      { label: 'Honours & Awards', items: [{ label: 'My Honours & Awards', to: '/awards' }, { label: 'Honour / Award Entry', to: '/awards/entry' }] },
       { label: 'Profile', items: [{ label: 'My Profile / Print CV', to: '/biodata' }, { label: 'Edit Profile', to: '/biodata/edit' }] },
-      { label: 'Reports', items: [{ label: 'My Performance', to: '/performance' }, 'sep', { label: 'Publication Reports', to: '/reports/publications' }, { label: 'Grant Reports', to: '/reports/grants' }, { label: 'FDP Reports', to: '/reports/fdps' }, { label: 'Conference Reports', to: '/reports/conferences' }] },
+      { label: 'Reports', items: [{ label: 'My Performance', to: '/performance' }, 'sep', { label: 'Publication Reports', to: '/reports/publications' }, { label: 'Grant Reports', to: '/reports/grants' }, { label: 'FDP Reports', to: '/reports/fdps' }, { label: 'Conference Reports', to: '/reports/conferences' }, { label: 'Honours & Awards Reports', to: '/reports/awards' }] },
       { label: 'Account', items: [{ label: 'Change Password', to: '/account' }, 'sep', LOGOUT] },
     ];
   }
@@ -43,7 +44,8 @@ export function menusFor(role: Role, pending: number): MenuDef[] {
     { label: 'Seed Money', items: [{ label: 'Seed Money Reports', to: '/seed-money' }] },
     { label: 'FDP', items: [{ label: 'FDP View', to: '/fdp' }, { label: 'FDP Reports', to: '/reports/fdps' }] },
     { label: 'Conference', items: [{ label: 'Conference View', to: '/conferences' }, { label: 'Conference Reports', to: '/reports/conferences' }] },
-    { label: 'Reports', items: [{ label: 'Annual Activity Report', to: '/reports/annual' }, 'sep', { label: 'Publication Reports', to: '/reports/publications' }, { label: 'Grant Reports', to: '/reports/grants' }, { label: 'FDP Reports', to: '/reports/fdps' }, { label: 'Conference Reports', to: '/reports/conferences' }] },
+    { label: 'Honours & Awards', items: [{ label: 'Honours & Awards View', to: '/awards' }, { label: 'Honours & Awards Reports', to: '/reports/awards' }] },
+    { label: 'Reports', items: [{ label: 'Annual Activity Report', to: '/reports/annual' }, 'sep', { label: 'Publication Reports', to: '/reports/publications' }, { label: 'Grant Reports', to: '/reports/grants' }, { label: 'FDP Reports', to: '/reports/fdps' }, { label: 'Conference Reports', to: '/reports/conferences' }, { label: 'Honours & Awards Reports', to: '/reports/awards' }] },
     { label: 'View Profile', to: '/profile-search' },
     { label: 'Settings', items: [{ label: 'Institution & Departments', to: '/settings' }, { label: 'Targets & Scoring', to: '/settings/targets' }, { label: 'Notices', to: '/settings/notices' }, 'sep', { label: 'Account (Change Password)', to: '/account' }, LOGOUT] },
   ];
@@ -72,7 +74,7 @@ function NavBar({ menus }: { menus: MenuDef[] }) {
   const isActive = (m: MenuDef) => (m.to ? (m.to === '/' ? loc.pathname === '/' : loc.pathname.startsWith(m.to)) : m.items?.some((i) => i !== 'sep' && 'to' in i && loc.pathname === i.to));
 
   return (
-    <nav className="nav no-print" ref={ref} aria-label="Main menu">
+    <nav className={`nav no-print ${menus.length > 11 ? 'compact' : ''}`} ref={ref} aria-label="Main menu">
       {menus.map((m) => (
         <div className="nav-item" key={m.label} onMouseEnter={() => (m.items ? setOpen(m.label) : open && closeSoon())} onMouseLeave={() => m.items && closeSoon()}>
           {m.to ? (
@@ -107,7 +109,7 @@ export function Layout() {
         </Link>
         <div className="hdr-right">
           <span className="inst" title={institution?.name}>
-            <span className="inst-name">{institution ? institution.name : 'Platform administration'}</span>
+            <span className="inst-name">{institution ? institution.name : 'UniRise · Office of Research'}</span>
           </span>
         </div>
       </header>

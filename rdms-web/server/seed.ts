@@ -12,4 +12,4 @@ store.close();
 console.log(`Demo platform recreated in ${dir}`);
 console.log(`  Management: director@sit.edu.in, vc@greenfield.ac.in / ${DEMO_PASSWORDS.management}`);
 console.log(`  Faculty:    e.g. anita.rao@sit.edu.in / ${DEMO_PASSWORDS.faculty}`);
-console.log(`  IT Admin:   ${adminEmail} / ${adminPassword}   (sign in at /#/admin; shown only now)`);
+console.log(`  Office of Research:   ${adminEmail} / ${adminPassword}   (sign in at /#/admin; shown only now)`);
