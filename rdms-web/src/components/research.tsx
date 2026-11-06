@@ -1,3 +1,4 @@
+import { useState } from 'react';
 import { creditedFaculty } from '../lib/domain';
 import type { AnyRecord, DB, EntityKind } from '../lib/types';
 import { SDGS } from '../lib/types';
@@ -52,6 +53,7 @@ export function activityByYear(db: DB, facultyId: string, thisYear = new Date().
 
 /** Small bar chart of research activity per year, labelled with the first and last year. */
 export function ActivitySpark({ data, height = 34, label = true }: { data: YearActivity[]; height?: number; label?: boolean }) {
+  const [hover, setHover] = useState<number | null>(null);
   if (!data.length) return <span className="muted spark-none">No approved research activity yet</span>;
   const max = Math.max(1, ...data.map((d) => d.total));
   const bw = 5; const gap = 2;
@@ -60,14 +62,26 @@ export function ActivitySpark({ data, height = 34, label = true }: { data: YearA
   return (
     <span className="spark">
       {label && <span className="spark-year">{data[0].year}</span>}
+      <span className="spark-plot" onMouseLeave={() => setHover(null)}>
+      {hover !== null && (
+        <span className="spark-tip" role="tooltip" style={{ left: hover * (bw + gap) + bw / 2 }}>
+          <b>{data[hover].year}</b>
+          <span>Publications: {data[hover].publications}</span>
+          <span>Grants / projects: {data[hover].projects}</span>
+          <span>Other: {data[hover].other}</span>
+        </span>
+      )}
       <svg width={w} height={height} viewBox={`0 0 ${w} ${height}`} role="img" aria-label={`Research activity per year. ${summary}`}>
-        <title>{data.map((d) => `${d.year}: ${d.publications} publications, ${d.projects} grants/projects, ${d.other} other`).join('\n')}</title>
         <line x1="0" x2={w} y1={height - 0.5} y2={height - 0.5} className="spark-base" />
         {data.map((d, i) => {
           const h = d.total ? Math.max(2, (d.total / max) * (height - 2)) : 0;
           return <rect key={d.year} x={i * (bw + gap)} y={height - 1 - h} width={bw} height={h} rx={1} className={i === data.length - 1 ? 'spark-bar now' : 'spark-bar'} />;
         })}
+        {data.map((d, i) => (
+          <rect key={`hit-${d.year}`} x={i * (bw + gap) - gap / 2} y={0} width={bw + gap} height={height} className="spark-hit" onMouseEnter={() => setHover(i)} />
+        ))}
       </svg>
+      </span>
       {label && <span className="spark-year">{data[data.length - 1].year}</span>}
     </span>
   );

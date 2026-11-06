@@ -462,6 +462,10 @@ dl.kv dd { margin: 0; word-break: break-word; }
 .spark-bar { fill: var(--violet-300); }
 .spark-bar.now { fill: var(--primary); }
 .spark-base { stroke: var(--slate-300); stroke-width: 1; }
+.spark-plot { position: relative; display: inline-flex; }
+.spark-hit { fill: transparent; cursor: default; }
+.spark-tip { position: absolute; bottom: calc(100% + 8px); transform: translateX(-50%); z-index: 20; display: flex; flex-direction: column; gap: 2px; padding: 6px 10px; border-radius: 6px; background: var(--slate-700, #334155); color: #fff; font-size: 12px; line-height: 1.3; white-space: nowrap; pointer-events: none; box-shadow: 0 4px 14px rgba(0,0,0,.2); }
+.spark-tip b { font-size: 13px; }
 .spark-none { font-size: 13px; }
 .chips { list-style: none; display: flex; flex-wrap: wrap; gap: 6px; margin: 0; padding: 0; }
 .chips li { background: var(--secondary); color: var(--secondary-fg); border-radius: 999px; padding: 4px 12px; font-size: 14px; }
