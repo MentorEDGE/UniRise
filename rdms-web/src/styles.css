@@ -1338,3 +1338,43 @@ a.rp-title:hover, button.rp-title:hover { text-decoration: underline; }
 /* hero fills the first screen; "For universities and research institutions" starts on the next one */
 .me-hero { min-height: 100vh !important; min-height: 100svh !important; display: flex; flex-direction: column; justify-content: center; }
 .me-hero-inner { margin: 0 auto; width: 100%; }
+.rp-ids div { grid-template-columns: 116px minmax(0, 1fr); }
+
+/* ---- analytics between Search and the records table ---- */
+.panel.insights { padding-top: 20px; }
+.ins-stats { display: grid; grid-template-columns: repeat(auto-fit, minmax(170px, 1fr)); gap: 12px; margin-bottom: 16px; }
+.ins-stats > div { border: 1px solid var(--border); border-radius: 14px; padding: 12px 16px; background: hsl(var(--tint) / 0.35); }
+.ins-stats span { display: flex; align-items: center; gap: 6px; font-size: 12.5px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.1em; color: var(--muted-fg); }
+.ins-stats b { display: block; margin-top: 4px; font-size: 24px; font-weight: 650; letter-spacing: -0.02em; color: var(--foreground); font-variant-numeric: tabular-nums; }
+.ins-bar { display: flex; flex-wrap: wrap; align-items: center; gap: 10px 14px; margin-bottom: 12px; }
+.ins-bar .net-seg { margin: 0; flex-wrap: wrap; }
+.ins-bar .net-seg button { height: 34px; }
+.ins-chip { display: inline-flex; align-items: center; gap: 6px; background: var(--secondary); color: var(--secondary-fg); border-radius: 999px; padding: 5px 6px 5px 12px; font-size: 14px; }
+.ins-chip button { border: 0; background: rgb(124 58 237 / 0.15); color: inherit; border-radius: 999px; width: 22px; height: 22px; cursor: pointer; font-size: 12px; }
+.ins-chart { width: 100%; }
+.ins-chart .recharts-bar-rectangle { transition: opacity .15s; }
+.ins-tip { background: var(--card); color: var(--foreground); border: 1px solid var(--border); border-radius: 12px; padding: 8px 12px; font-size: 14px; box-shadow: 0 16px 48px rgba(91,33,182,0.12); }
+.ins-tip small { display: block; color: var(--muted-fg); margin-top: 2px; }
+.ins-note { margin: 10px 0 0; font-size: 13.5px; color: var(--muted-fg); }
+.ins-empty { padding: 30px 0; text-align: center; }
+.ins-cards .card { box-shadow: none; border: 0; padding: 0; background: none; }
+.net-tools.inline { border: 0; padding: 0; }
+/* conference map */
+.cm-wrap { position: relative; border: 1px solid var(--border); border-radius: var(--radius); overflow: hidden; background: hsl(var(--tint) / 0.25); }
+.cm-svg { display: block; width: 100%; height: auto; max-height: 560px; cursor: grab; touch-action: none; }
+.cm-svg:active { cursor: grabbing; }
+.cm-marker { cursor: pointer; outline: none; }
+.cm-marker circle, .cm-marker rect { fill-opacity: 0.85; stroke: #fff; }
+.cm-marker.nat circle { fill: #7c3aed; }
+.cm-marker.int rect { fill: #0d9488; }
+.cm-marker.mix circle { fill: #db2777; }
+.cm-marker text { fill: #fff; font-weight: 700; pointer-events: none; }
+.cm-marker:hover circle, .cm-marker:hover rect, .cm-marker.on circle, .cm-marker.on rect, .cm-marker:focus circle, .cm-marker:focus rect { fill-opacity: 1; stroke: #facc15; }
+.cm-legend { position: absolute; left: 12px; bottom: 10px; list-style: none; margin: 0; padding: 8px 12px; display: flex; gap: 14px; flex-wrap: wrap; background: var(--card); border: 1px solid var(--border); border-radius: 10px; font-size: 13px; color: var(--ink-2); }
+.cm-dot { display: inline-block; width: 10px; height: 10px; border-radius: 50%; margin-right: 6px; vertical-align: -1px; }
+.cm-dot.nat { background: #7c3aed; } .cm-dot.int { background: #0d9488; } .cm-dot.int.sq { border-radius: 2px; } .cm-dot.mix { background: #db2777; }
+.cm-detail { margin-top: 14px; }
+.cm-detail h4 { margin: 0 0 8px; font-size: 16px; }
+@media (max-width: 640px) { .cm-legend { position: static; margin: 8px; } .ins-stats b { font-size: 20px; } }
+.ins-chart :focus, .ins-chart svg:focus, .ins-chart .recharts-wrapper:focus, .ins-chart .recharts-surface:focus { outline: none; }
+.ins-chart .recharts-rectangle.recharts-tooltip-cursor { pointer-events: none; }

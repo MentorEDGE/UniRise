@@ -37,7 +37,7 @@ const RECORD_MENUS: MenuDef[] = [
   { label: 'Conferences', icon: 'conferences', items: [{ label: 'Conference View', to: '/conferences' }, { label: 'Conference Reports', to: '/reports/conferences' }] },
   { label: 'Honours & Awards', icon: 'awards', items: [{ label: 'Honours & Awards View', to: '/awards' }, { label: 'Honours & Awards Reports', to: '/reports/awards' }] },
 ];
-const REPORTS: MenuDef = { label: 'Reports', icon: 'reports', items: [{ label: 'Annual Activity Report', to: '/reports/annual' }, 'sep', { label: 'Institution Overview', to: '/analytics' }, { label: 'Department Comparison', to: '/analytics/departments' }, { label: 'Faculty Performance', to: '/analytics/faculty' }, { label: 'Participation & Compliance', to: '/analytics/participation' }] };
+const REPORTS: MenuDef = { label: 'Reports', icon: 'reports', items: [{ label: 'Annual Activity Report', to: '/reports/annual' }, 'sep', { label: 'Institution Overview', to: '/analytics' }, { label: 'Department Comparison', to: '/analytics/departments' }, { label: 'Participation & Compliance', to: '/analytics/participation' }] };
 
 export function menusFor(role: Role, pending: number): MenuDef[] {
   if (role === 'faculty') {

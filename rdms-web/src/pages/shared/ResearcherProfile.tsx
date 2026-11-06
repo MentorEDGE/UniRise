@@ -95,6 +95,7 @@ export function ResearcherProfile({ facultyId }: { facultyId: string }) {
               <div><dt>Email</dt><dd><a href={`mailto:${f.email}`}>{f.email}</a></dd></div>
               <div><dt>ORCID</dt><dd>{f.orcid ? <a href={`https://orcid.org/${f.orcid}`} target="_blank" rel="noreferrer"><span className="orcid-dot" aria-hidden>iD</span>https://orcid.org/{f.orcid}</a> : <span className="muted">Not available</span>}</dd></div>
               {f.scopusId && <div><dt>Scopus</dt><dd><a href={`https://www.scopus.com/authid/detail.uri?authorId=${encodeURIComponent(f.scopusId)}`} target="_blank" rel="noreferrer">Author ID {f.scopusId}</a></dd></div>}
+              <div><dt>Google Scholar</dt><dd>{b?.googleScholar ? <a href={b.googleScholar} target="_blank" rel="noreferrer">View Google Scholar profile ↗</a> : <span className="muted">Not available</span>}</dd></div>
             </dl>
             <div className="rp-actions no-print">
               {!isMgmt && <Link className="btn sm" to="/biodata/edit">Update profile</Link>}
@@ -114,7 +115,6 @@ export function ResearcherProfile({ facultyId }: { facultyId: string }) {
                 </tbody>
               </table>
               {hasMetrics && <p className="rp-metrics-note">Updated {fmtDate(scholar.updatedAt)}</p>}
-              {b?.googleScholar && <a className="rp-gs-link" href={b.googleScholar} target="_blank" rel="noreferrer">View Google Scholar profile ↗</a>}
             </section>
             <section className="rp-activity">
               <ActivitySpark data={data.activity} height={64} />

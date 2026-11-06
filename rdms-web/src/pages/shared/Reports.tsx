@@ -11,6 +11,8 @@ import { STATUS_LABEL, STATUSES } from '../../lib/types';
 import { useAnalyticsFilter } from '../mgmt/filters';
 import { listColumns } from '../../lib/entities';
 import { RecordDetail } from './RecordDetail';
+import { focusMatcher, RecordInsights } from '../../components/insights';
+import type { Focus } from '../../components/insights';
 
 const GROUP_TITLE: Record<string, string> = { publications: 'Publication Reports', grants: 'Project Reports', fdps: 'FDP Reports', conferences: 'Conference Reports', awards: 'Honours & Awards Reports' };
 
@@ -89,21 +91,25 @@ export function SeedMoneyReport() {
   const rows = db.seedMoney.filter((s) => (!applied.from || s.appliedDate >= applied.from) && (!applied.to || s.appliedDate <= applied.to) && (!applied.status || s.status === applied.status))
     .sort((a, b) => b.appliedDate.localeCompare(a.appliedDate));
   const total = rows.reduce((a, s) => a + s.sanctionedAmount, 0);
+  const [focus, setFocus] = useState<Focus | null>(null);
+  const match = useMemo(() => focusMatcher('seedMoney', db), [db]);
+  const tableRows = focus ? rows.filter((r) => match(r, focus)) : rows;
   return (
     <>
-      <PageTitle>Faculty Seed Money Details</PageTitle>
+      <PageTitle>Seed Money Projects</PageTitle>
       <Panel size="wide">
-        <form className="grid" onSubmit={(e) => { e.preventDefault(); setApplied(form); }}>
+        <form className="grid" onSubmit={(e) => { e.preventDefault(); setApplied(form); setFocus(null); }}>
           <Field label="From Date"><input type="date" value={form.from} onChange={(e) => setForm({ ...form, from: e.target.value })} /></Field>
           <Field label="To Date"><input type="date" value={form.to} onChange={(e) => setForm({ ...form, to: e.target.value })} /></Field>
           <Field label="Status"><Select value={form.status} onChange={(v) => setForm({ ...form, status: v })} options={[{ value: 'Approved', label: 'Approved' }, { value: 'Draft', label: 'Yet to be Submitted' }, { value: 'Submitted', label: 'Submitted' }, { value: 'Rework', label: 'Rework / Revision Required' }, { value: 'Rejected', label: 'Reject' }]} placeholder="ALL" /></Field>
           <div className="btn-row" style={{ alignSelf: 'end', marginTop: 0 }}><button className="btn" type="submit">View</button></div>
         </form>
-        <p className="note">Seed money window is <b>{db.settings.seedMoneyWindowOpen ? 'open' : 'closed'}</b>. Change it in Settings → Institution & Departments.</p>
+        <p className="note">Seed money window is <b>{db.settings.seedMoneyWindowOpen ? 'open' : 'closed'}</b>. The Office of Research changes it under Institution → Institution &amp; Departments.</p>
       </Panel>
+      <RecordInsights kind="seedMoney" rows={rows} db={db} focus={focus} onFocus={setFocus} />
       <Panel size="wide">
-        <DataTable rows={rows} columns={listColumns(db, 'seedMoney', { showOwner: true })} rowKey={(r) => r.id} onRowClick={(r) => setOpenId(r.id)} exportName="seed_money" />
-        <p className="note">Total sanctioned in the selection: <b>{inr(total)}</b>. Open a submitted proposal to set the sanctioned amount and approve it.</p>
+        <DataTable rows={tableRows} columns={listColumns(db, 'seedMoney', { showOwner: true })} rowKey={(r) => r.id} onRowClick={(r) => setOpenId(r.id)} exportName="seed_money" />
+        <p className="note">Total sanctioned in the selection: <b>{inr(total)}</b>.</p>
       </Panel>
       {openId && <RecordDetail kind="seedMoney" id={openId} onClose={() => setOpenId(null)} />}
     </>

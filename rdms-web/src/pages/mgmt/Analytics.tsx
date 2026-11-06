@@ -1,7 +1,7 @@
-import { useMemo } from 'react';
+import { useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { BarCard, LineCard, RankList, useQuartileColors } from '../../components/charts';
-import { Attainment, DataTable, PageTitle, Panel } from '../../components/ui';
+import { Attainment, DataTable, Field, Input, PageTitle, Panel } from '../../components/ui';
 import type { Column } from '../../components/ui';
 import {
   dateOf, facultyStats, fmtDate, lakh, pct, trend, uniqueCounts,
@@ -9,7 +9,7 @@ import {
 import type { FacultyStats } from '../../lib/analytics';
 import { useStore } from '../../lib/store';
 import type { AnyRecord, EntityKind } from '../../lib/types';
-import { ENTITY_LABEL } from '../../lib/types';
+import { ENTITY_LABEL, SDGS } from '../../lib/types';
 import { useAnalyticsFilter } from './filters';
 
 const nf = (n: number) => n.toLocaleString('en-IN', { maximumFractionDigits: 1 });
@@ -208,30 +208,66 @@ export function facultyColumns(targets: { publicationsPerFaculty: number; fdpHou
 
 export function FacultyPerformance() {
   const { db } = useStore();
-  const { filter, bar } = useAnalyticsFilter();
-  const stats = useMemo(() => facultyStats(db, filter), [db, filter]);
+  const { filter, bar, years, ay } = useAnalyticsFilter();
+  const [q, setQ] = useState('');
+  const [view, setView] = useState<'dist' | 'desig' | 'dept' | 'top' | 'year' | 'sdg'>('dept');
+  const all = useMemo(() => facultyStats(db, filter), [db, filter]);
+  // The name / expertise search narrows both the graphs and the table.
+  const stats = useMemo(() => {
+    const t = q.trim().toLowerCase();
+    if (!t) return all;
+    return all.filter((s) => `${s.faculty.name} ${s.faculty.id} ${s.faculty.designation} ${db.biodata.find((b) => b.facultyId === s.faculty.id)?.expertise ?? ''}`.toLowerCase().includes(t));
+  }, [all, q, db]);
   const cols = facultyColumns(db.settings.targets);
   cols[0].render = (r) => stats.indexOf(r) + 1;
+  const avg = (xs: FacultyStats[], k: 'score' | 'publications' | 'fdpHours' | 'conferences') => Math.round((xs.reduce((a, x) => a + x[k], 0) / (xs.length || 1)) * 10) / 10;
   const buckets = [0, 10, 20, 30, 40, 60].map((lo, i, a) => ({ range: i === a.length - 1 ? `${lo}+` : `${lo}–${a[i + 1] - 1}`, faculty: stats.filter((s) => s.score >= lo && (i === a.length - 1 || s.score < a[i + 1])).length }));
-  const byDesig = ['Professor', 'Associate Professor', 'Assistant Professor'].map((d) => {
-    const s = stats.filter((x) => x.faculty.designation === d); const n = s.length || 1;
-    return { d: d.replace(' Professor', ' Prof.'), score: Math.round(s.reduce((a, x) => a + x.score, 0) / n * 10) / 10, pubs: Math.round(s.reduce((a, x) => a + x.publications, 0) / n * 10) / 10 };
-  });
+  const byDesig = ['Professor', 'Associate Professor', 'Assistant Professor'].map((d) => { const s = stats.filter((x) => x.faculty.designation === d); return { d: d.replace(' Professor', ' Prof.'), score: avg(s, 'score'), pubs: avg(s, 'publications') }; });
+  const byDept = db.settings.departments.filter((d) => !filter.department || d === filter.department).map((d) => { const s = stats.filter((x) => x.faculty.department === d); return { d: shortDept(d), score: avg(s, 'score'), pubs: avg(s, 'publications'), funding: Math.round(s.reduce((a, x) => a + x.sanctionedAmount, 0) / 100000 * 10) / 10 }; });
+  const top = [...stats].sort((a, b) => b.score - a.score).slice(0, 10).map((s) => ({ name: s.faculty.name, score: s.score, pubs: s.publications }));
+  const ids = new Set(stats.map((s) => s.faculty.id));
+  const byYear = useMemo(() => trend(db, filter.department, [...years].sort().slice(-6)), [db, filter.department, years]);
+  const sdg = SDGS.map((g) => {
+    const fac = stats.filter((s) => db.biodata.find((b) => b.facultyId === s.faculty.id)?.sdgs?.includes(g.n));
+    return { g: `SDG ${g.n}`, faculty: fac.length, pubs: fac.reduce((a, x) => a + x.publications, 0) };
+  }).filter((r) => r.faculty);
+  const tabs: [typeof view, string][] = [['dept', 'Department comparison'], ['top', 'Top faculty'], ['year', 'Output by year'], ['dist', 'Score distribution'], ['desig', 'By designation'], ['sdg', 'SDG contribution']];
   return (
     <>
       <PageTitle>Faculty Performance</PageTitle>
-      <Panel size="wide">{bar}</Panel>
+      <Panel size="wide" title="Search">
+        <div style={{ display: 'flex', gap: 16, flexWrap: 'wrap', alignItems: 'end' }}>
+          {bar}
+          <div style={{ flex: 1, minWidth: 280 }}><Field label="Faculty"><Input value={q} onChange={setQ} placeholder="Name, employee code, designation or expertise" type="search" /></Field></div>
+        </div>
+      </Panel>
+      <section className="panel wide insights" aria-label="Faculty performance graphs">
+        <div className="ins-stats">
+          <div><span>Faculty</span><b>{stats.length}</b></div>
+          <div><span>Average score</span><b>{avg(stats, 'score')}</b></div>
+          <div><span>Average publications</span><b>{avg(stats, 'publications')}</b></div>
+          <div><span>Sanctioned funding</span><b>{lakh(stats.reduce((a, x) => a + x.sanctionedAmount, 0))}</b></div>
+        </div>
+        <div className="ins-bar"><div className="net-seg" role="group" aria-label="Graph">{tabs.map(([id, l]) => <button key={id} type="button" className={view === id ? 'on' : ''} aria-pressed={view === id} onClick={() => setView(id)}>{l}</button>)}</div></div>
+        <div className="ins-cards">
+          {view === 'dept' && <BarCard title="Departments compared" sub={`Average per faculty${ay === 'all' ? '' : ` in AY ${ay}`}; funding in ₹ lakh`} data={byDept} xKey="d" xLabel="Department" series={[{ key: 'score', label: 'Avg score' }, { key: 'pubs', label: 'Avg publications' }, { key: 'funding', label: 'Funding (₹ L)' }]} fmt={nf} height={280} />}
+          {view === 'top' && <BarCard title="Top 10 faculty by weighted score" data={top} xKey="name" xLabel="Faculty" series={[{ key: 'score', label: 'Score' }, { key: 'pubs', label: 'Publications' }]} height={280} />}
+          {view === 'year' && <BarCard title="Research output by academic year" sub={filter.department || 'All departments'} data={byYear} xKey="ay" xLabel="Academic year" stacked series={[{ key: 'journal', label: 'Journal' }, { key: 'confPaper', label: 'Conference paper' }, { key: 'bookChapter', label: 'Book / chapter' }, { key: 'proposals', label: 'Grant proposals' }]} height={280} />}
+          {view === 'dist' && <BarCard title="Score distribution" sub="Number of faculty in each score band" data={buckets} xKey="range" xLabel="Score band" series={[{ key: 'faculty', label: 'Faculty' }]} height={280} />}
+          {view === 'desig' && <BarCard title="Average by designation" data={byDesig} xKey="d" xLabel="Designation" series={[{ key: 'score', label: 'Avg score' }, { key: 'pubs', label: 'Avg publications' }]} fmt={nf} height={280} />}
+          {view === 'sdg' && (sdg.length ? <BarCard title="SDG-wise research contribution" sub="Faculty listing each goal on their approved profile, and their publications in the period" data={sdg} xKey="g" xLabel="Goal" series={[{ key: 'faculty', label: 'Faculty' }, { key: 'pubs', label: 'Publications' }]} height={280} /> : <p className="muted ins-empty">No faculty in this selection list an SDG on their approved profile.</p>)}
+        </div>
+        <p className="ins-note">{ids.size} faculty in the selection. Graphs and table follow the academic year, department and faculty search above.</p>
+      </section>
       <Panel size="wide" title="Faculty ranking by weighted score">
         <DataTable rows={stats} columns={cols} rowKey={(r) => r.faculty.id} exportName="faculty_performance" pageSize={20} />
-        <p className="note">Green values meet the per-faculty target. Co-authored publications and shared grants credit each internal author; funding is split by investigator share. Click a name for the full 360° profile.</p>
+        <p className="note">Green values meet the per-faculty target. Co-authored publications and shared grants credit each internal author; funding is split by investigator share. Click a name for the full profile.</p>
       </Panel>
-      <div className="cards">
-        <BarCard title="Score distribution" sub="Number of faculty in each score band" data={buckets} xKey="range" xLabel="Score band" series={[{ key: 'faculty', label: 'Faculty' }]} />
-        <BarCard title="Average by designation" data={byDesig} xKey="d" xLabel="Designation" series={[{ key: 'score', label: 'Avg score' }, { key: 'pubs', label: 'Avg publications' }]} fmt={nf} />
-      </div>
     </>
   );
 }
+
+const shortDept = (d: string) => (d.length > 18 ? d.split(/[\s&]+/).filter(Boolean).map((w) => w[0]).join('') : d);
 
 // ---------------- Participation & compliance ----------------
 
