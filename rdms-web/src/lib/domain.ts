@@ -4,11 +4,12 @@
  * actor's own institution database, so nothing here can reach another institution.
  */
 import type {
-  AnyRecord, Author, Biodata, DB, EntityKind, Faculty, Grant, Investigator, Notice, Publication, Settings, Status,
+  AnyRecord, Author, Biodata, DB, EntityKind, Faculty, Grant, Investigator, Notice, ProfileChange, Publication, Settings, Status,
 } from './types';
-import { AUTHOR_KINDS, AWARD_CATEGORIES, LEVELS, PUB_TYPES } from './types';
+import { AUTHOR_KINDS, AWARD_CATEGORIES, EMPTY_SCHOLAR, LEVELS, PUB_TYPES } from './types';
 
-export interface Actor { userId: string; name: string; role: 'management' | 'faculty'; facultyId?: string }
+/** 'office' is the Office of Research acting on one institution's database (record approvals only). */
+export interface Actor { userId: string; name: string; role: 'management' | 'faculty' | 'office'; facultyId?: string }
 
 /** Error with an HTTP status; the server turns it into the response. */
 export class RuleError extends Error {
@@ -33,27 +34,36 @@ export function creditedFaculty(kind: EntityKind, r: AnyRecord): string[] {
 export const isEditable = (r: { status: Status }) => r.status === 'Draft' || r.status === 'Rework';
 
 /**
- * Faculty see records they are credited on (any state) and other people's APPROVED publications (the RMS
- * Publication View). FDPs, conferences, grants, seed money, honours and biodata of other faculty are private.
- * Management sees everything in its own institution.
+ * Faculty see only records they are credited on (any state): nothing of other faculty's profiles or records.
+ * Management sees APPROVED records of its own institution only: drafts, submissions waiting for review, rework and
+ * rejections belong to the Office of Research approval workflow and are not shown to management.
  */
 export function canView(actor: Actor, kind: EntityKind, r: AnyRecord) {
-  if (actor.role === 'management') return true;
-  if (creditedFaculty(kind, r).includes(actor.facultyId!)) return true;
-  return kind === 'publications' && r.status === 'Approved';
+  if (actor.role === 'office') return true;
+  if (actor.role === 'management') return r.status === 'Approved';
+  return creditedFaculty(kind, r).includes(actor.facultyId!);
 }
 
 const KINDS: EntityKind[] = ['publications', 'grants', 'seedMoney', 'fdps', 'conferences', 'awards'];
 
 /** The slice of the institution's data this actor may receive. */
 export function scopeFor(db: DB, actor: Actor): DB {
-  if (actor.role === 'management') return db;
+  if (actor.role === 'office') return db;
+  if (actor.role === 'management') {
+    const out: DB = { ...db };
+    // Approved records only, and without the review history: approval remarks stay with the Office of Research.
+    for (const k of KINDS) (out[k] as AnyRecord[]) = (db[k] as AnyRecord[]).filter((r) => r.status === 'Approved').map((r) => ({ ...r, history: r.history.filter((h) => h.action === 'Created' || h.action === 'Approved' || h.action.startsWith('Outcome')) }));
+    out.profileChanges = []; // pending profile edits are not institutional information until approved
+    out.faculty = db.faculty.filter((f) => f.active);
+    return out;
+  }
   const me = actor.facultyId!;
   const out: DB = {
     ...db,
-    // Directory entries of colleagues carry only what the RMS shows publicly (name, department, research IDs).
-    faculty: db.faculty.map((f) => (f.id === me ? f : { ...f, phone: '', joiningDate: '' })),
+    // Colleagues: only name, title, department and employee code, so co-authors can be picked in entry forms.
+    faculty: db.faculty.filter((f) => f.id === me || f.active).map((f) => (f.id === me ? f : { id: f.id, title: f.title, name: f.name, department: f.department, designation: '', email: '', phone: '', joiningDate: '', orcid: '', scopusId: '', active: true })),
     biodata: db.biodata.filter((b) => b.facultyId === me),
+    profileChanges: (db.profileChanges ?? []).filter((c) => c.facultyId === me),
     publications: [], grants: [], seedMoney: [], fdps: [], conferences: [], awards: [],
   };
   for (const k of KINDS) (out[k] as AnyRecord[]) = (db[k] as AnyRecord[]).filter((r) => canView(actor, k, r));
@@ -85,8 +95,8 @@ function sanitize(kind: EntityKind, input: Record<string, unknown>): Record<stri
     else if (t === 'number') out[k] = num(v);
     else if (t === 'boolean') out[k] = v === true;
     else if (t === 'strings') out[k] = list(v as unknown, 50, (x) => x as unknown).map((x) => str(x, 300)).filter(Boolean);
-    else if (t === 'authors') out[k] = list(v, 100, (a): Author => ({ kind: kindOf(a.kind), code: str(a.code, 40), name: str(a.name, 200), institution: str(a.institution, 300), department: str(a.department, 300), email: str(a.email, 200) }));
-    else out[k] = list(v, 30, (a): Investigator => ({ kind: kindOf(a.kind), code: str(a.code, 40), name: str(a.name, 200), role: (['PI', 'Co-PI', 'Co-I'].includes(a.role as string) ? a.role : 'Co-I') as Investigator['role'], institution: str(a.institution, 300), department: str(a.department, 300), sharePct: num(a.sharePct) }));
+    else if (t === 'authors') out[k] = list(v, 100, (a): Author => ({ kind: kindOf(a.kind), code: str(a.code, 40), name: str(a.name, 200), institution: str(a.institution, 300), department: str(a.department, 300), email: str(a.email, 200), country: str(a.country, 80) }));
+    else out[k] = list(v, 30, (a): Investigator => ({ kind: kindOf(a.kind), code: str(a.code, 40), name: str(a.name, 200), role: (['PI', 'Co-PI', 'Co-I'].includes(a.role as string) ? a.role : 'Co-I') as Investigator['role'], institution: str(a.institution, 300), department: str(a.department, 300), sharePct: num(a.sharePct), country: str(a.country, 80) }));
   }
   return out;
 }
@@ -143,8 +153,8 @@ function requireFaculty(actor: Actor, db: DB) {
   if (actor.role !== 'faculty' || !actor.facultyId) throw forbid('Entries are made by faculty members.');
   if (!db.faculty.find((f) => f.id === actor.facultyId)?.active) throw forbid('Your faculty profile is inactive.');
 }
-function requireManagement(actor: Actor) {
-  if (actor.role !== 'management') throw forbid('Only Top-Level Management can do this.');
+function requireOffice(actor: Actor) {
+  if (actor.role !== 'office') throw forbid('Only the Office of Research can approve entries.');
 }
 
 /** Faculty create or edit their own entry; `submit` sends it for approval. Returns the saved id. */
@@ -191,8 +201,9 @@ export function deleteRecord(db: DB, actor: Actor, kind: EntityKind, id: string)
 
 export type Decision = 'Approved' | 'Rework' | 'Rejected';
 
+/** Approve, send for rework or reject a submitted entry. Office of Research only. */
 export function review(db: DB, actor: Actor, kind: EntityKind, id: string, decision: Decision, remark: string, sanctionedAmount?: number) {
-  requireManagement(actor);
+  requireOffice(actor);
   if (!['Approved', 'Rework', 'Rejected'].includes(decision)) throw invalid('Unknown decision.');
   const list = db[kind] as AnyRecord[];
   const i = list.findIndex((x) => x.id === id);
@@ -201,7 +212,7 @@ export function review(db: DB, actor: Actor, kind: EntityKind, id: string, decis
   const note = str(remark, 1000).trim();
   if (decision !== 'Approved' && !note) throw invalid('Give a remark so the faculty member knows what to change.');
   const at = now();
-  const action = decision === 'Approved' ? 'Approved' : decision === 'Rework' ? 'Sent for rework' : 'Rejected';
+  const action = decision === 'Approved' ? 'Approved' : decision === 'Rework' ? 'Returned for correction' : 'Rejected';
   const updated = { ...list[i], status: decision, updatedAt: at, history: [...list[i].history, { at, by: actor.name, action, remark: note || undefined }] } as AnyRecord;
   if (kind === 'seedMoney' && decision === 'Approved' && sanctionedAmount != null) {
     if (num(sanctionedAmount) < 0) throw invalid('Sanctioned amount cannot be negative.');
@@ -210,8 +221,9 @@ export function review(db: DB, actor: Actor, kind: EntityKind, id: string, decis
   list[i] = updated;
 }
 
+/** Records the funding outcome of an approved grant. Office of Research only: management has read-only access. */
 export function updateGrantOutcome(db: DB, actor: Actor, id: string, patch: Pick<Grant, 'outcome' | 'sanctionDate' | 'sanctionedAmount' | 'receivedAmount'>) {
-  requireManagement(actor);
+  requireOffice(actor);
   const i = db.grants.findIndex((g) => g.id === id);
   if (i < 0) throw notFound('Grant');
   if (db.grants[i].status !== 'Approved') throw invalid('Record the outcome after the grant entry is approved.');
@@ -224,38 +236,120 @@ export function updateGrantOutcome(db: DB, actor: Actor, id: string, patch: Pick
 
 // ---------- people ----------
 
-export function saveBiodata(db: DB, actor: Actor, b: Biodata) {
-  if (actor.role === 'faculty' && actor.facultyId !== b.facultyId) throw forbid('You can only edit your own biodata.');
-  if (!db.faculty.some((f) => f.id === b.facultyId)) throw notFound('Faculty member');
+const metric = (v: unknown) => (v === null || v === undefined || v === '' ? null : typeof v === 'number' && Number.isFinite(v) && v >= 0 ? Math.round(v) : NaN);
+const PHOTO = /^data:image\/(jpeg|png|webp);base64,[A-Za-z0-9+/=]+$/;
+
+/** Checks and cleans a proposed profile. Google Scholar metrics keep their old stamp unless the numbers changed. */
+function cleanBiodata(b: Biodata, prev: Biodata | undefined, by: string): Biodata {
+  const inS = (b.scholar ?? {}) as Partial<Biodata['scholar']>;
+  const m = { citations: metric(inS.citations), hIndex: metric(inS.hIndex), i10Index: metric(inS.i10Index) };
+  if (Object.values(m).some((v) => Number.isNaN(v))) throw invalid('Google Scholar metrics must be whole numbers of 0 or more, or left blank.');
+  // Two facts that always hold on Google Scholar; they catch values typed into the wrong box.
+  if (m.hIndex != null && m.citations != null && m.hIndex * m.hIndex > m.citations) throw invalid('The h-index cannot be that high for this citation count. Copy the values exactly from the Google Scholar profile.');
+  if (m.hIndex != null && m.i10Index != null && m.hIndex >= 10 && m.i10Index < m.hIndex) throw invalid('With an h-index of 10 or more, the i10-index is at least the h-index. Check the values on the Google Scholar profile.');
+  const old = prev?.scholar ?? EMPTY_SCHOLAR;
+  const changed = m.citations !== old.citations || m.hIndex !== old.hIndex || m.i10Index !== old.i10Index;
+  const scholar = changed ? { ...m, updatedAt: now(), updatedBy: by } : old;
+  const photo = str(b.photo, 400_000);
+  if (photo && !PHOTO.test(photo)) throw invalid('The photograph must be a JPEG, PNG or WebP image.');
+  const sdgs = [...new Set(Array.isArray(b.sdgs) ? b.sdgs.filter((n) => Number.isInteger(n) && n >= 1 && n <= 17) : [])].sort((x, y) => x - y);
+  const scholarUrl = str(b.googleScholar, 300).trim();
+  if (scholarUrl && !/^https:\/\/scholar\.google\.[a-z.]+\//.test(scholarUrl)) throw invalid('The Google Scholar link must start with https://scholar.google.');
+  if (b.dob && str(b.dob, 10) > now().slice(0, 10)) throw invalid('Date of birth cannot be in the future.');
   const rows = <T,>(v: unknown, keys: (keyof T)[]) => list(v, 50, (x) => Object.fromEntries(keys.map((k) => [k, str(x[k as string], 300)])) as T);
-  const clean: Biodata = {
+  return {
     facultyId: b.facultyId, dob: str(b.dob, 10), gender: str(b.gender, 40), address: str(b.address, 500), summary: str(b.summary, 3000),
-    researchInterests: str(b.researchInterests, 1000), googleScholar: str(b.googleScholar, 300), phdGuided: num(b.phdGuided), phdOngoing: num(b.phdOngoing),
+    researchInterests: str(b.researchInterests, 1000), googleScholar: scholarUrl, phdGuided: num(b.phdGuided), phdOngoing: num(b.phdOngoing),
     qualifications: rows(b.qualifications, ['degree', 'specialization', 'institution', 'year']),
     experience: rows(b.experience, ['organisation', 'designation', 'from', 'to']),
-    awards: rows(b.awards, ['title', 'by', 'year']),
+    awards: prev?.awards ?? [],
     memberships: rows(b.memberships, ['body', 'type', 'since']),
-    updatedAt: now(),
+    expertise: str(b.expertise, 1000), keywords: str(b.keywords, 500), sdgs, photo, scholar,
+    updatedAt: prev?.updatedAt ?? now(),
   };
-  const i = db.biodata.findIndex((x) => x.facultyId === b.facultyId);
-  if (i >= 0) db.biodata[i] = clean; else db.biodata.push(clean);
 }
 
-const blankBiodata = (facultyId: string): Biodata => ({ facultyId, dob: '', gender: '', address: '', summary: '', researchInterests: '', googleScholar: '', phdGuided: 0, phdOngoing: 0, qualifications: [], experience: [], awards: [], memberships: [], updatedAt: now() });
+const FIELD_LABEL: Record<string, string> = {
+  dob: 'Date of birth', gender: 'Gender', address: 'Address', summary: 'Biography', researchInterests: 'Research interests', googleScholar: 'Google Scholar link',
+  phdGuided: 'Ph.D. guided', phdOngoing: 'Ph.D. ongoing', qualifications: 'Qualifications', experience: 'Experience', memberships: 'Memberships',
+  expertise: 'Areas of expertise', keywords: 'Keywords', sdgs: 'SDGs', photo: 'Photograph', scholar: 'Google Scholar metrics',
+  email: 'Email', phone: 'Phone', orcid: 'ORCID', scopusId: 'Scopus ID',
+};
+const same = (a: unknown, b: unknown) => JSON.stringify(a) === JSON.stringify(b);
 
-/** Faculty may update their own contact and research IDs; management edits everything inside its institution. */
+/**
+ * A faculty member proposes changes to their own profile. Nothing on the live profile changes: the proposal waits
+ * for the Office of Research. One open proposal per person; editing it again updates that proposal.
+ */
+export function proposeProfileChange(db: DB, actor: Actor, input: { biodata: Biodata; contact: Partial<Faculty> }, submit: boolean): string {
+  if (actor.role !== 'faculty' || !actor.facultyId) throw forbid('Profiles are updated by the faculty member, and approved by the Office of Research.');
+  const me = actor.facultyId;
+  const f = db.faculty.find((x) => x.id === me);
+  if (!f?.active) throw forbid('Your faculty profile is inactive.');
+  db.profileChanges ??= [];
+  const prev = db.biodata.find((x) => x.facultyId === me);
+  const open = db.profileChanges.find((c) => c.facultyId === me && ['Draft', 'Submitted', 'Rework'].includes(c.status));
+  const biodata = cleanBiodata({ ...(input.biodata ?? {}), facultyId: me } as Biodata, prev, actor.name);
+  const c = input.contact ?? {};
+  const contact = { email: str(c.email, 200).trim(), phone: str(c.phone, 20), orcid: str(c.orcid, 19).trim(), scopusId: str(c.scopusId, 20).trim() };
+  if (!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(contact.email)) throw invalid('Enter a valid email address.');
+  if (contact.orcid && !/^\d{4}-\d{4}-\d{4}-\d{3}[\dX]$/.test(contact.orcid)) throw invalid('ORCID must look like 0000-0002-1825-0097.');
+  const base = prev ? normalizeBiodata(prev) : blankBiodata(me);
+  const changed = [
+    ...PROFILE_KEYS.filter((k) => !same(biodata[k], base[k])),
+    ...(['email', 'phone', 'orcid', 'scopusId'] as const).filter((k) => contact[k] !== f[k]),
+  ].map((k) => FIELD_LABEL[k]);
+  if (!changed.length) throw invalid('Nothing has changed compared with your approved profile.');
+  const at = now();
+  const history = [...(open?.history ?? [])];
+  history.push({ at, by: actor.name, action: open ? 'Edited' : 'Created' });
+  if (submit) history.push({ at, by: actor.name, action: open?.status === 'Rework' ? 'Resubmitted' : 'Submitted' });
+  let id = open?.id;
+  if (!id) { db.seq += 1; id = `PRF${db.seq}`; }
+  const next: ProfileChange = { id, facultyId: me, status: submit ? 'Submitted' : open?.status === 'Submitted' ? 'Submitted' : open?.status ?? 'Draft', createdAt: open?.createdAt ?? at, updatedAt: at, history, biodata, contact, changed };
+  db.profileChanges = [next, ...db.profileChanges.filter((x) => x.id !== id)];
+  return id;
+}
+const PROFILE_KEYS = ['dob', 'gender', 'address', 'summary', 'researchInterests', 'googleScholar', 'phdGuided', 'phdOngoing', 'qualifications', 'experience', 'memberships', 'expertise', 'keywords', 'sdgs', 'photo', 'scholar'] as const;
+
+/** Office of Research decision on a proposed profile update. Only an approval touches the live profile. */
+export function reviewProfileChange(db: DB, actor: Actor, id: string, decision: Decision, remark: string) {
+  requireOffice(actor);
+  if (!['Approved', 'Rework', 'Rejected'].includes(decision)) throw invalid('Unknown decision.');
+  const i = (db.profileChanges ?? []).findIndex((c) => c.id === id);
+  if (i < 0) throw notFound('Profile update');
+  const c = db.profileChanges[i];
+  if (c.status !== 'Submitted') throw invalid('Only submitted profile updates can be reviewed.');
+  const note = str(remark, 1000).trim();
+  if (decision !== 'Approved' && !note) throw invalid('Give a remark so the faculty member knows what to change.');
+  const at = now();
+  const action = decision === 'Approved' ? 'Approved' : decision === 'Rework' ? 'Returned for correction' : 'Rejected';
+  db.profileChanges[i] = { ...c, status: decision, updatedAt: at, history: [...c.history, { at, by: actor.name, action, remark: note || undefined }] };
+  if (decision !== 'Approved') return;
+  const bi = db.biodata.findIndex((x) => x.facultyId === c.facultyId);
+  const approved = { ...c.biodata, updatedAt: at };
+  if (bi >= 0) db.biodata[bi] = approved; else db.biodata.push(approved);
+  db.faculty = db.faculty.map((f) => (f.id === c.facultyId ? { ...f, ...c.contact } : f));
+}
+
+export const blankBiodata = (facultyId: string, at = now()): Biodata => ({
+  facultyId, dob: '', gender: '', address: '', summary: '', researchInterests: '', googleScholar: '', phdGuided: 0, phdOngoing: 0, qualifications: [], experience: [], awards: [], memberships: [],
+  expertise: '', keywords: '', sdgs: [], photo: '', scholar: { ...EMPTY_SCHOLAR }, updatedAt: at,
+});
+
+/** Fills in profile fields added after a biodata row was stored. */
+export const normalizeBiodata = (b: Biodata): Biodata => ({ ...blankBiodata(b.facultyId, b.updatedAt), ...b, scholar: { ...EMPTY_SCHOLAR, ...(b.scholar ?? {}) }, sdgs: Array.isArray(b.sdgs) ? b.sdgs : [] });
+
+/**
+ * Official faculty details (name, designation, department, status). Office of Research only: faculty propose their
+ * contact details through a profile update, and Top-Level Management has read-only access.
+ */
 export function saveFaculty(db: DB, actor: Actor, input: Faculty, isNew = false) {
   const f: Faculty = {
     id: str(input.id, 20).trim(), title: str(input.title, 10), name: str(input.name, 200).trim(), designation: str(input.designation, 100), department: str(input.department, 200),
     email: str(input.email, 200).trim(), phone: str(input.phone, 20), joiningDate: str(input.joiningDate, 10), orcid: str(input.orcid, 19), scopusId: str(input.scopusId, 20), active: input.active !== false,
   };
-  if (actor.role === 'faculty') {
-    if (isNew || actor.facultyId !== f.id) throw forbid('You can only update your own profile.');
-    const cur = db.faculty.find((x) => x.id === f.id)!;
-    db.faculty = db.faculty.map((x) => (x.id === f.id ? { ...cur, phone: f.phone, email: f.email, orcid: f.orcid, scopusId: f.scopusId } : x));
-    return;
-  }
-  requireManagement(actor);
+  requireOffice(actor);
   if (!/^[A-Za-z0-9-]{3,20}$/.test(f.id)) throw invalid('Employee code must be 3-20 letters or digits.');
   if (!f.name) throw invalid('Name is required.');
   if (!db.settings.departments.includes(f.department)) throw invalid('Choose one of the institution’s departments.');
@@ -282,7 +376,7 @@ export function ensureFacultyProfile(db: DB, p: { id: string; title: string; nam
 }
 
 export function saveSettings(db: DB, actor: Actor, s: Settings) {
-  requireManagement(actor);
+  requireOffice(actor); // institution settings and notices are not managed by Top-Level Management
   if (!str(s.institutionName).trim()) throw invalid('Institution name is required.');
   const departments = list(s.departments as unknown, 100, (x) => x as unknown).map((d) => str(d, 200).trim()).filter(Boolean);
   if (!departments.length) throw invalid('Keep at least one department.');
@@ -297,12 +391,12 @@ export function saveSettings(db: DB, actor: Actor, s: Settings) {
 }
 
 export function addNotice(db: DB, actor: Actor, title: string, body: string) {
-  requireManagement(actor);
+  requireOffice(actor); // institution settings and notices are not managed by Top-Level Management
   if (!str(title).trim()) throw invalid('Title is required.');
   db.seq += 1;
   db.notices.unshift({ id: `N${db.seq}`, at: now(), title: str(title, 200).trim(), body: str(body, 2000).trim() } as Notice);
 }
 export function deleteNotice(db: DB, actor: Actor, id: string) {
-  requireManagement(actor);
+  requireOffice(actor); // institution settings and notices are not managed by Top-Level Management
   db.notices = db.notices.filter((n) => n.id !== id);
 }

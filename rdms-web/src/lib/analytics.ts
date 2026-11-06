@@ -192,12 +192,6 @@ export function uniqueCounts(db: DB, f: Filter) {
   };
 }
 
-export function pendingCount(db: DB, department = '') {
-  const deptOf = new Map(db.faculty.map((x) => [x.id, x.department]));
-  let n = 0;
-  for (const k of KINDS) for (const r of db[k] as AnyRecord[]) if (r.status === 'Submitted' && (!department || deptOf.get(r.facultyId) === department)) n++;
-  return n;
-}
 
 // ---------- formatting ----------
 

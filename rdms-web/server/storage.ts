@@ -10,15 +10,16 @@ import fs from 'node:fs';
 import path from 'node:path';
 import type { DB, Institution } from '../src/lib/types';
 import { AWARD_WEIGHT_DEFAULTS } from '../src/lib/types';
+import { normalizeBiodata } from '../src/lib/domain';
 
 export interface AccountRow {
-  id: string; email: string; password_hash: string; role: 'it_admin' | 'management' | 'faculty'; institution_id: string | null; faculty_id: string | null;
+  id: string; email: string; password_hash: string; role: 'office' | 'management' | 'faculty'; institution_id: string | null; faculty_id: string | null;
   status: 'pending' | 'active' | 'rejected' | 'suspended' | 'deactivated'; name: string; title: string; designation: string; department: string;
   employee_code: string; request_note: string; requested_at: string; reviewed_by: string | null; reviewed_at: string | null; review_note: string;
   affiliation_verified: number;
 }
 
-const COLLECTIONS = ['faculty', 'biodata', 'publications', 'grants', 'seedMoney', 'fdps', 'conferences', 'awards', 'notices'] as const;
+const COLLECTIONS = ['faculty', 'biodata', 'publications', 'grants', 'seedMoney', 'fdps', 'conferences', 'awards', 'profileChanges', 'notices'] as const;
 const keyOf = (c: (typeof COLLECTIONS)[number], row: Record<string, unknown>) => String(c === 'biodata' ? row.facultyId : row.id);
 
 export class Storage {
@@ -30,26 +31,60 @@ export class Storage {
     this.platform = new Database(path.join(dir, 'platform.sqlite'));
     this.platform.pragma('journal_mode = WAL');
     this.platform.pragma('foreign_keys = ON');
+    this.migrateAccounts();
     this.platform.exec(`
       CREATE TABLE IF NOT EXISTS institutions (
         id TEXT PRIMARY KEY, slug TEXT NOT NULL UNIQUE, name TEXT NOT NULL, tagline TEXT NOT NULL DEFAULT '',
         email_domain TEXT NOT NULL DEFAULT '', status TEXT NOT NULL DEFAULT 'active', created_at TEXT NOT NULL);
       CREATE TABLE IF NOT EXISTS accounts (
         id TEXT PRIMARY KEY, email TEXT NOT NULL UNIQUE COLLATE NOCASE, password_hash TEXT NOT NULL,
-        role TEXT NOT NULL CHECK (role IN ('it_admin','management','faculty')),
+        role TEXT NOT NULL CHECK (role IN ('office','management','faculty')),
         institution_id TEXT REFERENCES institutions(id), faculty_id TEXT,
         status TEXT NOT NULL CHECK (status IN ('pending','active','rejected','suspended','deactivated')),
         name TEXT NOT NULL, title TEXT NOT NULL DEFAULT '', designation TEXT NOT NULL DEFAULT '', department TEXT NOT NULL DEFAULT '',
         employee_code TEXT NOT NULL DEFAULT '', request_note TEXT NOT NULL DEFAULT '', requested_at TEXT NOT NULL,
         reviewed_by TEXT, reviewed_at TEXT, review_note TEXT NOT NULL DEFAULT '', affiliation_verified INTEGER NOT NULL DEFAULT 0,
-        CHECK ((role = 'it_admin') = (institution_id IS NULL)));
+        CHECK (institution_id IS NOT NULL));
       CREATE UNIQUE INDEX IF NOT EXISTS one_account_per_profile ON accounts(institution_id, faculty_id) WHERE faculty_id IS NOT NULL AND status IN ('active','suspended');
       CREATE TABLE IF NOT EXISTS sessions (
         token_hash TEXT PRIMARY KEY, account_id TEXT NOT NULL REFERENCES accounts(id) ON DELETE CASCADE,
         created_at INTEGER NOT NULL, last_seen INTEGER NOT NULL, admin INTEGER NOT NULL);
+      CREATE TABLE IF NOT EXISTS enquiries (
+        id INTEGER PRIMARY KEY AUTOINCREMENT, at TEXT NOT NULL, data TEXT NOT NULL, delivered INTEGER NOT NULL DEFAULT 0, delivery_note TEXT NOT NULL DEFAULT '');
       CREATE TABLE IF NOT EXISTS audit (
         id INTEGER PRIMARY KEY AUTOINCREMENT, at TEXT NOT NULL, actor_id TEXT, actor_name TEXT, action TEXT NOT NULL,
         target TEXT, institution_id TEXT, detail TEXT NOT NULL DEFAULT '');
+    `);
+  }
+
+  /**
+   * Earlier versions had one platform-level Office of Research ('it_admin', no institution). The Office of Research
+   * now belongs to an institution. Old platform-level accounts are removed (UniRise provisions each institution's
+   * Office of Research with `npm run provision`); every other account and all research data are kept.
+   */
+  private migrateAccounts() {
+    const row = this.platform.prepare("SELECT sql FROM sqlite_master WHERE type = 'table' AND name = 'accounts'").get() as { sql: string } | undefined;
+    if (!row || !row.sql.includes('it_admin')) return;
+    this.platform.exec(`
+      PRAGMA foreign_keys = OFF;
+      BEGIN;
+      DELETE FROM sessions WHERE account_id IN (SELECT id FROM accounts WHERE role = 'it_admin');
+      DELETE FROM accounts WHERE role = 'it_admin';
+      ALTER TABLE accounts RENAME TO accounts_old;
+      CREATE TABLE accounts (
+        id TEXT PRIMARY KEY, email TEXT NOT NULL UNIQUE COLLATE NOCASE, password_hash TEXT NOT NULL,
+        role TEXT NOT NULL CHECK (role IN ('office','management','faculty')),
+        institution_id TEXT REFERENCES institutions(id), faculty_id TEXT,
+        status TEXT NOT NULL CHECK (status IN ('pending','active','rejected','suspended','deactivated')),
+        name TEXT NOT NULL, title TEXT NOT NULL DEFAULT '', designation TEXT NOT NULL DEFAULT '', department TEXT NOT NULL DEFAULT '',
+        employee_code TEXT NOT NULL DEFAULT '', request_note TEXT NOT NULL DEFAULT '', requested_at TEXT NOT NULL,
+        reviewed_by TEXT, reviewed_at TEXT, review_note TEXT NOT NULL DEFAULT '', affiliation_verified INTEGER NOT NULL DEFAULT 0,
+        CHECK (institution_id IS NOT NULL));
+      INSERT INTO accounts SELECT * FROM accounts_old;
+      DROP TABLE accounts_old;
+      DROP INDEX IF EXISTS one_account_per_profile;
+      COMMIT;
+      PRAGMA foreign_keys = ON;
     `);
   }
 
@@ -114,6 +149,8 @@ export class Storage {
       }
       // Institutions created before Honours & Awards existed get the default award weights.
       if (data.settings.weights) data.settings.weights = { ...AWARD_WEIGHT_DEFAULTS, ...data.settings.weights };
+      // Profiles stored before the researcher-profile fields existed get empty values (never invented ones).
+      data.biodata = data.biodata.map(normalizeBiodata);
       t = { conn, data };
       this.tenants.set(institutionId, t);
     }

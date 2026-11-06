@@ -2,8 +2,13 @@ import { useState } from 'react';
 import { Link, useNavigate, useParams } from 'react-router-dom';
 import { Alert, Attainment, Field, Input, NumberInput, PageTitle, Panel, Select, TextArea, useToast } from '../../components/ui';
 import { biodataCompleteness, fmtDate, inr, isSanctioned } from '../../lib/analytics';
-import { creditedFaculty, saveBiodata, saveFaculty, useStore } from '../../lib/store';
+import { creditedFaculty, proposeProfileChange, useStore } from '../../lib/store';
+import { StatusBadge } from '../../components/ui';
+import { STATUS_LABEL } from '../../lib/types';
+import { blankBiodata, normalizeBiodata } from '../../lib/domain';
 import type { Biodata, Experience, Faculty, Membership, Qualification } from '../../lib/types';
+import { SDGS } from '../../lib/types';
+import { Avatar, SdgIcon } from '../../components/research';
 
 function useTarget() {
   const { db, user } = useStore();
@@ -11,7 +16,8 @@ function useTarget() {
   const facultyId = id ?? user?.facultyId ?? '';
   const f = db.faculty.find((x) => x.id === facultyId);
   const b = db.biodata.find((x) => x.facultyId === facultyId);
-  return { db, user, f, b, facultyId, canEdit: user?.role === 'management' || user?.facultyId === facultyId };
+  // Only the faculty member edits their own profile; every change goes to the Office of Research for approval.
+  return { db, user, f, b, facultyId, canEdit: user?.role === 'faculty' && user.facultyId === facultyId };
 }
 
 export function BiodataView() {
@@ -26,7 +32,7 @@ export function BiodataView() {
   const honours = approved(db.awards).filter((x) => x.facultyId === facultyId).sort((a, z) => z.awardDate.localeCompare(a.awardDate));
   const legacyAwards = b?.awards ?? []; // noted in the profile before Honours & Awards became its own section
   const pct = biodataCompleteness(b, f);
-  const editPath = user?.role === 'management' ? `/faculty/${f.id}/biodata/edit` : '/biodata/edit';
+  const editPath = '/biodata/edit';
   return (
     <>
       <PageTitle>{user?.role === 'faculty' ? 'My Profile' : 'Faculty Profile'}</PageTitle>
@@ -43,6 +49,8 @@ export function BiodataView() {
         </div>
         {b?.summary && <><h2>Summary</h2><p style={{ margin: 0 }}>{b.summary}</p></>}
         {b?.researchInterests && <p><b>Research interests:</b> {b.researchInterests}</p>}
+        {b?.expertise && <p><b>Areas of expertise:</b> {b.expertise}</p>}
+        {!!b?.sdgs?.length && <p><b>Sustainable Development Goals:</b> {b.sdgs.map((n) => `SDG ${n} ${SDGS[n - 1].title}`).join('; ')}</p>}
         <h2>Personal Details</h2>
         <dl className="kv">
           <dt>Date of Birth</dt><dd>{fmtDate(b?.dob ?? '') || '—'}</dd><dt>Gender</dt><dd>{b?.gender || '—'}</dd>
@@ -101,29 +109,42 @@ function Repeat<T extends object>({ title, rows, onChange, blank, cols }: {
 }
 
 export function BiodataEdit() {
-  const { f, b, canEdit, facultyId, user } = useTarget();
+  const { db, f, b, canEdit, facultyId } = useTarget();
   const nav = useNavigate();
   const toast = useToast();
-  const [bio, setBio] = useState<Biodata>(() => structuredClone(b ?? { facultyId, dob: '', gender: '', address: '', summary: '', researchInterests: '', googleScholar: '', phdGuided: 0, phdOngoing: 0, qualifications: [], experience: [], awards: [], memberships: [], updatedAt: '' }));
-  const [fac, setFac] = useState<Faculty | undefined>(() => (f ? { ...f } : undefined));
+  // Continue an open proposal if there is one; otherwise start from the approved profile.
+  const open = db.profileChanges.find((c) => c.facultyId === facultyId && ['Draft', 'Submitted', 'Rework'].includes(c.status));
+  const last = [...db.profileChanges].filter((c) => c.facultyId === facultyId).sort((x, y) => y.updatedAt.localeCompare(x.updatedAt))[0];
+  const [bio, setBio] = useState<Biodata>(() => structuredClone(open ? normalizeBiodata(open.biodata) : b ? normalizeBiodata(b) : blankBiodata(facultyId, '')));
+  const [photoError, setPhotoError] = useState('');
+  const [fac, setFac] = useState<Faculty | undefined>(() => (f ? { ...f, ...(open?.contact ?? {}) } : undefined));
   const [error, setError] = useState('');
   if (!f || !fac) return <Panel><Alert kind="error">Faculty member not found.</Alert></Panel>;
-  if (!canEdit) return <Panel><Alert kind="error">You can only edit your own profile.</Alert></Panel>;
+  if (!canEdit) return <Panel><Alert kind="error">Only the faculty member can update their profile. Top-Level Management has read-only access.</Alert></Panel>;
   const u = (p: Partial<Biodata>) => setBio({ ...bio, ...p });
-  const save = async () => {
+  const remark = last && ['Rework', 'Rejected'].includes(last.status) ? [...last.history].reverse().find((h) => h.remark)?.remark : undefined;
+  const save = async (submit: boolean) => {
     if (fac.orcid && !/^\d{4}-\d{4}-\d{4}-\d{3}[\dX]$/.test(fac.orcid)) { setError('ORCID must look like 0000-0002-1825-0097.'); return; }
     if (fac.email && !/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(fac.email)) { setError('Enter a valid email address.'); return; }
     if (bio.dob && bio.dob > new Date().toISOString().slice(0, 10)) { setError('Date of birth cannot be in the future.'); return; }
     try {
-      await saveFaculty(fac);
-      await saveBiodata({ ...bio, qualifications: bio.qualifications.filter((q) => q.degree.trim()), experience: bio.experience.filter((x) => x.organisation.trim()), awards: bio.awards.filter((a) => a.title.trim()), memberships: bio.memberships.filter((m) => m.body.trim()) });
-      toast('Profile saved.');
-      nav(user?.role === 'management' ? `/faculty/${f.id}/biodata` : '/biodata');
+      await proposeProfileChange({ ...bio, qualifications: bio.qualifications.filter((q) => q.degree.trim()), experience: bio.experience.filter((x) => x.organisation.trim()), memberships: bio.memberships.filter((m) => m.body.trim()) },
+        { email: fac.email, phone: fac.phone, orcid: fac.orcid, scopusId: fac.scopusId }, submit);
+      toast(submit ? 'Profile update submitted. It appears on your profile once the Office of Research approves it.' : 'Draft saved. Submit it when you are ready.');
+      nav('/my-profile');
     } catch (e) { setError((e as Error).message); }
   };
   return (
     <>
       <PageTitle>Edit Profile</PageTitle>
+      <div className="panel wide">
+        {last ? (
+          <p style={{ margin: 0 }}><b>Latest profile update {last.id}:</b> <StatusBadge status={last.status} /> <span className="muted">· {fmtDate(last.updatedAt)} · changes: {last.changed.join(', ')}</span></p>
+        ) : <p style={{ margin: 0 }}>Changes you make here are sent to the Office of Research. Your public profile keeps its approved details until they approve the update.</p>}
+        {remark && <Alert kind="info">Office of Research comment ({STATUS_LABEL[last!.status]}): <b>{remark}</b></Alert>}
+        {open?.status === 'Submitted' && <p className="note" style={{ marginBottom: 0 }}>Your update is waiting for approval. Saving again replaces the pending update.</p>}
+        {open && open.status !== 'Submitted' && <p className="note" style={{ marginBottom: 0 }}>You are editing your unsent update {open.id}.</p>}
+      </div>
       {error && <div className="panel wide"><Alert kind="error">{error}</Alert></div>}
       <Panel title="Official Details" size="wide">
         <div className="grid">
@@ -136,13 +157,12 @@ export function BiodataEdit() {
           <Field label="ORCID ID"><Input value={fac.orcid} onChange={(v) => setFac({ ...fac, orcid: v })} placeholder="0000-0000-0000-0000" /></Field>
           <Field label="Scopus Author ID"><Input value={fac.scopusId} onChange={(v) => setFac({ ...fac, scopusId: v })} /></Field>
         </div>
-        <p className="note">Name, designation and department are maintained by management.</p>
+        <p className="note">Name, designation and department come from your verified access request and are maintained by the Office of Research.</p>
       </Panel>
       <Panel title="Personal Details" size="wide">
         <div className="grid">
           <Field label="Date of Birth"><input type="date" value={bio.dob} onChange={(e) => u({ dob: e.target.value })} /></Field>
           <Field label="Gender"><Select value={bio.gender} onChange={(v) => u({ gender: v })} options={['Female', 'Male', 'Other', 'Prefer not to say']} placeholder="--Select--" /></Field>
-          <Field label="Google Scholar URL" className="span2"><Input value={bio.googleScholar} onChange={(v) => u({ googleScholar: v })} /></Field>
           <Field label="Address" className="span2"><TextArea value={bio.address} onChange={(v) => u({ address: v })} /></Field>
           <Field label="Ph.D. students guided (awarded)"><NumberInput value={bio.phdGuided} onChange={(v) => u({ phdGuided: v })} min={0} /></Field>
           <Field label="Ph.D. students ongoing"><NumberInput value={bio.phdOngoing} onChange={(v) => u({ phdOngoing: v })} min={0} /></Field>
@@ -150,17 +170,86 @@ export function BiodataEdit() {
           <Field label="Research interests" className="span2" hint="Separate with semicolons"><TextArea value={bio.researchInterests} onChange={(v) => u({ researchInterests: v })} rows={3} /></Field>
         </div>
       </Panel>
+      <Panel title="Researcher Profile" size="wide">
+        <p className="note" style={{ marginTop: 0 }}>Shown on the research profile and used by Faculty Search.</p>
+        <div className="photo-row">
+          <Avatar name={f.name} photo={bio.photo} size={96} />
+          <div>
+            <label className="btn sm secondary" style={{ cursor: 'pointer' }}>
+              {bio.photo ? 'Change photograph' : 'Upload photograph'}
+              <input type="file" accept="image/jpeg,image/png,image/webp" hidden onChange={async (e) => {
+                const file = e.target.files?.[0];
+                e.target.value = '';
+                if (!file) return;
+                try { u({ photo: await shrinkPhoto(file) }); setPhotoError(''); } catch { setPhotoError('That file could not be read as an image. Use a JPEG, PNG or WebP photograph.'); }
+              }} />
+            </label>
+            {bio.photo && <button type="button" className="link-btn" style={{ marginLeft: 10 }} onClick={() => u({ photo: '' })}>Remove</button>}
+            <p className="hint">A head-and-shoulders photograph. It is resized to 320 pixels before saving.</p>
+            {photoError && <Alert kind="error">{photoError}</Alert>}
+          </div>
+        </div>
+        <div className="grid">
+          <Field label="Areas of expertise" className="span2" hint="Separate with semicolons"><TextArea value={bio.expertise} onChange={(v) => u({ expertise: v })} rows={2} /></Field>
+          <Field label="Research keywords" className="span2" hint="Separate with commas"><TextArea value={bio.keywords} onChange={(v) => u({ keywords: v })} rows={2} /></Field>
+        </div>
+        <fieldset className="sdg-pick">
+          <legend>Sustainable Development Goals your work contributes to</legend>
+          <div className="sdg-pick-grid">
+            {SDGS.map((g) => (
+              <label key={g.n} className="check">
+                <input type="checkbox" checked={bio.sdgs.includes(g.n)} onChange={(e) => u({ sdgs: e.target.checked ? [...bio.sdgs, g.n].sort((x, y) => x - y) : bio.sdgs.filter((n) => n !== g.n) })} />
+                <SdgIcon n={g.n} size={26} /> <span>SDG {g.n} · {g.title}</span>
+              </label>
+            ))}
+          </div>
+        </fieldset>
+      </Panel>
+      <Panel title="Google Scholar" size="wide">
+        <div className="grid">
+          <Field label="Google Scholar profile URL" className="span2" hint="https://scholar.google.com/citations?user=…"><Input value={bio.googleScholar} onChange={(v) => u({ googleScholar: v })} /></Field>
+          <Field label="Citations (all)"><MetricInput value={bio.scholar.citations} onChange={(v) => u({ scholar: { ...bio.scholar, citations: v } })} /></Field>
+          <Field label="h-index (all)"><MetricInput value={bio.scholar.hIndex} onChange={(v) => u({ scholar: { ...bio.scholar, hIndex: v } })} /></Field>
+          <Field label="i10-index (all)"><MetricInput value={bio.scholar.i10Index} onChange={(v) => u({ scholar: { ...bio.scholar, i10Index: v } })} /></Field>
+        </div>
+        <p className="note">Enter the three numbers exactly as shown in the “Cited by” box of your Google Scholar profile, or leave a box blank. They appear on your profile after the Office of Research approves the update.
+          {bio.scholar.updatedAt ? ` Last updated ${fmtDate(bio.scholar.updatedAt)}.` : ''}</p>
+      </Panel>
       <Repeat<Qualification> title="Educational Qualifications" rows={bio.qualifications} onChange={(r) => u({ qualifications: r })} blank={{ degree: '', specialization: '', institution: '', year: '' }}
         cols={[{ key: 'degree', label: 'Degree', placeholder: 'Ph.D.' }, { key: 'specialization', label: 'Specialisation' }, { key: 'institution', label: 'Institution / University' }, { key: 'year', label: 'Year' }]} />
       <Repeat<Experience> title="Experience" rows={bio.experience} onChange={(r) => u({ experience: r })} blank={{ organisation: '', designation: '', from: '', to: '' }}
         cols={[{ key: 'organisation', label: 'Organisation' }, { key: 'designation', label: 'Designation' }, { key: 'from', label: 'From (year)' }, { key: 'to', label: 'To (year / Present)' }]} />
-      <div className="panel wide no-print"><p className="note" style={{ margin: 0 }}>Honours and awards are recorded under <b>Honours &amp; Awards</b>, with a certificate, and appear here once approved.{user?.role === 'faculty' && <> <Link to="/awards/entry">Add an honour or award</Link></>}</p></div>
+      <div className="panel wide no-print"><p className="note" style={{ margin: 0 }}>Honours and awards are recorded under <b>Honours &amp; Awards</b>, with a certificate, and appear here once approved.{canEdit && <> <Link to="/awards/entry">Add an honour or award</Link></>}</p></div>
       <Repeat<Membership> title="Professional Memberships" rows={bio.memberships} onChange={(r) => u({ memberships: r })} blank={{ body: '', type: '', since: '' }}
         cols={[{ key: 'body', label: 'Professional body' }, { key: 'type', label: 'Membership type' }, { key: 'since', label: 'Since (year)' }]} />
       <div className="btn-row">
         <button className="btn secondary" onClick={() => nav(-1)}>Cancel</button>
-        <button className="btn ok" onClick={save}>Save Profile</button>
+        <button className="btn secondary" onClick={() => save(false)}>Save as Draft</button>
+        <button className="btn ok" onClick={() => save(true)}>Submit for Approval</button>
       </div>
     </>
   );
+}
+
+/** Blank means "not available"; otherwise a whole number of 0 or more. */
+function MetricInput({ value, onChange }: { value: number | null; onChange: (v: number | null) => void }) {
+  return <input type="number" min={0} step={1} inputMode="numeric" placeholder="Not available" value={value ?? ''} onChange={(e) => onChange(e.target.value === '' ? null : Math.max(0, Math.round(Number(e.target.value))))} />;
+}
+
+/** Reads an image file and returns a JPEG data URL no larger than 320 px on its longer side. */
+function shrinkPhoto(file: File): Promise<string> {
+  return new Promise((resolve, reject) => {
+    const img = new Image();
+    const url = URL.createObjectURL(file);
+    img.onload = () => {
+      const scale = Math.min(1, 320 / Math.max(img.width, img.height));
+      const c = document.createElement('canvas');
+      c.width = Math.round(img.width * scale); c.height = Math.round(img.height * scale);
+      c.getContext('2d')!.drawImage(img, 0, 0, c.width, c.height);
+      URL.revokeObjectURL(url);
+      resolve(c.toDataURL('image/jpeg', 0.85));
+    };
+    img.onerror = () => { URL.revokeObjectURL(url); reject(new Error('bad image')); };
+    img.src = url;
+  });
 }

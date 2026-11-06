@@ -1,6 +1,7 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from 'react';
 import type { ReactNode } from 'react';
 import type { Status } from '../lib/types';
+import { STATUS_LABEL } from '../lib/types';
 import { downloadCsv } from '../lib/csv';
 
 export function PageTitle({ children }: { children: ReactNode }) {
@@ -72,7 +73,7 @@ export function FileName({ value, onChange, accept = '.pdf' }: { value: string; 
 
 export function StatusBadge({ status }: { status: Status }) {
   const icon = { Approved: '✓', Submitted: '⏳', Draft: '✎', Rework: '↺', Rejected: '✕' }[status];
-  return <span className={`badge ${status}`}><span aria-hidden>{icon}</span>{status}</span>;
+  return <span className={`badge ${status}`}><span aria-hidden>{icon}</span>{STATUS_LABEL[status]}</span>;
 }
 
 export function Alert({ kind = 'info', children }: { kind?: 'info' | 'error' | 'success'; children: ReactNode }) {

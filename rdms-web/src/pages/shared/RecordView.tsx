@@ -5,7 +5,7 @@ import { ENTITIES, listColumns } from '../../lib/entities';
 import { creditedFaculty, useStore, visible } from '../../lib/store';
 import { dateOf } from '../../lib/analytics';
 import type { AnyRecord, EntityKind } from '../../lib/types';
-import { STATUSES } from '../../lib/types';
+import { STATUS_LABEL, STATUSES } from '../../lib/types';
 import { RecordDetail } from './RecordDetail';
 
 const TITLES: Record<EntityKind, string> = {
@@ -62,7 +62,6 @@ export function RecordView({ kind }: { kind: EntityKind }) {
         {isFaculty && (
           <Tabs value={scope} onChange={setScope} tabs={[
             { id: 'mine', label: `My ${cfg.plural}` },
-            ...(kind === 'publications' ? [{ id: 'all' as const, label: 'All Approved Publications (Institution)' }] : []),
           ]} />
         )}
         <form className="grid" onSubmit={(e) => { e.preventDefault(); setApplied(form); }}>
@@ -70,7 +69,7 @@ export function RecordView({ kind }: { kind: EntityKind }) {
             <Select value={form.type} onChange={set('type')} options={cfg.typeOptions} placeholder="ALL" />
           </Field>
           <Field label={`${cfg.label} ID`}><Input value={form.id} onChange={set('id')} /></Field>
-          <Field label={`${cfg.label} Status`}><Select value={form.status} onChange={set('status')} options={STATUSES} placeholder="ALL" /></Field>
+          {(isFaculty || user?.role === 'office') && <Field label={`${cfg.label} Status`}><Select value={form.status} onChange={set('status')} options={STATUSES.map((x) => ({ value: x, label: STATUS_LABEL[x] }))} placeholder="ALL" /></Field>}
           <Field label="Title"><Input value={form.title} onChange={set('title')} /></Field>
           {(!isFaculty || scope === 'all') && <Field label="Author / Faculty" hint="Name or employee code"><Input value={form.person} onChange={set('person')} /></Field>}
           {(!isFaculty || scope === 'all') && <Field label="Department"><Select value={form.dept} onChange={set('dept')} options={db.settings.departments} placeholder="ALL" /></Field>}
@@ -85,7 +84,7 @@ export function RecordView({ kind }: { kind: EntityKind }) {
       <Panel size="wide">
         <DataTable rows={rows} columns={listColumns(db, kind, { showOwner: !isFaculty || scope === 'all' })} rowKey={(r) => r.id}
           onRowClick={(r) => setOpenId(r.id)} exportName={cfg.plural} empty={`No ${cfg.plural.toLowerCase()} match the search.`} />
-        <p className="note">Click a row to see the full details{isFaculty ? ', edit a draft or submit it for approval' : ' and review it'}.</p>
+        <p className="note">{isFaculty ? 'Click a row to see the full details and the Office of Research’s comments, edit a draft or submit it for approval.' : user?.role === 'office' ? 'All entries, in every status. Review submissions under Approval.' : 'Approved entries only (verified by the Office of Research). Click a row to see the full details.'}</p>
       </Panel>
       {openId && <RecordDetail kind={kind} id={openId} onClose={() => setOpenId(null)} />}
     </>

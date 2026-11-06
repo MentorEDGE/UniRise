@@ -1,110 +1,254 @@
-import { useEffect, useRef, useState } from 'react';
-import type { CSSProperties, ReactNode } from 'react';
+import { useEffect } from 'react';
+import type { ReactNode } from 'react';
+import { Link, useLocation, useNavigate, useSearchParams } from 'react-router-dom';
+import { Logo } from '../../components/Logo';
+import { ThemeToggle } from '../../components/ThemeToggle';
 
-/** Landing-page copy and sections shown around the sign-in form. Content only: no data, no routes. */
+/**
+ * Public introduction page (route "/" when signed out). Structure, type sizes, spacing and colours follow
+ * mentoredge.co.in/unirise section by section (light and dark), with its text word for word; the research portal
+ * sections (portal, RISE, perspectives) use the same card patterns. Content only: it links to the separate sign-in page.
+ */
 
-const Icon = ({ children }: { children: ReactNode }) => <svg viewBox="0 0 24 24" aria-hidden>{children}</svg>;
+export const ENQUIRY_EMAIL = 'corporate@mentoredge.co.in';
+const HERO_PHOTO = 'https://images.unsplash.com/photo-1758518730178-6e237bc8b87d'; // the photo used on mentoredge.co.in/unirise
 
-const ICONS = {
-  vault: <Icon><rect x="3.5" y="4" width="17" height="16" rx="2.5" /><circle cx="12" cy="12" r="3.2" /><path d="M12 8.8V7M12 17v-1.8M15.2 12H17M7 12h1.8" /></Icon>,
-  seal: <Icon><path d="M12 3 4.5 6v5.5c0 4.6 3.1 8.2 7.5 9.5 4.4-1.3 7.5-4.9 7.5-9.5V6L12 3Z" /><path d="m8.8 12 2.2 2.2 4.2-4.4" /></Icon>,
-  layers: <Icon><path d="m12 3.5 8.5 4.5-8.5 4.5L3.5 8 12 3.5Z" /><path d="m3.5 12 8.5 4.5 8.5-4.5" /><path d="m3.5 16 8.5 4.5 8.5-4.5" /></Icon>,
-  record: <Icon><path d="M7 3.5h7.5L19 8v12.5H7Z" /><path d="M14.5 3.5V8H19" /><path d="M10 12.5h6M10 16h4" /><path d="M5 6.5v14h1" /></Icon>,
-  insight: <Icon><path d="M4 20h16" /><rect x="5.5" y="12" width="3" height="5.5" rx="0.8" /><rect x="10.5" y="8" width="3" height="9.5" rx="0.8" /><rect x="15.5" y="4.5" width="3" height="13" rx="0.8" /></Icon>,
-  steward: <Icon><path d="M12 3.5v17" /><path d="M5 7.5h14" /><path d="m5 7.5-2.5 6a3 3 0 0 0 5 0Z" /><path d="m19 7.5-2.5 6a3 3 0 0 0 5 0Z" /><path d="M8.5 20.5h7" /></Icon>,
-  elevate: <Icon><path d="M4 19 10 13l3.5 3.5L20 10" /><path d="M15 10h5v5" /></Icon>,
-  faculty: <Icon><circle cx="12" cy="8" r="3.5" /><path d="M5 20.5c.8-3.6 3.6-5.5 7-5.5s6.2 1.9 7 5.5" /></Icon>,
-  leadership: <Icon><path d="M3.5 9.5 12 4l8.5 5.5" /><path d="M5.5 10v8M9.5 10v8M14.5 10v8M18.5 10v8" /><path d="M3.5 20.5h17" /></Icon>,
-  office: <Icon><rect x="4" y="10.5" width="16" height="10" rx="2" /><path d="M8 10.5V7.5a4 4 0 0 1 8 0v3" /><circle cx="12" cy="15.5" r="1.6" /></Icon>,
-};
+const svg = (d: ReactNode, cls = '') => <svg className={cls} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" aria-hidden>{d}</svg>;
+const BOOK = <><path d="M12 7v14" /><path d="M3 18a1 1 0 0 1-1-1V4a1 1 0 0 1 1-1h5a4 4 0 0 1 4 4 4 4 0 0 1 4-4h5a1 1 0 0 1 1 1v13a1 1 0 0 1-1 1h-6a3 3 0 0 0-3 3 3 3 0 0 0-3-3z" /></>;
+const USERS = <><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2" /><circle cx="9" cy="7" r="4" /><path d="M22 21v-2a4 4 0 0 0-3-3.87" /><path d="M16 3.13a4 4 0 0 1 0 7.75" /></>;
+const TREND = <><polyline points="22 7 13.5 15.5 8.5 10.5 2 17" /><polyline points="16 7 22 7 22 13" /></>;
+const LANDMARK = <><path d="M3 22h18" /><path d="M6 18v-7M10 18v-7M14 18v-7M18 18v-7" /><path d="m12 2 8 5H4Z" /></>;
+const SHIELD = <><path d="M20 13c0 5-3.5 7.5-7.66 8.95a1 1 0 0 1-.67-.01C7.5 20.5 4 18 4 13V6a1 1 0 0 1 1-1c2 0 4.5-1.2 6.24-2.72a1.17 1.17 0 0 1 1.52 0C14.51 3.81 17 5 19 5a1 1 0 0 1 1 1z" /><path d="m9 12 2 2 4-4" /></>;
+const CHECK = <><circle cx="12" cy="12" r="10" /><path d="m9 12 2 2 4-4" /></>;
 
-/** Fades a block in the first time it scrolls into view (instantly when motion is reduced). */
-function Reveal({ children, className = '', delay = 0, as: Tag = 'div' }: { children: ReactNode; className?: string; delay?: number; as?: 'div' | 'li' | 'section' }) {
-  const ref = useRef<HTMLElement>(null);
-  const [shown, setShown] = useState(false);
-  useEffect(() => {
-    const el = ref.current;
-    if (!el || !('IntersectionObserver' in window)) { setShown(true); return; }
-    const io = new IntersectionObserver(([e]) => { if (e.isIntersecting) { setShown(true); io.disconnect(); } }, { rootMargin: '0px 0px -8% 0px' });
-    io.observe(el);
-    return () => io.disconnect();
-  }, []);
-  return <Tag ref={ref as never} className={`reveal ${shown ? 'in' : ''} ${className}`} style={{ '--d': `${delay}ms` } as CSSProperties}>{children}</Tag>;
-}
+// ---- mentoredge.co.in/unirise ----
+const ORBIT = [
+  ['Customized Research Support', 'Tailored support for your faculty and research goals'],
+  ['Industry Partnerships', 'Connect with industry on real projects and opportunities'],
+  ['Analytics & Insights', 'Actionable analytics on research and partnerships'],
+  ['Research Management System', 'Manage all your research in one digital place'],
+];
+const ECOSYSTEM = [
+  ['Customized Research Support', 'Tailored capacity building programs designed to enhance faculty output and institutional research prestige'],
+  ['Industry Partnerships', 'Strategic bridges connecting academic brilliance with real world corporate needs and commercialization'],
+  ['Analytics & Insights', 'Data-driven intelligence to track performance, identify trends, and make informed strategic decisions'],
+  ['Research Management System', 'A seamless, end-to-end digital infrastructure to streamline workflows and maximize institutional efficiency'],
+];
+type Tone = 'blue' | 'violet' | 'emerald';
+interface Feature { title: string; icon: ReactNode; tone: Tone; points: string[]; who?: string }
+const UNLOCKS: Feature[] = [
+  { title: 'Institution-Wide Research Strategy', icon: BOOK, tone: 'blue', points: ['Map faculty, labs and projects into clear strategic clusters', 'Track funded projects, grants and proposals in one place', 'Spot gaps where new chairs, labs or courses can unlock value', 'Align annual plans with accreditation and ranking requirements'] },
+  { title: 'Partnerships And Co-Innovation', icon: USERS, tone: 'violet', points: ['Standardised engagement models for corporate partners', 'Co-branded research programs and joint labs with transparent KPIs', 'Capstone projects and live problem statements for students', 'Ecosystem for IP sharing, technology licensing and spin-outs'] },
+  { title: 'Impact, Analytics And Governance', icon: TREND, tone: 'emerald', points: ['Dashboards for publications, citations, grants and patents', 'View collaboration networks across departments and partners', 'Monitor pipeline health from ideas to pilots and products', 'Exportable reports that speak the language of accreditation'] },
+];
 
-export function LandingHero() {
+// ---- the research portal ----
+const RISE = [
+  ['R', 'Record', 'Every publication, grant, FDP and conference captured once, at the source, with its evidence.'],
+  ['I', 'Insight', 'Output, funding and participation by department, year and researcher, the moment entries are approved.'],
+  ['S', 'Stewardship', 'Every entry reviewed by the Office of Research before it counts, a full audit trail, and data that never leaves its institution.'],
+  ['E', 'Elevate', 'Verified records become accreditation-ready reports and decisions that raise research standing.'],
+];
+// Matches what each role can actually do in the application.
+const PERSPECTIVES: Feature[] = [
+  { who: 'Faculty', title: 'Your research record, always current.', icon: USERS, tone: 'blue', points: ['Log achievements in minutes', 'Track every approval', 'Print a ready CV'] },
+  { who: 'Top-Level Management', title: 'Clarity for every decision.', icon: LANDMARK, tone: 'violet', points: ['Search faculty by expertise and SDG', 'Department benchmarks and trends', 'Annual reports on demand'] },
+  { who: 'Office of Research', title: 'Governance without the paperwork.', icon: SHIELD, tone: 'emerald', points: ['Verify affiliation before access', 'Review and approve research entries', 'Every decision on record'] },
+];
+
+const scrollTo = (id: string) => document.getElementById(id)?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+
+/** Public header for the UniRise site: UniRise-only navigation (no links to the main MentorEDGE website). */
+export function PublicHeader() {
+  const nav = useNavigate();
+  const loc = useLocation();
+  const go = (id: string) => (loc.pathname === '/' ? scrollTo(id) : nav(`/?s=${id}`));
   return (
-    <section className="intro-hero">
-      <p className="eyebrow">Research management for universities</p>
-      <h1>A connected framework for institutional research growth</h1>
-      <p className="hero-slogan">Every contribution counted. Every institution elevated.</p>
-      <p className="lead">
-        Each college and university gets its own secure research environment. Publications, grants, seed money, FDPs,
-        conferences and faculty profiles live in one place, with approvals and analytics that leadership can act on.
-      </p>
-      <ul className="hero-proof">
-        <li>{ICONS.vault}<span>A separate database for every institution</span></li>
-        <li>{ICONS.seal}<span>Access approved by your Office of Research</span></li>
-        <li>{ICONS.layers}<span>Role-based views for faculty and leadership</span></li>
-      </ul>
-    </section>
+    <header className="me-head">
+      <Link className="me-logo" to="/" onClick={() => loc.pathname === '/' && scrollTo('top')} aria-label="UniRise by MentorEdge, overview"><Logo /></Link>
+      <nav className="me-nav" aria-label="UniRise">
+        <ul>
+          <li><button type="button" onClick={() => go('top')}>Overview</button></li>
+          <li><button type="button" onClick={() => go('rise')}>The RISE Framework</button></li>
+          <li><button type="button" onClick={() => go('perspectives')}>Platform Perspectives</button></li>
+          <li><Link to="/talk-to-our-team" className={loc.pathname === '/talk-to-our-team' ? 'on' : ''}>Talk to Our Team</Link></li>
+        </ul>
+      </nav>
+      <div className="me-head-right">
+        <ThemeToggle />
+        <Link className="me-signin" to="/login">Sign In</Link>
+      </div>
+    </header>
   );
 }
 
-const RISE = [
-  { letter: 'R', name: 'Record', icon: ICONS.record, text: 'Every publication, grant, FDP and conference captured once, at the source, with its evidence.' },
-  { letter: 'I', name: 'Insight', icon: ICONS.insight, text: 'Output, funding and participation by department, year and researcher, the moment entries are approved.' },
-  { letter: 'S', name: 'Stewardship', icon: ICONS.steward, text: 'Clear review and approval workflows, a full audit trail, and data that never leaves its institution.' },
-  { letter: 'E', name: 'Elevate', icon: ICONS.elevate, text: 'Verified records become accreditation-ready reports and decisions that raise research standing.' },
-];
+const PIN = <><path d="M20 10c0 4.99-5.54 10.19-7.4 11.8a1 1 0 0 1-1.2 0C9.54 20.19 4 14.99 4 10a8 8 0 0 1 16 0" /><circle cx="12" cy="10" r="3" /></>;
+const PHONE = <path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72c.13.96.36 1.9.7 2.81a2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45c.91.34 1.85.57 2.81.7A2 2 0 0 1 22 16.92z" />;
+const MAIL = <><rect width="20" height="16" x="2" y="4" rx="2" /><path d="m22 7-8.97 5.7a1.94 1.94 0 0 1-2.06 0L2 7" /></>;
 
-const AUDIENCES = [
-  { who: 'Faculty', icon: ICONS.faculty, line: 'Your research record, always current.', points: ['Log achievements in minutes', 'Track every approval', 'Print a ready CV'] },
-  { who: 'Top-Level Management', icon: ICONS.leadership, line: 'Clarity for every decision.', points: ['Department benchmarks and targets', 'Trends across academic years', 'Annual reports on demand'] },
-  { who: 'Office of Research', icon: ICONS.office, line: 'Governance without the paperwork.', points: ['Verify affiliation before access', 'Approve, suspend or restore accounts', 'Every decision on record'] },
-];
-
-export function LandingShowcase() {
+/** Footer as on mentoredge.co.in/unirise, with the UniRise logo, Company and Contact Us columns. */
+export function PublicFooter() {
   return (
-    <div className="showcase">
-      <section className="show-block" aria-labelledby="rise-title">
-        <Reveal className="show-head">
-          <p className="eyebrow">The RISE framework</p>
-          <h2 id="rise-title">From faculty activity to institutional intelligence</h2>
-          <p className="show-sub">Four disciplines that turn scattered academic records into a research strategy.</p>
-        </Reveal>
-        <ul className="rise-grid">
-          {RISE.map((r, i) => (
-            <Reveal as="li" key={r.letter} className="rise-card" delay={i * 80}>
-              <div className="rise-top"><span className="rise-letter" aria-hidden>{r.letter}</span><span className="rise-icon">{r.icon}</span></div>
-              <h3>{r.name}</h3>
-              <p>{r.text}</p>
-            </Reveal>
-          ))}
-        </ul>
-      </section>
+    <footer className="me-foot">
+      <div className="me-foot-glow" aria-hidden />
+      <div className="me-foot-inner">
+        <div className="me-foot-grid">
+          <div>
+            <Logo />
+            <p className="me-foot-tag">Together, we are building the future of research - one discovery, one innovation, and one breakthrough at a time.</p>
+          </div>
+          <div>
+            <h4>Company</h4>
+            <ul>
+              <li><Link to="/?s=about-unirise">About</Link></li>
+              <li><Link to="/talk-to-our-team">Contact</Link></li>
+              <li><a href="https://mentoredge.co.in/privacy" target="_blank" rel="noreferrer">Privacy Policy</a></li>
+            </ul>
+          </div>
+          <div>
+            <h4>Contact Us</h4>
+            <ul className="me-foot-contact">
+              <li>{svg(PIN, 'me-foot-ic')}<p>Prizlyn Technologies Pvt. Ltd., 2nd Floor, House No. 9, Sector-24, Pocket 1, Rohini Sec-11, North West Delhi, Delhi – 110085</p></li>
+              <li>{svg(PHONE, 'me-foot-ic')}<a href="tel:18004101410">1800 410 1410</a></li>
+              <li>{svg(MAIL, 'me-foot-ic')}<a href={`mailto:${ENQUIRY_EMAIL}`}>Email: {ENQUIRY_EMAIL}</a></li>
+            </ul>
+          </div>
+        </div>
+        <div className="me-foot-bottom"><p>© 2026 Prizlyn Technologies Pvt. Ltd. · MentorEDGE. All rights reserved.</p></div>
+      </div>
+    </footer>
+  );
+}
 
-      <section className="show-block" aria-labelledby="roles-title">
-        <Reveal className="show-head">
-          <p className="eyebrow">One platform, three perspectives</p>
-          <h2 id="roles-title">Built for everyone who shapes research</h2>
-        </Reveal>
-        <ul className="role-grid">
-          {AUDIENCES.map((a, i) => (
-            <Reveal as="li" key={a.who} className="role-card" delay={i * 80}>
-              <span className="role-icon">{a.icon}</span>
-              <p className="role-who">{a.who}</p>
-              <h3>{a.line}</h3>
-              <ul>{a.points.map((p) => <li key={p}>{p}</li>)}</ul>
-            </Reveal>
-          ))}
-        </ul>
-      </section>
+function FeatureCard({ f }: { f: Feature }) {
+  return (
+    <div className={`me-feature ${f.tone}`}>
+      <div className="me-feature-head">
+        <span className="me-feature-ic">{svg(f.icon)}</span>
+        <div>{f.who && <p className="me-feature-who">{f.who}</p>}<h3>{f.title}</h3></div>
+      </div>
+      <div className="me-feature-rule" />
+      <ul>{f.points.map((p) => <li key={p}>{svg(CHECK, 'me-check')}<span>{p}</span></li>)}</ul>
+    </div>
+  );
+}
 
-      <Reveal as="section" className="show-close">
-        <p className="close-line">Where scholarship becomes institutional strength.</p>
-        <p className="close-sign">UniRise by MentorEdge · powering research</p>
-      </Reveal>
+export function IntroLanding() {
+  const [params] = useSearchParams();
+  const target = params.get('s');
+  useEffect(() => { if (target) setTimeout(() => scrollTo(target), 60); }, [target]);
+  return (
+    <div className="me">
+      <PublicHeader />
+
+      <main id="top">
+        <section className="me-hero">
+          <div className="me-hero-bg" aria-hidden>
+            <div className="me-hero-photo" style={{ backgroundImage: `url("${HERO_PHOTO}")` }} />
+            <div className="me-hero-veil" />
+            <div className="me-hero-fade" />
+            <div className="me-blob a" />
+            <div className="me-blob b" />
+          </div>
+          <div className="me-hero-inner">
+            <p className="me-eyebrow">UniRise · For Universities &amp; Research Institutions</p>
+            <h1>A Connected Framework For Institutional Research Growth</h1>
+            <p className="me-hero-lead">UniRise is a comprehensive strategic framework designed to bridge the gap between academic potential and global research impact. We provide the tools, networks and insights necessary for institutions to strengthen research quality, deepen collaborations and elevate institutional standing.</p>
+          </div>
+        </section>
+
+        <section className="me-section" id="about-unirise">
+          <div className="me-container wide">
+            <p className="me-eyebrow me-mb">For universities and research institutions</p>
+            <div className="me-about">
+              <div>
+                <h2 className="me-h2">Turning Academic Strength Into Industry-Visible Impact</h2>
+                <p className="me-p">Many universities invest in strong faculty and research labs but still struggle to translate that work into visible outcomes: industry-funded projects, high quality publications, patents and employable talent. UniRise is built as a connective tissue between your internal research ecosystem and the outside world.</p>
+                <p className="me-p">Inspired by global best practices in academia–industry collaboration, UniRise helps align institutional priorities with concrete programs: themed research clusters, joint industry chairs, co-developed curricula and startup pipelines that grow out of real research, not isolated hackathons.</p>
+                <p className="me-p">Instead of chasing one-off MoUs, institutions use UniRise to build a recurring partnership engine: clear engagement models for companies, transparent expectations for faculty and students, and a shared digital space where every collaboration, project and outcome is documented and measurable.</p>
+              </div>
+              <div className="me-panel">
+                <div className="me-blob p1" aria-hidden />
+                <div className="me-blob p2" aria-hidden />
+                <div className="me-panel-body">
+                  <div>
+                    <p className="me-panel-eyebrow">WHAT UNIRISE ORBITS AROUND</p>
+                    <p className="me-panel-title">A single view of research, partnerships and outcomes</p>
+                  </div>
+                  <div className="me-orbit">
+                    {ORBIT.map(([t, d]) => <div key={t}><p className="me-orbit-label">{t}</p><p className="me-orbit-text">{d}</p></div>)}
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </section>
+
+        <section className="me-section" id="ecosystem">
+          <div className="me-container">
+            <p className="me-eyebrow me-mb">Unirise Ecosystem</p>
+            <div className="me-eco">
+              {ECOSYSTEM.map(([t, d]) => <div key={t} className="me-card"><h3>{t}</h3><p>{d}</p></div>)}
+            </div>
+          </div>
+        </section>
+
+        <section className="me-section me-pb-only">
+          <div className="me-container">
+            <p className="me-eyebrow me-mb">What UniRise unlocks for your campus</p>
+            <div className="me-three">{UNLOCKS.map((f) => <FeatureCard key={f.title} f={f} />)}</div>
+          </div>
+        </section>
+
+        {/* ---------- the UniRise research portal ---------- */}
+        <section className="me-section me-pb-only" id="portal">
+          <div className="me-container">
+            <p className="me-eyebrow me-mb">The UniRise research portal</p>
+            <h2 className="me-h2 narrow">One Platform. Every Research Achievement. Institutional Intelligence.</h2>
+            <p className="me-p narrow">A unified research management platform that brings faculty achievements, publications, grants, research collaborations and institutional performance into one verified and intelligent system.</p>
+          </div>
+        </section>
+
+        <section className="me-section me-pb-only" id="rise">
+          <div className="me-container">
+            <p className="me-eyebrow me-mb">The RISE framework</p>
+            <h2 className="me-h2 narrow">From faculty activity to institutional intelligence</h2>
+            <p className="me-p narrow">Four disciplines that turn scattered academic records into a research strategy.</p>
+            <ol className="me-rise">
+              {RISE.map(([l, t, d], i) => (
+                <li key={l} className="me-card">
+                  <span className="me-rise-letter" aria-hidden>{l}</span>
+                  <h3>{t}</h3><p>{d}</p>
+                  {i < RISE.length - 1 && <span className="me-rise-arrow" aria-hidden>{svg(<path d="M5 12h14M13 6l6 6-6 6" />)}</span>}
+                </li>
+              ))}
+            </ol>
+          </div>
+        </section>
+
+        <section className="me-section me-pb-only" id="perspectives">
+          <div className="me-container">
+            <p className="me-eyebrow me-mb">One platform, three perspectives</p>
+            <h2 className="me-h2 narrow">Built for everyone who shapes research</h2>
+            <div className="me-three">{PERSPECTIVES.map((f) => <FeatureCard key={f.who} f={f} />)}</div>
+          </div>
+        </section>
+
+        <section className="me-cta-section">
+          <div className="me-cta-container">
+            <div className="me-cta">
+              <div className="me-blob c1" aria-hidden />
+              <div className="me-blob c2" aria-hidden />
+              <div className="me-cta-body">
+                <h2 className="me-h2">Ready to Transform Your Institution with UniRise?</h2>
+                <p>Whether you lead a university, college, or research institution, our team will work with you to craft the ideal partnership. Reach out today for a complimentary, no-obligation consultation.</p>
+                <Link className="me-cta-btn" to="/talk-to-our-team">Talk to our team</Link>
+              </div>
+            </div>
+          </div>
+        </section>
+      </main>
+      <PublicFooter />
     </div>
   );
 }

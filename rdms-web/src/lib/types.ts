@@ -1,16 +1,18 @@
-/** Institution-level roles plus the platform-level Office of Research. */
-export type Role = 'it_admin' | 'management' | 'faculty';
-export type InstitutionRole = Exclude<Role, 'it_admin'>;
+/** The three roles. Every account belongs to one institution, including that institution's Office of Research. */
+export type Role = 'office' | 'management' | 'faculty';
+export type InstitutionRole = Role;
 export type AccountStatus = 'pending' | 'active' | 'rejected' | 'suspended' | 'deactivated';
 
 /** Approval workflow shared by every entry type, as in the reference RMS. */
 export type Status = 'Draft' | 'Submitted' | 'Approved' | 'Rework' | 'Rejected';
 export const STATUSES: Status[] = ['Draft', 'Submitted', 'Approved', 'Rework', 'Rejected'];
+/** How each state is named on screen. A submitted entry is pending approval by the Office of Research. */
+export const STATUS_LABEL: Record<Status, string> = { Draft: 'Draft', Submitted: 'Submitted · Pending Approval', Approved: 'Approved', Rework: 'Returned for Correction', Rejected: 'Rejected' };
 
 export interface HistoryItem {
   at: string; // ISO timestamp
   by: string; // display name
-  action: string; // Created, Submitted, Approved, Sent for rework, ...
+  action: string; // Created, Submitted, Approved, Returned for correction, ...
   remark?: string;
 }
 
@@ -21,7 +23,7 @@ export interface User {
   name: string;
   role: Role;
   status: AccountStatus;
-  institutionId: string | null; // null only for Office of Research
+  institutionId: string | null;
   facultyId?: string; // set for faculty accounts: the employee code inside the institution's database
   designation?: string;
 }
@@ -69,8 +71,48 @@ export interface Biodata {
   experience: Experience[];
   awards: Award[];
   memberships: Membership[];
+  /** Researcher-profile fields (directory and public profile). */
+  expertise: string; // areas of expertise, separated by semicolons
+  keywords: string; // research keywords, separated by commas
+  sdgs: number[]; // UN Sustainable Development Goals (1-17) the faculty member's work contributes to, as declared in the profile
+  photo: string; // small JPEG data URL, '' if none
+  scholar: ScholarMetrics;
   updatedAt: string;
 }
+
+/**
+ * Google Scholar metrics as copied from the faculty member's own Scholar profile. Never estimated: a null value
+ * shows as "Not available". Each change is stamped with who made it and when.
+ */
+export interface ScholarMetrics {
+  citations: number | null;
+  hIndex: number | null;
+  i10Index: number | null;
+  updatedAt: string; // '' until first entered
+  updatedBy: string;
+}
+export const EMPTY_SCHOLAR: ScholarMetrics = { citations: null, hIndex: null, i10Index: null, updatedAt: '', updatedBy: '' };
+
+/** The 17 UN Sustainable Development Goals, with their official colours. */
+export const SDGS: { n: number; title: string; color: string }[] = [
+  { n: 1, title: 'No Poverty', color: '#E5243B' },
+  { n: 2, title: 'Zero Hunger', color: '#DDA63A' },
+  { n: 3, title: 'Good Health and Well-being', color: '#4C9F38' },
+  { n: 4, title: 'Quality Education', color: '#C5192D' },
+  { n: 5, title: 'Gender Equality', color: '#FF3A21' },
+  { n: 6, title: 'Clean Water and Sanitation', color: '#26BDE2' },
+  { n: 7, title: 'Affordable and Clean Energy', color: '#FCC30B' },
+  { n: 8, title: 'Decent Work and Economic Growth', color: '#A21942' },
+  { n: 9, title: 'Industry, Innovation and Infrastructure', color: '#FD6925' },
+  { n: 10, title: 'Reduced Inequalities', color: '#DD1367' },
+  { n: 11, title: 'Sustainable Cities and Communities', color: '#FD9D24' },
+  { n: 12, title: 'Responsible Consumption and Production', color: '#BF8B2E' },
+  { n: 13, title: 'Climate Action', color: '#3F7E44' },
+  { n: 14, title: 'Life Below Water', color: '#0A97D9' },
+  { n: 15, title: 'Life on Land', color: '#56C02B' },
+  { n: 16, title: 'Peace, Justice and Strong Institutions', color: '#00689D' },
+  { n: 17, title: 'Partnerships for the Goals', color: '#19486A' },
+];
 
 /** Fields every workflow record has. */
 export interface Base {
@@ -92,6 +134,7 @@ export interface Author {
   institution: string;
   department: string;
   email: string;
+  country?: string; // for external co-authors: country of their institution (collaboration map)
 }
 
 export const PUB_TYPES = ['Journal Article', 'Book', 'Book Chapter', 'Conference Paper', 'Technical Report'] as const;
@@ -134,6 +177,7 @@ export interface Investigator {
   institution: string;
   department: string;
   sharePct: number;
+  country?: string; // for external investigators
 }
 
 export interface Grant extends Base {
@@ -274,6 +318,23 @@ export interface Notice {
   body: string;
 }
 
+/** Faculty-editable profile fields. Changes to them wait for the Office of Research before replacing the live profile. */
+export const PROFILE_FIELDS = ['dob', 'gender', 'address', 'summary', 'researchInterests', 'googleScholar', 'phdGuided', 'phdOngoing', 'qualifications', 'experience', 'memberships', 'expertise', 'keywords', 'sdgs', 'photo', 'scholar'] as const;
+export const CONTACT_FIELDS = ['email', 'phone', 'orcid', 'scopusId'] as const;
+
+/** A faculty member's proposed profile update: one open request per person, reviewed like any other entry. */
+export interface ProfileChange {
+  id: string;
+  facultyId: string;
+  status: Status;
+  createdAt: string;
+  updatedAt: string;
+  history: HistoryItem[];
+  biodata: Biodata; // the full proposed profile
+  contact: Pick<Faculty, (typeof CONTACT_FIELDS)[number]>;
+  changed: string[]; // labels of what differs from the approved profile, for the reviewer
+}
+
 /** One institution's data. Each institution has its own database; nothing in here refers to another institution. */
 export interface DB {
   version: number;
@@ -286,6 +347,7 @@ export interface DB {
   fdps: Fdp[];
   conferences: Conference[];
   awards: Honour[];
+  profileChanges: ProfileChange[];
   notices: Notice[];
   seq: number;
 }

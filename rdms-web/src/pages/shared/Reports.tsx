@@ -7,7 +7,7 @@ import { academicYearRange, dateOf, facultyStats, fmtDate, inr, lakh, uniqueCoun
 import { REPORTS, runReport } from '../../lib/reports';
 import { creditedFaculty, useStore } from '../../lib/store';
 import type { AnyRecord } from '../../lib/types';
-import { STATUSES } from '../../lib/types';
+import { STATUS_LABEL, STATUSES } from '../../lib/types';
 import { useAnalyticsFilter } from '../mgmt/filters';
 import { listColumns } from '../../lib/entities';
 import { RecordDetail } from './RecordDetail';
@@ -58,7 +58,7 @@ export function ReportsPage() {
           <form className="grid" onSubmit={(e) => { e.preventDefault(); setApplied(form); }}>
             <Field label="From Date"><input type="date" value={form.from} onChange={(e) => setForm({ ...form, from: e.target.value })} /></Field>
             <Field label="To Date"><input type="date" value={form.to} onChange={(e) => setForm({ ...form, to: e.target.value })} /></Field>
-            <Field label="Status"><Select value={form.status} onChange={(v) => setForm({ ...form, status: v })} options={STATUSES} placeholder="ALL" /></Field>
+            {user?.role === 'office' && <Field label="Status"><Select value={form.status} onChange={(v) => setForm({ ...form, status: v })} options={STATUSES.map((x) => ({ value: x, label: STATUS_LABEL[x] }))} placeholder="ALL" /></Field>}
             {!isFaculty ? <Field label="Department"><Select value={form.dept} onChange={(v) => setForm({ ...form, dept: v })} options={db.settings.departments} placeholder="ALL" /></Field> : <span />}
             {!isFaculty && <Field label="Employee Code"><Input value={form.emp} onChange={(v) => setForm({ ...form, emp: v })} list="emp-codes" /></Field>}
             <datalist id="emp-codes">{db.faculty.map((f) => <option key={f.id} value={f.id}>{f.name}</option>)}</datalist>
@@ -126,7 +126,7 @@ export function AnnualReport() {
         {bar}
         <button className="btn" onClick={() => window.print()}>Print / Save as PDF</button>
       </div>
-      <article className="cv" style={{ maxWidth: 1000 }}>
+      <article className="cv report">
         <h1>{db.settings.institutionName}</h1>
         <div>Annual Research &amp; Faculty Development Report — {ay === 'all' ? 'All years' : `Academic Year ${ay}`}{filter.department && ` — ${filter.department}`}</div>
         <div className="muted">{range.from && `${fmtDate(range.from)} to ${fmtDate(range.to)} · `}Approved entries only · generated {fmtDate(new Date().toISOString())}</div>
