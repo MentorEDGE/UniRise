@@ -44,16 +44,16 @@ const UNLOCKS: Feature[] = [
 
 // ---- the research portal ----
 const RISE = [
-  ['R', 'Record', 'Every publication, grant, FDP and conference captured once, at the source, with its evidence.'],
+  ['R', 'Record', 'Publications, grants, FDPs, conferences and other achievements, captured once, at the source.'],
   ['I', 'Insight', 'Output, funding and participation by department, year and researcher, the moment entries are approved.'],
   ['S', 'Stewardship', 'Every entry reviewed by the Office of Research before it counts, a full audit trail, and data that never leaves its institution.'],
   ['E', 'Elevate', 'Verified records become accreditation-ready reports and decisions that raise research standing.'],
 ];
 // Matches what each role can actually do in the application.
 const PERSPECTIVES: Feature[] = [
-  { who: 'Faculty', title: 'Your research record, always current.', icon: USERS, tone: 'blue', points: ['Log achievements in minutes', 'Track every approval', 'Print a ready CV'] },
-  { who: 'Top-Level Management', title: 'Clarity for every decision.', icon: LANDMARK, tone: 'violet', points: ['Search faculty by expertise and SDG', 'Department benchmarks and trends', 'Annual reports on demand'] },
-  { who: 'Office of Research', title: 'Governance without the paperwork.', icon: SHIELD, tone: 'emerald', points: ['Verify affiliation before access', 'Review and approve research entries', 'Every decision on record'] },
+  { who: 'Faculty', title: 'A complete, current record of your research.', icon: USERS, tone: 'blue', points: ['Showcase your research profile to peers and collaborators', 'Submit achievements once and follow them through to approval', 'Earn recognition for verified, accreditation-ready work'] },
+  { who: 'Top-Level Management', title: 'Verified insight to guide institutional decisions.', icon: LANDMARK, tone: 'violet', points: ['Identify research strengths by expertise and Sustainable Development Goal', 'Compare departmental performance and emerging trends', 'Report to accreditation bodies with confidence'] },
+  { who: 'Office of Research', title: 'Rigorous governance, without the paperwork.', icon: SHIELD, tone: 'emerald', points: ['Confirm institutional affiliation before access is granted', 'Review and approve every research entry', 'Keep a complete, auditable record of each decision'] },
 ];
 
 const scrollTo = (id: string) => document.getElementById(id)?.scrollIntoView({ behavior: 'smooth', block: 'start' });

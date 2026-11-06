@@ -1378,3 +1378,107 @@ a.rp-title:hover, button.rp-title:hover { text-decoration: underline; }
 @media (max-width: 640px) { .cm-legend { position: static; margin: 8px; } .ins-stats b { font-size: 20px; } }
 .ins-chart :focus, .ins-chart svg:focus, .ins-chart .recharts-wrapper:focus, .ins-chart .recharts-surface:focus { outline: none; }
 .ins-chart .recharts-rectangle.recharts-tooltip-cursor { pointer-events: none; }
+
+/* ================= Introduction page redesign (visual layer only; copy and markup unchanged) =================
+   Ink-indigo hero and closing panel, hairline-joined grids, and a RISE sequence set as four oversized letters.
+   Yellow is taken from the UniRise mark and is used only for the dot markers and the primary call to action. */
+.me { --me-ink: #150f33; --me-ink-2: #241a5c; --me-yellow: #ffc61a; --me-hair: rgb(21 15 51 / 0.1); --me-eyebrow: #6d28d9; --me-text: #4b5470; }
+@media screen { :root[data-theme='dark'] .me { --me-ink: #1b1445; --me-ink-2: #2c1f78; --me-hair: rgb(255 255 255 / 0.1); --me-eyebrow: #b79dff; --me-text: #c3c9db; } }
+
+/* eyebrows: sentence case, led by a small yellow dot */
+.me .me-eyebrow { display: inline-flex; align-items: center; gap: 10px; text-transform: none; letter-spacing: 0; font-size: calc(var(--r) * 0.9); line-height: 1.3; font-weight: 650; }
+.me .me-eyebrow::before { content: ''; width: 8px; height: 8px; border-radius: 50%; background: var(--me-yellow); box-shadow: 0 0 0 4px color-mix(in srgb, var(--me-yellow) 25%, transparent); flex: none; }
+.me .me-mb { margin-bottom: calc(var(--r) * 2) !important; }
+
+/* hero */
+.me .me-hero { margin: 12px 12px 0; border-radius: 32px; min-height: min(86vh, 760px); align-items: flex-end; padding: calc(var(--r) * 5) calc(var(--r) * 1.25) calc(var(--r) * 3.5); background: var(--me-ink); }
+.me .me-hero-photo { opacity: .5; mix-blend-mode: luminosity; background-position: 70% 40%; }
+.me .me-hero-veil { background: linear-gradient(100deg, var(--me-ink) 18%, color-mix(in srgb, var(--me-ink) 70%, transparent) 62%, color-mix(in srgb, var(--me-ink-2) 55%, transparent)); }
+.me .me-hero-fade { background: linear-gradient(to top, var(--me-ink), transparent 45%); }
+:root[data-theme='dark'] .me .me-hero-veil { background: linear-gradient(100deg, var(--me-ink) 18%, color-mix(in srgb, var(--me-ink) 70%, transparent) 62%, color-mix(in srgb, var(--me-ink-2) 55%, transparent)); }
+:root[data-theme='dark'] .me .me-hero-fade { background: linear-gradient(to top, var(--me-ink), transparent 45%); }
+.me .me-blob.a { background: rgb(124 58 237 / 0.45); }
+.me .me-blob.b { background: rgb(255 198 26 / 0.14); }
+.me .me-hero-inner { max-width: calc(var(--r) * 80); padding: 0 calc(var(--r) * 0.5); }
+.me .me-hero .me-eyebrow { color: rgb(255 255 255 / 0.85); margin-bottom: calc(var(--r) * 1.5); }
+.me .me-hero h1 { max-width: 13em; font-size: clamp(40px, 6.6vw, 92px); line-height: 1.02; font-weight: 650; letter-spacing: -0.045em; color: #fff; text-wrap: balance; }
+.me .me-hero-lead { max-width: 40em; margin-top: calc(var(--r) * 1.75) !important; font-size: calc(var(--r) * 1.2); line-height: 1.6; color: rgb(255 255 255 / 0.76); }
+@media (prefers-reduced-motion: no-preference) { .me .me-hero-inner { animation: me-rise-in .7s cubic-bezier(.2,.7,.2,1) both; } }
+@keyframes me-rise-in { from { opacity: 0; transform: translateY(18px); } to { opacity: 1; transform: none; } }
+
+/* headings and body */
+.me .me-h2 { font-size: clamp(30px, 4.2vw, 56px); line-height: 1.05; font-weight: 650; letter-spacing: -0.04em; text-wrap: balance; }
+.me .me-p { font-size: calc(var(--r) * 1.05); line-height: 1.7; max-width: 38em; }
+.me .me-h2.narrow, .me .me-p.narrow { max-width: 46rem; }
+.me .me-section { padding: calc(var(--r) * 6) 0 calc(var(--r) * 3); }
+.me .me-section.me-pb-only { padding-top: calc(var(--r) * 3); padding-bottom: calc(var(--r) * 4); }
+@media (min-width: 768px) { .me .me-section.me-pb-only { padding-bottom: calc(var(--r) * 5); } }
+
+/* about: the "orbit" panel reads as a ruled index, title first */
+.me .me-panel { background: var(--me-card); border: 1px solid var(--me-hair); border-radius: 28px; box-shadow: none; padding: calc(var(--r) * 2) calc(var(--r) * 2); }
+.me .me-panel .me-blob { display: none; }
+.me .me-panel-eyebrow { font-size: calc(var(--r) * 0.8); font-weight: 650; letter-spacing: 0.14em; }
+.me .me-panel-title { font-size: calc(var(--r) * 1.3); line-height: 1.3; letter-spacing: -0.02em; color: var(--me-h); }
+.me .me-orbit { grid-template-columns: 1fr; gap: 0; margin-top: calc(var(--r) * 0.5); }
+.me .me-orbit > div { background: none; border: 0; border-top: 1px solid var(--me-hair); border-radius: 0; padding: calc(var(--r) * 1) 0; display: flex; flex-direction: column-reverse; gap: 2px; }
+.me .me-orbit-label { text-transform: none; letter-spacing: 0; font-size: calc(var(--r) * 0.85); font-weight: 400; color: var(--me-text); margin: 0 !important; }
+.me .me-orbit-text { font-size: calc(var(--r) * 1); font-weight: 650; color: var(--me-h); }
+:root[data-theme='dark'] .me .me-panel { background: var(--me-card); border-color: var(--me-hair); box-shadow: none; }
+:root[data-theme='dark'] .me .me-orbit > div { background: none; border-color: var(--me-hair); }
+
+/* ecosystem: one joined grid with shared hairlines */
+.me .me-eco { gap: 1px; background: var(--me-hair); border: 1px solid var(--me-hair); border-radius: 28px; overflow: hidden; }
+.me .me-eco .me-card { border: 0; border-radius: 0; box-shadow: none; background: var(--me-card); padding: calc(var(--r) * 2.25); transform: none; transition: background-color .25s; }
+.me .me-eco .me-card:hover { background: var(--me-muted); transform: none; box-shadow: none; }
+:root[data-theme='dark'] .me .me-eco .me-card { background: var(--me-card); border: 0; box-shadow: none; }
+:root[data-theme='dark'] .me .me-eco .me-card:hover { background: var(--me-muted); box-shadow: none; }
+.me .me-card h3 { font-size: calc(var(--r) * 1.3); letter-spacing: -0.03em; }
+.me .me-card p { font-size: calc(var(--r) * 0.98); line-height: 1.65; }
+
+/* feature cards: calmer surface, tone shown by a permanent accent bar */
+.me .me-feature { border-radius: 24px; padding: calc(var(--r) * 1.75); border-color: var(--me-hair); box-shadow: none; background: var(--me-card); }
+.me .me-feature::before { opacity: 1; height: 3px; border-radius: 24px 24px 0 0; }
+.me .me-feature:hover { transform: translateY(-3px); box-shadow: 0 18px 44px rgb(21 15 51 / 0.1); border-color: var(--me-hair); }
+.me .me-feature h3 { font-size: calc(var(--r) * 1.2); line-height: 1.25; letter-spacing: -0.03em; }
+.me .me-feature-who { text-transform: none; letter-spacing: 0; font-size: calc(var(--r) * 0.85); font-weight: 650; margin-bottom: 4px !important; }
+.me .me-feature.blue .me-feature-who { color: #2563eb; } .me .me-feature.violet .me-feature-who { color: #7c3aed; } .me .me-feature.emerald .me-feature-who { color: #059669; }
+.me .me-feature li span { font-size: calc(var(--r) * 0.92); }
+:root[data-theme='dark'] .me .me-feature { border-color: var(--me-hair); box-shadow: none; }
+:root[data-theme='dark'] .me .me-feature:hover { border-color: var(--me-hair); box-shadow: 0 18px 44px rgb(0 0 0 / 0.5); }
+:root[data-theme='dark'] .me .me-feature.blue .me-feature-who { color: #60a5fa; } :root[data-theme='dark'] .me .me-feature.violet .me-feature-who { color: #a78bfa; } :root[data-theme='dark'] .me .me-feature.emerald .me-feature-who { color: #34d399; }
+
+/* RISE: the one bold moment. Four letters on a shared rule, deepening from Record to Elevate. */
+.me .me-rise { gap: calc(var(--r) * 2); margin-top: calc(var(--r) * 1); }
+.me .me-rise .me-card { background: none; border: 0; border-top: 2px solid var(--me-hair); border-radius: 0; box-shadow: none; padding: calc(var(--r) * 1.5) 0 0; transform: none; }
+.me .me-rise .me-card:hover { transform: none; box-shadow: none; border-top-color: var(--me-eyebrow); }
+:root[data-theme='dark'] .me .me-rise .me-card, :root[data-theme='dark'] .me .me-rise .me-card:hover { background: none; box-shadow: none; }
+.me .me-rise-letter { font-size: clamp(96px, 13vw, 184px); line-height: .85; font-weight: 700; letter-spacing: -0.06em; margin-bottom: calc(var(--r) * 1); color: var(--me-eyebrow); }
+.me .me-rise li:nth-child(1) .me-rise-letter { opacity: .3; }
+.me .me-rise li:nth-child(2) .me-rise-letter { opacity: .55; }
+.me .me-rise li:nth-child(3) .me-rise-letter { opacity: .8; }
+.me .me-rise li:nth-child(4) .me-rise-letter { opacity: 1; }
+.me .me-rise .me-card h3 { font-size: calc(var(--r) * 1.4); }
+.me .me-rise .me-card p { font-size: calc(var(--r) * 0.95); color: var(--me-text); max-width: 22em; }
+@media (min-width: 1024px) {
+  .me .me-rise { gap: calc(var(--r) * 2.5); }
+  .me .me-rise-arrow { top: 0; right: calc(var(--r) * -1.25 - 14px); width: 28px; height: 28px; border-radius: 50%; background: var(--me-bg); border: 1px solid var(--me-hair); }
+  .me .me-rise-arrow svg { width: 14px; height: 14px; }
+}
+
+/* closing call to action */
+.me .me-cta { background: var(--me-ink); border: 0; border-radius: 32px; box-shadow: none; padding: calc(var(--r) * 3.5) calc(var(--r) * 2); }
+.me .me-blob.c1 { background: rgb(124 58 237 / 0.5); } .me .me-blob.c2 { background: rgb(255 198 26 / 0.16); }
+:root[data-theme='dark'] .me .me-cta { background: var(--me-ink); border: 0; box-shadow: none; }
+:root[data-theme='dark'] .me .me-blob.c1 { background: rgb(124 58 237 / 0.5); }
+.me .me-cta .me-h2 { color: #fff; }
+.me .me-cta-body p { color: rgb(255 255 255 / 0.76); }
+.me .me-cta-btn { background: var(--me-yellow); color: var(--me-ink); font-weight: 650; box-shadow: 0 10px 28px rgb(255 198 26 / 0.25); transition: transform .2s, box-shadow .2s; }
+.me .me-cta-btn:hover { background: #ffd24d; transform: translateY(-1px); }
+.me .me-cta-btn:focus-visible, .me .me-signin:focus-visible { outline: 3px solid var(--me-yellow); outline-offset: 3px; }
+
+@media (max-width: 640px) {
+  .me .me-hero { margin: 8px 8px 0; border-radius: 24px; min-height: 78vh; }
+  .me .me-panel, .me .me-cta { border-radius: 24px; }
+  .me .me-eco { border-radius: 24px; }
+}
+@media print { .me .me-hero, .me .me-cta { background: none; } .me .me-hero h1, .me .me-cta .me-h2 { color: #000; } }
