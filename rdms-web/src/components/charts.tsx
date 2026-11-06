@@ -1,14 +1,20 @@
 import { useState } from 'react';
 import type { ReactNode } from 'react';
+import { useTheme } from '../lib/theme';
 import { Bar, BarChart, CartesianGrid, Line, LineChart, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts';
 
 /** UniRise chart palette (../unirise-web/src/index.css --viz-*): violet, pink, amber, teal, in this fixed order.
  *  Validated: all adjacent pairs pass CVD and normal-vision separation on the light surface. Never more than four series. */
 export const SERIES = ['#7c3aed', '#db2777', '#d97706', '#0d9488'];
-/** One violet ramp for journal quartiles (strongest = Q1), plus slate for unranked. */
-export const QUARTILE_COLORS = ['#3b0f8c', '#5b21b6', '#7c3aed', '#a78bfa', '#94a3b8'];
-const GRID = 'hsl(248 100% 95%)';
-const AXIS = { fontSize: 13.5, fill: 'hsl(220 9% 46%)' };
+/** One violet ramp for journal quartiles (strongest = Q1), plus slate for unranked. On dark, the strongest step is the lightest. */
+const QUARTILES = { light: ['#3b0f8c', '#5b21b6', '#7c3aed', '#a78bfa', '#94a3b8'], dark: ['#ede9fe', '#c4b5fd', '#a78bfa', '#7c3aed', '#64748b'] };
+export const useQuartileColors = () => QUARTILES[useTheme()];
+/** Axis, grid and surface colours per theme (SVG attributes cannot read CSS variables reliably). */
+const INK = {
+  light: { grid: 'hsl(248 100% 95%)', axisLine: 'hsl(248 100% 92%)', axis: { fontSize: 13.5, fill: 'hsl(220 9% 46%)' }, surface: '#fff', cursor: '#999' },
+  dark: { grid: 'hsl(250 18% 22%)', axisLine: 'hsl(250 16% 30%)', axis: { fontSize: 13.5, fill: 'hsl(250 10% 70%)' }, surface: 'hsl(250 22% 13%)', cursor: '#777' },
+};
+const useInk = () => INK[useTheme()];
 
 export interface Series { key: string; label: string; color?: string }
 const colorOf = (series: Series[], i: number) => series[i]?.color ?? SERIES[i];
@@ -32,7 +38,7 @@ function TableView<T extends object>({ data, xKey, xLabel, series, fmt }: { data
 function TooltipBox({ active, payload, label, fmt, series }: { active?: boolean; payload?: { dataKey: string; value: number }[]; label?: string; fmt: (n: number) => string; series: Series[] }) {
   if (!active || !payload?.length) return null;
   return (
-    <div style={{ background: '#fff', border: '1px solid hsl(248 100% 95%)', borderRadius: 12, padding: '8px 12px', fontSize: 14, boxShadow: '0 16px 48px rgba(91,33,182,0.12)' }}>
+    <div style={{ background: 'var(--card)', color: 'var(--foreground)', border: '1px solid var(--border)', borderRadius: 12, padding: '8px 12px', fontSize: 14, boxShadow: '0 16px 48px rgba(91,33,182,0.12)' }}>
       <b>{label}</b>
       {payload.map((p) => {
         const i = series.findIndex((s) => s.key === p.dataKey);
@@ -57,26 +63,27 @@ export function ChartCard({ title, sub, children, table, className }: { title: s
 export function BarCard<T extends object>({ title, sub, data, xKey, xLabel, series, stacked, fmt = (n) => n.toLocaleString('en-IN'), horizontal, height = 240, className }: {
   title: string; sub?: string; data: T[]; xKey: string; xLabel: string; series: Series[]; stacked?: boolean; fmt?: (n: number) => string; horizontal?: boolean; height?: number; className?: string;
 }) {
+  const ink = useInk();
   return (
     <ChartCard title={title} sub={sub} className={className} table={<TableView data={data} xKey={xKey} xLabel={xLabel} series={series} fmt={fmt} />}>
       <div style={{ height }}>
         <ResponsiveContainer width="100%" height="100%">
           <BarChart data={data} layout={horizontal ? 'vertical' : 'horizontal'} margin={{ top: 6, right: 12, bottom: 0, left: horizontal ? 10 : -8 }} barCategoryGap="22%" barGap={2}>
-            <CartesianGrid stroke={GRID} vertical={!!horizontal} horizontal={!horizontal} />
+            <CartesianGrid stroke={ink.grid} vertical={!!horizontal} horizontal={!horizontal} />
             {horizontal ? (
               <>
-                <XAxis type="number" tick={AXIS} tickFormatter={fmt} axisLine={false} tickLine={false} />
-                <YAxis type="category" dataKey={xKey} tick={AXIS} width={150} axisLine={false} tickLine={false} />
+                <XAxis type="number" tick={ink.axis} tickFormatter={fmt} axisLine={false} tickLine={false} />
+                <YAxis type="category" dataKey={xKey} tick={ink.axis} width={150} axisLine={false} tickLine={false} />
               </>
             ) : (
               <>
-                <XAxis dataKey={xKey} tick={AXIS} axisLine={{ stroke: 'hsl(248 100% 92%)' }} tickLine={false} interval={0} />
-                <YAxis tick={AXIS} tickFormatter={fmt} axisLine={false} tickLine={false} allowDecimals={false} />
+                <XAxis dataKey={xKey} tick={ink.axis} axisLine={{ stroke: ink.axisLine }} tickLine={false} interval={0} />
+                <YAxis tick={ink.axis} tickFormatter={fmt} axisLine={false} tickLine={false} allowDecimals={false} />
               </>
             )}
             <Tooltip cursor={{ fill: 'hsl(257 100% 97% / 0.7)' }} content={<TooltipBox fmt={fmt} series={series} />} />
             {series.map((s, i) => (
-              <Bar key={s.key} dataKey={s.key} stackId={stacked ? 'a' : undefined} fill={colorOf(series, i)} stroke="#fff" strokeWidth={stacked ? 1 : 0}
+              <Bar key={s.key} dataKey={s.key} stackId={stacked ? 'a' : undefined} fill={colorOf(series, i)} stroke={ink.surface} strokeWidth={stacked ? 1 : 0}
                 isAnimationActive={false} radius={stacked ? (i === series.length - 1 ? (horizontal ? [0, 4, 4, 0] : [4, 4, 0, 0]) : 0) : horizontal ? [0, 4, 4, 0] : [4, 4, 0, 0]} maxBarSize={36} />
             ))}
           </BarChart>
@@ -90,16 +97,17 @@ export function BarCard<T extends object>({ title, sub, data, xKey, xLabel, seri
 export function LineCard<T extends object>({ title, sub, data, xKey, xLabel, series, fmt = (n) => n.toLocaleString('en-IN'), height = 240, className }: {
   title: string; sub?: string; data: T[]; xKey: string; xLabel: string; series: Series[]; fmt?: (n: number) => string; height?: number; className?: string;
 }) {
+  const ink = useInk();
   return (
     <ChartCard title={title} sub={sub} className={className} table={<TableView data={data} xKey={xKey} xLabel={xLabel} series={series} fmt={fmt} />}>
       <div style={{ height }}>
         <ResponsiveContainer width="100%" height="100%">
           <LineChart data={data} margin={{ top: 6, right: 12, bottom: 0, left: -8 }}>
-            <CartesianGrid stroke={GRID} vertical={false} />
-            <XAxis dataKey={xKey} tick={AXIS} axisLine={{ stroke: 'hsl(248 100% 92%)' }} tickLine={false} />
-            <YAxis tick={AXIS} tickFormatter={fmt} axisLine={false} tickLine={false} allowDecimals={false} />
-            <Tooltip cursor={{ stroke: '#999', strokeDasharray: '3 3' }} content={<TooltipBox fmt={fmt} series={series} />} />
-            {series.map((s, i) => <Line key={s.key} dataKey={s.key} stroke={colorOf(series, i)} strokeWidth={2} dot={{ r: 4, strokeWidth: 2, stroke: '#fff', fill: colorOf(series, i) }} activeDot={{ r: 5 }} isAnimationActive={false} />)}
+            <CartesianGrid stroke={ink.grid} vertical={false} />
+            <XAxis dataKey={xKey} tick={ink.axis} axisLine={{ stroke: ink.axisLine }} tickLine={false} />
+            <YAxis tick={ink.axis} tickFormatter={fmt} axisLine={false} tickLine={false} allowDecimals={false} />
+            <Tooltip cursor={{ stroke: ink.cursor, strokeDasharray: '3 3' }} content={<TooltipBox fmt={fmt} series={series} />} />
+            {series.map((s, i) => <Line key={s.key} dataKey={s.key} stroke={colorOf(series, i)} strokeWidth={2} dot={{ r: 4, strokeWidth: 2, stroke: ink.surface, fill: colorOf(series, i) }} activeDot={{ r: 5 }} isAnimationActive={false} />)}
           </LineChart>
         </ResponsiveContainer>
       </div>
@@ -112,7 +120,7 @@ export function LineCard<T extends object>({ title, sub, data, xKey, xLabel, ser
 export function RankList({ rows, fmt = (n: number) => String(n) }: { rows: { label: ReactNode; value: number; key: string }[]; fmt?: (n: number) => string }) {
   const max = Math.max(1, ...rows.map((r) => r.value));
   return (
-    <table className="tbl" style={{ background: '#fff' }}>
+    <table className="tbl">
       <tbody>
         {rows.map((r) => (
           <tr key={r.key}>

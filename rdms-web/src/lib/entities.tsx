@@ -2,7 +2,8 @@ import type { ReactNode } from 'react';
 import type { Column } from '../components/ui';
 import { StatusBadge } from '../components/ui';
 import { dateOf, fmtDate, inr } from './analytics';
-import type { AnyRecord, Conference, DB, EntityKind, Fdp, Grant, Publication, SeedMoney } from './types';
+import type { AnyRecord, Conference, DB, EntityKind, Fdp, Grant, Honour, Publication, SeedMoney } from './types';
+import { AWARD_CATEGORIES } from './types';
 
 export interface EntityConfig {
   kind: EntityKind;
@@ -124,6 +125,21 @@ export const ENTITIES: Record<EntityKind, EntityConfig> = {
         ['Amount Claimed', c.amountClaimed ? inr(c.amountClaimed) : '—'], ['Award', c.award || '—'], ['Certificate', file(c.certificateName)]];
     },
   },
+  awards: {
+    kind: 'awards', label: 'Honour / Award', plural: 'Honours & Awards', entryPath: '/awards/entry', viewPath: '/awards',
+    typeOf: (r) => (r as Honour).category, typeOptions: AWARD_CATEGORIES,
+    title: (r) => (r as Honour).title,
+    columns: [
+      { key: 'by', label: 'Conferred by', value: (r) => (r as Honour).awardedBy },
+      { key: 'level', label: 'Level', value: (r) => (r as Honour).level },
+      { key: 'date', label: 'Received', value: (r) => (r as Honour).awardDate, render: (r) => fmtDate((r as Honour).awardDate) },
+    ],
+    details: (r) => {
+      const a = r as Honour;
+      return [['Category', a.category], ['Honour / Award', a.title], ['Conferred by', a.awardedBy], ['Level', a.level], ['Date received', fmtDate(a.awardDate)],
+        ['Citation', a.citation || '—'], ['Prize / Honorarium', a.prizeAmount ? inr(a.prizeAmount) : '—'], ['Certificate', file(a.certificateName)]];
+    },
+  },
 };
 
 /** Common leading/trailing columns for every list. */
@@ -132,8 +148,8 @@ export function listColumns(db: DB, kind: EntityKind, opts: { showOwner: boolean
   const byId = new Map(db.faculty.map((f) => [f.id, f]));
   return [
     { key: 'id', label: `${cfg.label} ID`, value: (r) => r.id },
-    { key: 'type', label: kind === 'conferences' ? 'Participation' : kind === 'seedMoney' ? 'Category' : 'Type Of Entry', value: (r) => cfg.typeOf(r) },
-    { key: 'title', label: kind === 'conferences' ? 'Conference' : 'Title', value: (r) => cfg.title(r), className: 'title-cell' },
+    { key: 'type', label: kind === 'conferences' ? 'Participation' : kind === 'seedMoney' || kind === 'awards' ? 'Category' : 'Type Of Entry', value: (r) => cfg.typeOf(r) },
+    { key: 'title', label: kind === 'conferences' ? 'Conference' : kind === 'awards' ? 'Honour / Award' : 'Title', value: (r) => cfg.title(r), className: 'title-cell' },
     ...(opts.showOwner ? [
       { key: 'owner', label: 'Faculty', value: (r: AnyRecord) => byId.get(r.facultyId)?.name ?? r.facultyId },
       { key: 'dept', label: 'Department', value: (r: AnyRecord) => byId.get(r.facultyId)?.department ?? '' },

@@ -16,7 +16,7 @@ declare module 'express-serve-static-core' {
   interface Request { account?: AccountRow; actor?: Actor; institutionId?: string }
 }
 
-const KINDS: EntityKind[] = ['publications', 'grants', 'seedMoney', 'fdps', 'conferences'];
+const KINDS: EntityKind[] = ['publications', 'grants', 'seedMoney', 'fdps', 'conferences', 'awards'];
 const EMAIL = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 const s = (v: unknown, max = 300) => (typeof v === 'string' ? v.trim().slice(0, max) : '');
 
@@ -144,7 +144,7 @@ export function createApp(store: Storage, opts: { secureCookies?: boolean } = {}
     const ip = req.ip ?? '';
     if (loginByEmail.blocked(email) || loginByIp.blocked(ip)) return res.status(429).json({ error: 'Too many failed attempts. Try again in 15 minutes.' });
     const acc = store.platform.prepare('SELECT * FROM accounts WHERE email = ?').get(email) as AccountRow | undefined;
-    // IT Admin accounts cannot use the regular sign-in, and other accounts cannot use the admin one.
+    // Office of Research accounts cannot use the regular sign-in, and other accounts cannot use the admin one.
     const eligible = acc && (acc.role === 'it_admin') === admin;
     if (!acc || !eligible) burnPasswordCheck(password);
     if (!acc || !eligible || !verifyPassword(password, acc.password_hash)) {
@@ -218,7 +218,7 @@ export function createApp(store: Storage, opts: { secureCookies?: boolean } = {}
   app.post('/api/notices', institutionUser, tenantAction((db, actor, req) => rules.addNotice(db, actor, req.body?.title, req.body?.body)));
   app.delete('/api/notices/:id', institutionUser, tenantAction((db, actor, req) => rules.deleteNotice(db, actor, String(req.params.id))));
 
-  // ---------- IT Admin (platform level: accounts and institutions, never research data) ----------
+  // ---------- Office of Research (platform level: accounts and institutions, never research data) ----------
 
   app.get('/api/admin/requests', itAdmin, (req, res) => {
     const status = ['pending', 'rejected'].includes(String(req.query.status)) ? String(req.query.status) : 'pending';
@@ -268,7 +268,7 @@ export function createApp(store: Storage, opts: { secureCookies?: boolean } = {}
   app.post('/api/admin/users/:id/status', itAdmin, (req, res) => {
     const acc = store.platform.prepare('SELECT * FROM accounts WHERE id = ?').get(String(req.params.id)) as AccountRow | undefined;
     if (!acc || ['pending', 'rejected'].includes(acc.status)) return res.status(404).json({ error: 'User not found.' });
-    if (acc.role === 'it_admin') return res.status(400).json({ error: 'IT Admin accounts are managed from the server command line.' });
+    if (acc.role === 'it_admin') return res.status(400).json({ error: 'Office of Research accounts are managed from the server command line.' });
     const status = String(req.body?.status);
     if (!['active', 'suspended', 'deactivated'].includes(status)) return res.status(400).json({ error: 'Unknown status.' });
     const reason = s(req.body?.reason, 500);
@@ -361,7 +361,7 @@ export function createApp(store: Storage, opts: { secureCookies?: boolean } = {}
   return app;
 }
 
-/** Account as the IT Admin sees it: identity and request details, never the password hash. */
+/** Account as the Office of Research sees it: identity and request details, never the password hash. */
 function requestView(a: AccountRow) {
   return {
     id: a.id, email: a.email, name: a.name, title: a.title, role: a.role, status: a.status, institutionId: a.institution_id, facultyId: a.faculty_id,

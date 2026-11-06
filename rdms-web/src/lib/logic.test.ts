@@ -97,6 +97,37 @@ describe('workflow rules', () => {
   });
 });
 
+describe('honours and awards', () => {
+  const honour = (): Record<string, unknown> => ({ category: 'Award', title: 'Young Scientist Award', awardedBy: 'DST', level: 'National', awardDate: '2026-08-15', citation: '', prizeAmount: 25000, certificateName: 'c.pdf' });
+
+  it('go through the same approval workflow and stay private to their owner', () => {
+    const id = rules.saveRecord(db, fac('EMP1001'), 'awards', { ...honour(), status: 'Approved' }, true);
+    const rec = db.awards.find((x) => x.id === id)!;
+    expect(id).toMatch(/^AWD/);
+    expect(rec.status).toBe('Submitted');
+    expect(rules.scopeFor(db, fac('EMP1002')).awards.some((x) => x.id === id)).toBe(false);
+    rules.review(db, mgmt, 'awards', id, 'Approved', '');
+    expect(db.awards.find((x) => x.id === id)!.status).toBe('Approved');
+  });
+
+  it('reject future dates, unknown categories and missing fields', () => {
+    expect(() => rules.saveRecord(db, fac('EMP1001'), 'awards', { ...honour(), awardDate: '2999-01-01' }, false)).toThrow(/after it has been received/);
+    expect(() => rules.saveRecord(db, fac('EMP1001'), 'awards', { ...honour(), category: 'Made up' }, false)).toThrow(/category/);
+    expect(() => rules.saveRecord(db, fac('EMP1001'), 'awards', { ...honour(), awardedBy: ' ' }, false)).toThrow(/Conferred by/);
+  });
+
+  it('approved honours count for the faculty member and score by level', () => {
+    const f = { from: '2026-08-01', to: '2026-08-31', department: '' };
+    const before = facultyStats(db, f).find((s) => s.faculty.id === 'EMP1001')!;
+    const id = rules.saveRecord(db, fac('EMP1001'), 'awards', { ...honour(), level: 'International' }, true);
+    rules.review(db, mgmt, 'awards', id, 'Approved', '');
+    const after = facultyStats(db, f).find((s) => s.faculty.id === 'EMP1001')!;
+    expect(after.awards).toBe(before.awards + 1);
+    expect(after.score - before.score).toBeCloseTo(db.settings.weights.awardInternational);
+    expect(uniqueCounts(db, f).awards.some((x) => x.id === id)).toBe(true);
+  });
+});
+
 describe('what faculty receive', () => {
   it('own records in any state, colleagues’ approved publications only, no colleague biodata or contact details', () => {
     const me = 'EMP1005';

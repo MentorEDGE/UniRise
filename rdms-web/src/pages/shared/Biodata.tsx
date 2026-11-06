@@ -3,7 +3,7 @@ import { Link, useNavigate, useParams } from 'react-router-dom';
 import { Alert, Attainment, Field, Input, NumberInput, PageTitle, Panel, Select, TextArea, useToast } from '../../components/ui';
 import { biodataCompleteness, fmtDate, inr, isSanctioned } from '../../lib/analytics';
 import { creditedFaculty, saveBiodata, saveFaculty, useStore } from '../../lib/store';
-import type { Award, Biodata, Experience, Faculty, Membership, Qualification } from '../../lib/types';
+import type { Biodata, Experience, Faculty, Membership, Qualification } from '../../lib/types';
 
 function useTarget() {
   const { db, user } = useStore();
@@ -23,6 +23,8 @@ export function BiodataView() {
   const grants = approved(db.grants).filter((g) => creditedFaculty('grants', g).includes(facultyId)).sort((a, z) => z.appliedDate.localeCompare(a.appliedDate));
   const fdps = approved(db.fdps).filter((x) => x.facultyId === facultyId).sort((a, z) => z.fromDate.localeCompare(a.fromDate));
   const confs = approved(db.conferences).filter((x) => x.facultyId === facultyId).sort((a, z) => z.fromDate.localeCompare(a.fromDate));
+  const honours = approved(db.awards).filter((x) => x.facultyId === facultyId).sort((a, z) => z.awardDate.localeCompare(a.awardDate));
+  const legacyAwards = b?.awards ?? []; // noted in the profile before Honours & Awards became its own section
   const pct = biodataCompleteness(b, f);
   const editPath = user?.role === 'management' ? `/faculty/${f.id}/biodata/edit` : '/biodata/edit';
   return (
@@ -31,7 +33,6 @@ export function BiodataView() {
       <div className="panel wide no-print" style={{ display: 'flex', gap: 12, alignItems: 'center', flexWrap: 'wrap' }}>
         <div style={{ flex: 1, minWidth: 220 }}><b>Profile completeness</b><Attainment value={pct} target={100} /></div>
         {canEdit && <Link className="btn" to={editPath}>Edit Profile</Link>}
-        {user?.role === 'faculty' && <Link className="btn secondary" to="/profile-search">Search Faculty Profiles</Link>}
         <button className="btn secondary" onClick={() => window.print()}>Print / Save as PDF</button>
       </div>
       <article className="cv">
@@ -61,11 +62,16 @@ export function BiodataView() {
         {fdps.length ? <ol>{fdps.map((x) => <li key={x.id}>{x.role}: {x.programmeType} on “{x.title}”, {x.organiser}, {fmtDate(x.fromDate)}–{fmtDate(x.toDate)} ({x.hours} h, {x.mode})</li>)}</ol> : <p className="muted">No approved FDPs.</p>}
         <h2>Conference Participation ({confs.length})</h2>
         {confs.length ? <ol>{confs.map((c) => <li key={c.id}>{c.participation}{c.paperTitle && `: “${c.paperTitle}”`}, {c.conferenceName}, {c.venue}, {c.country}, {fmtDate(c.fromDate)}{c.award && ` — ${c.award}`}</li>)}</ol> : <p className="muted">No approved conference entries.</p>}
-        <h2>Awards & Recognition</h2>
-        {b?.awards.length ? <ol>{b.awards.map((a, i) => <li key={i}>{a.title}, {a.by} ({a.year})</li>)}</ol> : <p className="muted">Not entered.</p>}
+        <h2>Honours &amp; Awards ({honours.length + legacyAwards.length})</h2>
+        {honours.length + legacyAwards.length ? (
+          <ol>
+            {honours.map((a) => <li key={a.id}><b>{a.title}</b>, {a.awardedBy} ({a.level}, {fmtDate(a.awardDate)}){a.citation && ` — ${a.citation}`}</li>)}
+            {legacyAwards.map((a, i) => <li key={`l${i}`}>{a.title}, {a.by} ({a.year})</li>)}
+          </ol>
+        ) : <p className="muted">No approved honours or awards.</p>}
         <h2>Professional Memberships</h2>
         {b?.memberships.length ? <ol>{b.memberships.map((m, i) => <li key={i}>{m.type}, {m.body} (since {m.since})</li>)}</ol> : <p className="muted">Not entered.</p>}
-        <p className="muted" style={{ marginTop: 18, fontSize: 11 }}>Generated {fmtDate(new Date().toISOString())}. Publications, grants, FDPs and conferences list approved entries only. Profile last updated {fmtDate(b?.updatedAt ?? '')}.</p>
+        <p className="muted" style={{ marginTop: 18, fontSize: 11 }}>Generated {fmtDate(new Date().toISOString())}. Publications, grants, FDPs, conferences and honours list approved entries only. Profile last updated {fmtDate(b?.updatedAt ?? '')}.</p>
       </article>
     </>
   );
@@ -148,8 +154,7 @@ export function BiodataEdit() {
         cols={[{ key: 'degree', label: 'Degree', placeholder: 'Ph.D.' }, { key: 'specialization', label: 'Specialisation' }, { key: 'institution', label: 'Institution / University' }, { key: 'year', label: 'Year' }]} />
       <Repeat<Experience> title="Experience" rows={bio.experience} onChange={(r) => u({ experience: r })} blank={{ organisation: '', designation: '', from: '', to: '' }}
         cols={[{ key: 'organisation', label: 'Organisation' }, { key: 'designation', label: 'Designation' }, { key: 'from', label: 'From (year)' }, { key: 'to', label: 'To (year / Present)' }]} />
-      <Repeat<Award> title="Awards & Recognition" rows={bio.awards} onChange={(r) => u({ awards: r })} blank={{ title: '', by: '', year: '' }}
-        cols={[{ key: 'title', label: 'Award' }, { key: 'by', label: 'Awarded by' }, { key: 'year', label: 'Year' }]} />
+      <div className="panel wide no-print"><p className="note" style={{ margin: 0 }}>Honours and awards are recorded under <b>Honours &amp; Awards</b>, with a certificate, and appear here once approved.{user?.role === 'faculty' && <> <Link to="/awards/entry">Add an honour or award</Link></>}</p></div>
       <Repeat<Membership> title="Professional Memberships" rows={bio.memberships} onChange={(r) => u({ memberships: r })} blank={{ body: '', type: '', since: '' }}
         cols={[{ key: 'body', label: 'Professional body' }, { key: 'type', label: 'Membership type' }, { key: 'since', label: 'Since (year)' }]} />
       <div className="btn-row">

@@ -2,10 +2,10 @@ import { useState } from 'react';
 import { Field, FileName, Input, NumberInput, PageTitle, Panel, Select, TextArea, YesNo } from '../../components/ui';
 import { getDB, useStore } from '../../lib/store';
 import {
-  CONF_PARTICIPATION, FDP_ROLES, FDP_TYPES, FUNDING, GRANT_SOURCES, GRANT_TYPES, GRANT_UNITS, INDEXING, LEVELS, MODES, MONTHS,
+  AWARD_CATEGORIES, CONF_PARTICIPATION, FDP_ROLES, FDP_TYPES, FUNDING, GRANT_SOURCES, GRANT_TYPES, GRANT_UNITS, INDEXING, LEVELS, MODES, MONTHS,
   PUB_CATEGORIES, PUB_TYPES, QUARTILES,
 } from '../../lib/types';
-import type { Conference, Fdp, Grant, PubType, Publication, SeedMoney } from '../../lib/types';
+import type { Conference, Fdp, Grant, Honour, PubType, Publication, SeedMoney } from '../../lib/types';
 import { AuthorTable, BlockedEntry, InvestigatorTable, SaveBar, selfAuthor, selfInvestigator, useEntry, validateInvestigators } from './entryKit';
 import type { Errors } from './entryKit';
 
@@ -343,3 +343,40 @@ export function ConferenceEntry() {
   );
 }
 
+// ---------------- Honours & Awards ----------------
+
+export function AwardEntry() {
+  const e = useEntry<Honour>('awards', () => ({
+    category: 'Award', title: '', awardedBy: '', level: 'National', awardDate: '', citation: '', prizeAmount: 0, certificateName: '',
+  }), (r, submit) => {
+    const errs: Errors = {};
+    required(errs, 'title', r.title.trim(), 'Name of the honour or award');
+    required(errs, 'awardedBy', r.awardedBy.trim(), 'Conferred by');
+    required(errs, 'awardDate', r.awardDate, 'Date received');
+    if (r.awardDate > today()) errs.awardDate = 'Enter an honour after it has been received.';
+    if (r.prizeAmount < 0) errs.prizeAmount = 'Prize amount cannot be negative.';
+    if (submit && !r.certificateName) errs.certificate = 'Upload the certificate or letter before submitting.';
+    return errs;
+  });
+  if (e.blocked) return <BlockedEntry msg={e.blocked} />;
+  const { rec: r, update: u, errors: x } = e;
+  return (
+    <>
+      <PageTitle>Honours &amp; Awards Entry/Update</PageTitle>
+      {e.banner}
+      <Panel title="Honour / Award Details" size="wide">
+        <div className="grid">
+          <Field label="Category" required><Select value={r.category} onChange={(v) => u({ category: v })} options={AWARD_CATEGORIES} /></Field>
+          <Field label="Level" required><Select value={r.level} onChange={(v) => u({ level: v })} options={LEVELS} /></Field>
+          <Field label="Date Received" required error={x.awardDate}><input type="date" value={r.awardDate} max={today()} onChange={(ev) => u({ awardDate: ev.target.value })} /></Field>
+          <Field label="Prize / Honorarium (₹)" error={x.prizeAmount} hint="0 if none"><NumberInput value={r.prizeAmount} onChange={(v) => u({ prizeAmount: v })} min={0} /></Field>
+          <Field label="Name of the Honour / Award" required error={x.title} className="span2"><Input value={r.title} onChange={(v) => u({ title: v })} /></Field>
+          <Field label="Conferred By" required error={x.awardedBy} hint="Body, society, government or university" className="span2"><Input value={r.awardedBy} onChange={(v) => u({ awardedBy: v })} /></Field>
+          <Field label="Citation / What it recognises" className="span3"><TextArea value={r.citation} onChange={(v) => u({ citation: v })} /></Field>
+          <Field label="Certificate / Letter" error={x.certificate}><FileName value={r.certificateName} onChange={(v) => u({ certificateName: v })} accept=".pdf,.jpg,.png" /></Field>
+        </div>
+        <SaveBar onSave={e.save} isNew={e.isNew} />
+      </Panel>
+    </>
+  );
+}

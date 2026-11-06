@@ -9,7 +9,7 @@ import { ENTITY_LABEL } from '../../lib/types';
 import { RecordDetail } from '../shared/RecordDetail';
 import { Tile } from '../mgmt/Analytics';
 
-const KINDS: EntityKind[] = ['publications', 'grants', 'seedMoney', 'fdps', 'conferences'];
+const KINDS: EntityKind[] = ['publications', 'grants', 'seedMoney', 'fdps', 'conferences', 'awards'];
 
 export function FacultyHome() {
   const { db, user } = useStore();
@@ -36,6 +36,7 @@ export function FacultyHome() {
             <Link className="btn sm" to="/grants/entry">+ Grant</Link>
             <Link className="btn sm" to="/fdp/entry">+ FDP</Link>
             <Link className="btn sm" to="/conferences/entry">+ Conference</Link>
+            <Link className="btn sm" to="/awards/entry">+ Honour / Award</Link>
             {db.settings.seedMoneyWindowOpen && <Link className="btn sm" to="/seed-money/entry">+ Seed Money</Link>}
           </div>
         </div>
@@ -47,6 +48,7 @@ export function FacultyHome() {
             <Tile label="FDP hours" value={s.fdpHours} sub={<Attainment value={s.fdpHours} target={t.fdpHoursPerFaculty} />} to="/fdp" />
             <Tile label="Conferences" value={s.conferences} sub={<Attainment value={s.conferences} target={t.conferencesPerFaculty} />} to="/conferences" />
             <Tile label="Grant proposals" value={s.grantsApplied} sub={`${s.grantsSanctioned} sanctioned`} to="/grants" />
+            <Tile label="Honours & Awards" value={s.awards} sub="Approved this year" to="/awards" />
             <Tile label="Score" value={s.score} sub="See My Performance" to="/performance" />
             <Tile label="Profile" value={`${bio}%`} sub={<Attainment value={bio} target={100} />} to="/biodata/edit" />
           </div>

@@ -34,7 +34,7 @@ async function api<T = unknown>(method: string, path: string, body?: unknown): P
   });
   const data = await res.json().catch(() => ({}));
   if (!res.ok) {
-    // A session that expired or was ended by IT Admin sends the user back to sign in.
+    // A session that expired or was ended by the Office of Research sends the user back to sign in.
     if (res.status === 401 && snapshot.user) set({ user: null, institution: null, db: EMPTY });
     throw new ApiError(res.status, (data as { error?: string }).error ?? 'Something went wrong. Try again.');
   }

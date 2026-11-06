@@ -12,7 +12,7 @@ import { RecordDetail } from '../shared/RecordDetail';
 import { departmentRows, Tile } from './Analytics';
 import { useAnalyticsFilter } from './filters';
 
-const KINDS: EntityKind[] = ['publications', 'grants', 'seedMoney', 'fdps', 'conferences'];
+const KINDS: EntityKind[] = ['publications', 'grants', 'seedMoney', 'fdps', 'conferences', 'awards'];
 
 // ---------------- Dashboard ----------------
 
@@ -57,6 +57,7 @@ export function ManagementDashboard() {
           <Tile label="Sanctioned funding" value={lakh(u.sanctionedAmount)} sub={`${u.sanctioned.length} of ${u.grants.length} proposals`} to="/reports/grants" />
           <Tile label="FDP hours" value={u.fdpHours.toLocaleString('en-IN')} sub={prevU ? delta(prevU.fdpHours, u.fdpHours) : ''} to="/analytics/participation" />
           <Tile label="Conferences" value={u.confs.length} sub={prevU ? delta(prevU.confs.length, u.confs.length) : ''} to="/conferences" />
+          <Tile label="Honours & Awards" value={u.awards.length} sub={prevU ? delta(prevU.awards.length, u.awards.length) : `${u.awards.filter((a) => a.level === 'International').length} international`} to="/awards" />
           <Tile label="Inactive faculty" value={inactive} sub="No approved activity in 12 months" to="/analytics/participation" />
         </div>
       </div>
@@ -222,10 +223,9 @@ export function Faculty360({ facultyId: given }: { facultyId?: string }) {
   if (!f) return <Panel><Alert kind="error">Faculty member not found.</Alert></Panel>;
   const isMgmt = user?.role === 'management';
   const isSelf = user?.facultyId === facultyId;
-  const showScores = isMgmt || isSelf;
-  // A colleague's FDPs, conferences, grants and biodata are private: faculty only see their approved publications.
-  const colleague = !isMgmt && !isSelf;
-  const kinds: EntityKind[] = colleague ? ['publications'] : KINDS;
+  // Faculty see only their own profile; management sees everyone in the institution.
+  if (!isMgmt && !isSelf) return <Panel><Alert kind="error">You can only view your own profile.</Alert></Panel>;
+  const kinds: EntityKind[] = KINDS;
   const dept = (v: string) => (isMgmt ? ` · dept. avg ${v}` : '');
   const deptStats = facultyStats(db, { ...filter, department: f.department });
   const avg = (k: 'publications' | 'fdpHours' | 'conferences' | 'score') => deptStats.reduce((a, x) => a + x[k], 0) / (deptStats.length || 1);
@@ -244,7 +244,7 @@ export function Faculty360({ facultyId: given }: { facultyId?: string }) {
             <div className="muted">{f.id} · {f.email}{f.orcid && <> · ORCID <a href={`https://orcid.org/${f.orcid}`} target="_blank" rel="noreferrer">{f.orcid}</a></>}{f.scopusId && ` · Scopus ${f.scopusId}`} · joined {fmtDate(f.joiningDate)}</div>
           </div>
           <div className="row-actions" style={{ alignItems: 'start' }}>
-            {!colleague && <Link className="btn sm" to={isMgmt ? `/faculty/${f.id}/biodata` : '/biodata'}>Profile / CV</Link>}
+            <Link className="btn sm" to={isMgmt ? `/faculty/${f.id}/biodata` : '/biodata'}>Profile / CV</Link>
             {isMgmt && <Link className="btn sm secondary" to={`/faculty/${f.id}/edit`}>Edit details</Link>}
           </div>
         </div>
@@ -253,20 +253,21 @@ export function Faculty360({ facultyId: given }: { facultyId?: string }) {
       {s && (
         <div style={{ maxWidth: 1180, margin: '0 auto 14px' }}>
           <div className="tiles">
-            {showScores && <Tile label="Score" value={s.score} sub={isMgmt ? `Dept. avg ${avg('score').toFixed(1)}` : 'Weighted score'} />}
-            <Tile label="Publications" value={s.publications} sub={colleague ? 'Approved publications' : `Target ${t.publicationsPerFaculty}${dept(avg('publications').toFixed(1))}`} />
+            <Tile label="Score" value={s.score} sub={isMgmt ? `Dept. avg ${avg('score').toFixed(1)}` : 'Weighted score'} />
+            <Tile label="Publications" value={s.publications} sub={`Target ${t.publicationsPerFaculty}${dept(avg('publications').toFixed(1))}`} />
             <Tile label="Q1 + Q2" value={s.q1q2} sub={`${s.scopusWos} Scopus/WoS indexed`} />
-            {!colleague && <Tile label="Grants" value={`${s.grantsApplied} / ${s.grantsSanctioned}`} sub={`applied / sanctioned · ${lakh(s.sanctionedAmount)} share`} />}
-            {!colleague && <Tile label="FDP hours" value={s.fdpHours} sub={`Target ${t.fdpHoursPerFaculty}${dept(avg('fdpHours').toFixed(0))}`} />}
-            {!colleague && <Tile label="Conferences" value={s.conferences} sub={`${s.confPresented} presented`} />}
-            {showScores && <Tile label="Profile" value={`${s.biodata}%`} sub="complete" />}
+            <Tile label="Grants" value={`${s.grantsApplied} / ${s.grantsSanctioned}`} sub={`applied / sanctioned · ${lakh(s.sanctionedAmount)} share`} />
+            <Tile label="FDP hours" value={s.fdpHours} sub={`Target ${t.fdpHoursPerFaculty}${dept(avg('fdpHours').toFixed(0))}`} />
+            <Tile label="Conferences" value={s.conferences} sub={`${s.confPresented} presented`} />
+            <Tile label="Honours & Awards" value={s.awards} sub="approved" />
+            <Tile label="Profile" value={`${s.biodata}%`} sub="complete" />
           </div>
         </div>
       )}
       <div className="cards" style={{ marginBottom: 14 }}>
         <BarCard title="Publications by year" data={rows} xKey="ay" xLabel="Academic year" stacked series={[{ key: 'journal', label: 'Journal' }, { key: 'confPaper', label: 'Conference paper' }, { key: 'bookChapter', label: 'Book / chapter' }, { key: 'report', label: 'Tech report' }]} height={200} />
-        {!colleague && <BarCard title="FDP hours by year" data={rows} xKey="ay" xLabel="Academic year" series={[{ key: 'fdpHours', label: 'FDP hours' }]} height={200} />}
-        {!colleague && <BarCard title="Conferences by year" data={rows} xKey="ay" xLabel="Academic year" stacked series={[{ key: 'national', label: 'National' }, { key: 'international', label: 'International' }]} height={200} />}
+        <BarCard title="FDP hours by year" data={rows} xKey="ay" xLabel="Academic year" series={[{ key: 'fdpHours', label: 'FDP hours' }]} height={200} />
+        <BarCard title="Conferences by year" data={rows} xKey="ay" xLabel="Academic year" stacked series={[{ key: 'national', label: 'National' }, { key: 'international', label: 'International' }]} height={200} />
       </div>
       <Panel size="wide" title={`Records${ay === 'all' ? '' : ` in AY ${ay}`}`}>
         <Tabs value={tab} onChange={setTab} tabs={kinds.map((k) => ({ id: k, label: ENTITY_LABEL[k] }))} />
@@ -292,6 +293,7 @@ function InstitutionOverview({ filter }: { filter: { from: string; to: string; d
   const mine = (id: string) => !filter.department || byId.get(id)?.department === filter.department;
   const fdps = db.fdps.filter((x) => x.status === 'Approved' && inPeriod(x.fromDate) && mine(x.facultyId)).sort((a, b) => b.fromDate.localeCompare(a.fromDate));
   const confs = db.conferences.filter((x) => x.status === 'Approved' && inPeriod(x.fromDate) && mine(x.facultyId)).sort((a, b) => b.fromDate.localeCompare(a.fromDate));
+  const honours = db.awards.filter((x) => x.status === 'Approved' && inPeriod(x.awardDate) && mine(x.facultyId)).sort((a, b) => b.awardDate.localeCompare(a.awardDate));
   const phd = people.filter((f) => db.biodata.find((b) => b.facultyId === f.id)?.qualifications.some((q) => q.degree.toLowerCase().includes('ph'))).length;
   const desig = ['Professor', 'Associate Professor', 'Assistant Professor'].map((d) => ({ d, n: people.filter((f) => f.designation === d).length }));
   const other = people.length - desig.reduce((a, x) => a + x.n, 0);
@@ -353,6 +355,14 @@ function InstitutionOverview({ filter }: { filter: { from: string; to: string; d
         ))}</tbody></table>
         {!confs.length && <p className="muted">No approved conference participation in this period.</p>}
         <div className="btn-row left"><Link className="btn sm" to="/conferences">All conferences</Link><Link className="btn sm secondary" to="/reports/conferences?r=cnf-faculty">Conference reports</Link></div>
+      </section>
+      <section className="card">
+        <h3>Honours &amp; Awards</h3><p className="sub">{honours.length} approved in the period · {honours.filter((a) => a.level === 'International').length} international</p>
+        <table className="tbl"><tbody>{honours.slice(0, 6).map((a) => (
+          <tr key={a.id}><td>{who(a.facultyId)}</td><td className="title-cell">{a.title} <span className="muted">· {a.awardedBy}</span></td><td className="muted">{a.level}</td></tr>
+        ))}</tbody></table>
+        {!honours.length && <p className="muted">No approved honours or awards in this period.</p>}
+        <div className="btn-row left"><Link className="btn sm" to="/awards">All honours &amp; awards</Link><Link className="btn sm secondary" to="/reports/awards?r=awd-faculty">Honours &amp; awards reports</Link></div>
       </section>
     </>
   );

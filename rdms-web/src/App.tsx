@@ -5,7 +5,7 @@ import { Layout } from './components/Layout';
 import { Alert, Panel, ToastProvider } from './components/ui';
 import { bootstrap, useStore } from './lib/store';
 import type { Role } from './lib/types';
-import { ConferenceEntry, FdpEntry, GrantEntry, PublicationEntry, SeedMoneyEntry } from './pages/faculty/Entries';
+import { AwardEntry, ConferenceEntry, FdpEntry, GrantEntry, PublicationEntry, SeedMoneyEntry } from './pages/faculty/Entries';
 import { FacultyHome } from './pages/faculty/FacultyHome';
 import { DepartmentAnalytics, FacultyPerformance, InstitutionAnalytics, ParticipationAnalytics } from './pages/mgmt/Analytics';
 import { Approvals, Faculty360, FacultyDirectory, FacultyForm, ManagementDashboard } from './pages/mgmt/Management';
@@ -35,7 +35,7 @@ function RequireAuth({ children }: { children: ReactNode }) {
   return user ? <>{children}</> : <Navigate to="/login" replace />;
 }
 
-const ROLE_NAME: Record<Role, string> = { management: 'Top-Level Management', faculty: 'faculty', it_admin: 'the IT Admin' };
+const ROLE_NAME: Record<Role, string> = { management: 'Top-Level Management', faculty: 'faculty', it_admin: 'the Office of Research' };
 /** Route-level role check for a clear message. The API enforces the same rules on every request. */
 function Only({ role, children }: { role: Role | Role[]; children: ReactNode }) {
   const { user } = useStore();
@@ -78,7 +78,7 @@ export default function App() {
         <Routes>
           <Route path="/login" element={<Login />} />
           <Route path="/register" element={<Register />} />
-          {/* IT Admin has its own sign-in route; it is not linked from the public pages. */}
+          {/* Office of Research has its own sign-in route; it is not linked from the public pages. */}
           <Route path="/admin" element={<AdminLogin />} />
           <Route element={<RequireAuth><Layout /></RequireAuth>}>
             <Route index element={<Home />} />
@@ -88,11 +88,10 @@ export default function App() {
             <Route path="seed-money" element={<Only role={INST}><SeedMoneyHome /></Only>} />
             <Route path="fdp" element={<Only role={INST}><RecordView kind="fdps" /></Only>} />
             <Route path="conferences" element={<Only role={INST}><RecordView kind="conferences" /></Only>} />
+            <Route path="awards" element={<Only role={INST}><RecordView kind="awards" /></Only>} />
             <Route path="reports/annual" element={<Only role="management"><AnnualReport /></Only>} />
             <Route path="reports/:group" element={<Only role={INST}><ReportsPage /></Only>} />
-            <Route path="profile-search" element={<Only role={INST}><ProfileSearch /></Only>} />
-            <Route path="profile/:id" element={<Only role={INST}><ProfileRoute /></Only>} />
-            <Route path="profile/:id/biodata" element={<Only role={INST}><BiodataView /></Only>} />
+            <Route path="profile-search" element={<Only role="management"><ProfileSearch /></Only>} />
             <Route path="account" element={<Account />} />
 
             {/* faculty */}
@@ -101,6 +100,7 @@ export default function App() {
             <Route path="seed-money/entry" element={<Only role="faculty"><SeedMoneyEntry /></Only>} />
             <Route path="fdp/entry" element={<Only role="faculty"><FdpEntry /></Only>} />
             <Route path="conferences/entry" element={<Only role="faculty"><ConferenceEntry /></Only>} />
+            <Route path="awards/entry" element={<Only role="faculty"><AwardEntry /></Only>} />
             <Route path="biodata" element={<Only role="faculty"><BiodataView /></Only>} />
             <Route path="biodata/edit" element={<Only role="faculty"><BiodataEdit /></Only>} />
             <Route path="performance" element={<Only role="faculty"><SelfPerformance /></Only>} />
@@ -121,7 +121,7 @@ export default function App() {
             <Route path="settings/targets" element={<Only role="management"><TargetSettings /></Only>} />
             <Route path="settings/notices" element={<Only role="management"><NoticeSettings /></Only>} />
 
-            {/* IT Admin (platform level) */}
+            {/* Office of Research (platform level) */}
             <Route path="admin/users" element={<Only role="it_admin"><AdminUsers /></Only>} />
             <Route path="admin/institutions" element={<Only role="it_admin"><AdminInstitutions /></Only>} />
             <Route path="admin/audit" element={<Only role="it_admin"><AdminAudit /></Only>} />

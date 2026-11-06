@@ -1,6 +1,6 @@
 import { useMemo } from 'react';
 import { Link } from 'react-router-dom';
-import { BarCard, LineCard, QUARTILE_COLORS, RankList } from '../../components/charts';
+import { BarCard, LineCard, RankList, useQuartileColors } from '../../components/charts';
 import { Attainment, DataTable, PageTitle, Panel } from '../../components/ui';
 import type { Column } from '../../components/ui';
 import {
@@ -41,6 +41,7 @@ export function InstitutionAnalytics() {
   const student = u.pubs.filter((p) => p.authors.some((a) => a.kind === 'Student' || a.kind === 'Ex-Student')).length;
 
   // Monthly activity inside the selected range.
+  const quartileColors = useQuartileColors();
   const monthly = useMemo(() => {
     if (!filter.from) return [];
     const out: Record<string, Record<string, number | string>> = {};
@@ -69,6 +70,7 @@ export function InstitutionAnalytics() {
           <Tile label="Seed money" value={lakh(u.seedAmount)} sub={`${u.seed.length} proposals approved`} />
           <Tile label="FDP hours" value={nf(u.fdpHours)} sub={`${u.fdps.length} programmes · ${nf(u.fdpHours / n)} h per faculty`} to="/fdp" />
           <Tile label="Conferences" value={u.confs.length} sub={`${u.confs.filter((c) => c.level === 'International').length} international`} to="/conferences" />
+          <Tile label="Honours & Awards" value={u.awards.length} sub={`${u.awards.filter((a) => a.level === 'International').length} international · ${u.awards.filter((a) => a.level === 'National').length} national`} to="/reports/awards?r=awd-level" />
           <Tile label="Collaboration" value={`${pct(intl, u.pubs.length)}%`} sub={`external co-authors · ${pct(student, u.pubs.length)}% with students`} />
         </div>
       </div>
@@ -76,7 +78,7 @@ export function InstitutionAnalytics() {
         <BarCard title="Publications by type" sub="Per academic year; a co-authored paper counts once" data={rows} xKey="ay" xLabel="Academic year" stacked
           series={[{ key: 'journal', label: 'Journal' }, { key: 'confPaper', label: 'Conference paper' }, { key: 'bookChapter', label: 'Book / chapter' }, { key: 'report', label: 'Tech report' }]} />
         <BarCard title="Journal quality (quartile)" sub="Journal articles per academic year" data={rows} xKey="ay" xLabel="Academic year" stacked
-          series={(['q1', 'q2', 'q3', 'q4', 'unranked'] as const).map((k, i) => ({ key: k, label: k === 'unranked' ? 'Unranked' : k.toUpperCase(), color: QUARTILE_COLORS[i] }))} />
+          series={(['q1', 'q2', 'q3', 'q4', 'unranked'] as const).map((k, i) => ({ key: k, label: k === 'unranked' ? 'Unranked' : k.toUpperCase(), color: quartileColors[i] }))} />
         <BarCard title="Grant funding (₹ lakh)" sub="Applied vs sanctioned, by year the proposal was applied" data={rows} xKey="ay" xLabel="Academic year" fmt={nf}
           series={[{ key: 'appliedL', label: 'Applied' }, { key: 'sanctionedL', label: 'Sanctioned' }, { key: 'receivedL', label: 'Received' }]} />
         <BarCard title="FDP hours" sub="Total hours of approved FDPs, workshops and courses" data={rows} xKey="ay" xLabel="Academic year" series={[{ key: 'fdpHours', label: 'FDP hours' }]} />
@@ -199,6 +201,7 @@ export function facultyColumns(targets: { publicationsPerFaculty: number; fdpHou
     { key: 'amount', label: 'Funding share', value: (r) => Math.round(r.sanctionedAmount), render: (r) => (r.sanctionedAmount ? lakh(r.sanctionedAmount) : '—'), num: true },
     { key: 'fdp', label: 'FDP h', value: (r) => r.fdpHours, num: true, render: (r) => <span style={{ color: r.fdpHours >= targets.fdpHoursPerFaculty ? 'var(--ok)' : undefined }}>{r.fdpHours}</span> },
     { key: 'conf', label: 'Conf.', value: (r) => r.conferences, num: true },
+    { key: 'awards', label: 'Awards', value: (r) => r.awards, num: true },
     { key: 'score', label: 'Score', value: (r) => r.score, num: true, render: (r) => <b>{nf(r.score)}</b> },
   ];
 }
@@ -245,6 +248,7 @@ export function ParticipationAnalytics() {
     { label: 'Attended / organised an FDP', ...share((s) => s.fdps > 0) },
     { label: `Met FDP-hours target (${t.fdpHoursPerFaculty} h)`, ...share((s) => s.fdpHours >= t.fdpHoursPerFaculty) },
     { label: 'Participated in a conference', ...share((s) => s.conferences > 0) },
+    { label: 'Received an honour or award', ...share((s) => s.awards > 0) },
     { label: 'Applied for an external grant', ...share((s) => s.grantsApplied > 0) },
     { label: 'Holds a sanctioned grant', ...share((s) => s.grantsSanctioned > 0) },
     { label: 'Profile ≥ 80% complete', ...share((s) => s.biodata >= 80) },
@@ -255,7 +259,7 @@ export function ParticipationAnalytics() {
   const lowBio = stats.filter((s) => s.biodata < 80).sort((a, b) => a.biodata - b.biodata);
 
   const weekAgo = new Date(Date.now() - 7 * 86400000).toISOString();
-  const stale = (['publications', 'grants', 'seedMoney', 'fdps', 'conferences'] as EntityKind[]).flatMap((k) =>
+  const stale = (['publications', 'grants', 'seedMoney', 'fdps', 'conferences', 'awards'] as EntityKind[]).flatMap((k) =>
     (db[k] as AnyRecord[]).filter((r) => r.status === 'Submitted' && r.updatedAt < weekAgo).map((r) => ({ k, r })));
   const missingDocs = [
     ...db.publications.filter((p) => p.status === 'Approved' && p.entryType !== 'Book' && !p.pdfName).map((r) => ({ k: 'publications' as EntityKind, r: r as AnyRecord })),

@@ -11,7 +11,7 @@ interface Account {
 }
 type Inst = Institution & { management: number; faculty: number; pending: number };
 
-const ROLE: Record<string, string> = { it_admin: 'IT Admin', management: 'Top-Level Management', faculty: 'Faculty' };
+const ROLE: Record<string, string> = { it_admin: 'Office of Research', management: 'Top-Level Management', faculty: 'Faculty' };
 const STATUS_BADGE: Record<string, string> = { active: 'Approved', pending: 'Submitted', rejected: 'Rejected', suspended: 'Rework', deactivated: 'Draft' };
 const statusBadge = (s: string) => <span className={`badge ${STATUS_BADGE[s] ?? 'Draft'}`}>{s[0].toUpperCase() + s.slice(1)}</span>;
 const domainOf = (email: string) => email.split('@')[1]?.toLowerCase() ?? '';
@@ -82,7 +82,7 @@ function ReviewRequest({ account: a, institutions, onClose, onDone }: { account:
         <dt>Designation</dt><dd>{a.designation || '—'}</dd>
         <dt>Their note</dt><dd>{a.note || '—'}</dd>
       </dl>
-      <div className="panel" style={{ marginTop: 14, background: '#fff' }}>
+      <div className="panel" style={{ marginTop: 14 }}>
         <h3 className="panel-title">Assign and approve</h3>
         <div className="grid g2">
           <Field label="Institution" required><Select value={form.institutionId} onChange={(v) => setForm({ ...form, institutionId: v, department: '' })} options={institutions.filter((i) => i.status === 'active').map((i) => ({ value: i.id, label: i.name }))} placeholder="--Select--" /></Field>
@@ -103,7 +103,7 @@ function ReviewRequest({ account: a, institutions, onClose, onDone }: { account:
           <button className="btn ok" disabled={busy || !form.affiliationVerified} onClick={() => act(`/admin/requests/${a.id}/approve`, form, `${a.name} approved as ${ROLE[form.role]}.`)}>Approve</button>
         </div>
       </div>
-      <div className="panel" style={{ marginTop: 14, background: '#fff' }}>
+      <div className="panel" style={{ marginTop: 14 }}>
         <h3 className="panel-title">Reject</h3>
         <Field label="Reason" hint="Recorded in the audit log"><TextArea value={reason} onChange={setReason} /></Field>
         <div className="btn-row"><button className="btn danger" disabled={busy} onClick={() => act(`/admin/requests/${a.id}/reject`, { reason }, `Request from ${a.name} rejected.`)}>Reject request</button></div>
@@ -150,12 +150,12 @@ export function AdminUsers() {
         <div className="filters" style={{ marginBottom: 10 }}>
           <Field label="Search"><Input value={filter.q} onChange={(v) => setFilter({ ...filter, q: v })} placeholder="Name or email" type="search" /></Field>
           <Field label="Institution"><Select value={filter.institutionId} onChange={(v) => setFilter({ ...filter, institutionId: v })} options={(inst.data ?? []).map((i) => ({ value: i.id, label: i.name }))} placeholder="All" /></Field>
-          <Field label="Role"><Select value={filter.role} onChange={(v) => setFilter({ ...filter, role: v })} options={[{ value: 'management', label: 'Top-Level Management' }, { value: 'faculty', label: 'Faculty' }, { value: 'it_admin', label: 'IT Admin' }]} placeholder="All" /></Field>
+          <Field label="Role"><Select value={filter.role} onChange={(v) => setFilter({ ...filter, role: v })} options={[{ value: 'management', label: 'Top-Level Management' }, { value: 'faculty', label: 'Faculty' }, { value: 'it_admin', label: 'Office of Research' }]} placeholder="All" /></Field>
           <Field label="Status"><Select value={filter.status} onChange={(v) => setFilter({ ...filter, status: v })} options={['active', 'suspended', 'deactivated']} placeholder="All" /></Field>
         </div>
         {users.error && <Alert kind="error">{users.error}</Alert>}
         <DataTable rows={rows} columns={cols} rowKey={(a) => a.id} onRowClick={(a) => { setOpen(a); setTemp(''); setError(''); }} exportName="platform_users" pageSize={20} />
-        <p className="note">Open a user to suspend, deactivate, reactivate, change role or reset their password. Suspending signs them out at once. IT Admin accounts are managed from the server command line.</p>
+        <p className="note">Open a user to suspend, deactivate, reactivate, change role or reset their password. Suspending signs them out at once. Office of Research accounts are managed from the server command line.</p>
       </Panel>
       {open && (
         <Modal title={`${open.name} · ${ROLE[open.role]}`} onClose={() => setOpen(null)}>
@@ -168,7 +168,7 @@ export function AdminUsers() {
             <dt>Approved</dt><dd>{open.reviewedBy ?? '—'} {fmtDate(open.reviewedAt ?? '')}</dd>
           </dl>
           {open.role !== 'it_admin' && (
-            <div className="panel" style={{ marginTop: 14, background: '#fff' }}>
+            <div className="panel" style={{ marginTop: 14 }}>
               <Field label="Reason" hint="Needed to suspend or deactivate; recorded in the audit log"><Input value={reason} onChange={setReason} /></Field>
               <div className="btn-row">
                 {open.status !== 'active' && <button className="btn ok" onClick={() => act(`/admin/users/${open.id}/status`, { status: 'active', reason }, `${open.name} reactivated.`)}>Activate</button>}
@@ -257,7 +257,7 @@ export function AdminAudit() {
           { key: 'inst', label: 'Institution', value: (r) => r.institution_id ?? '' },
           { key: 'detail', label: 'Detail', value: (r) => r.detail },
         ]} />
-        <p className="note">Sign-ins by IT Admin, failed admin sign-ins, access decisions, account and institution changes. Times are UTC.</p>
+        <p className="note">Sign-ins by the Office of Research, failed admin sign-ins, access decisions, account and institution changes. Times are UTC.</p>
       </Panel>
     </>
   );

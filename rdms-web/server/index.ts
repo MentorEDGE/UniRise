@@ -16,7 +16,7 @@ if (!store.institutions().length) {
   console.log(`\nCreated the demo platform in ${dir}`);
   console.log(`  Management:  director@sit.edu.in, vc@greenfield.ac.in  /  ${DEMO_PASSWORDS.management}`);
   console.log(`  Faculty:     e.g. anita.rao@sit.edu.in  /  ${DEMO_PASSWORDS.faculty}`);
-  console.log(`  IT Admin:    ${adminEmail}  /  ${adminPassword}   (sign in at /#/admin; shown only now)\n`);
+  console.log(`  Office of Research:    ${adminEmail}  /  ${adminPassword}   (sign in at /#/admin; shown only now)\n`);
 }
 
 const app = createApp(store, { secureCookies: production });

@@ -9,6 +9,7 @@ import Database from 'better-sqlite3';
 import fs from 'node:fs';
 import path from 'node:path';
 import type { DB, Institution } from '../src/lib/types';
+import { AWARD_WEIGHT_DEFAULTS } from '../src/lib/types';
 
 export interface AccountRow {
   id: string; email: string; password_hash: string; role: 'it_admin' | 'management' | 'faculty'; institution_id: string | null; faculty_id: string | null;
@@ -17,7 +18,7 @@ export interface AccountRow {
   affiliation_verified: number;
 }
 
-const COLLECTIONS = ['faculty', 'biodata', 'publications', 'grants', 'seedMoney', 'fdps', 'conferences', 'notices'] as const;
+const COLLECTIONS = ['faculty', 'biodata', 'publications', 'grants', 'seedMoney', 'fdps', 'conferences', 'awards', 'notices'] as const;
 const keyOf = (c: (typeof COLLECTIONS)[number], row: Record<string, unknown>) => String(c === 'biodata' ? row.facultyId : row.id);
 
 export class Storage {
@@ -111,6 +112,8 @@ export class Storage {
         else if (row.key === 'seq') data.seq = Number(row.value);
         else if (row.key === 'version') data.version = Number(row.value);
       }
+      // Institutions created before Honours & Awards existed get the default award weights.
+      if (data.settings.weights) data.settings.weights = { ...AWARD_WEIGHT_DEFAULTS, ...data.settings.weights };
       t = { conn, data };
       this.tenants.set(institutionId, t);
     }

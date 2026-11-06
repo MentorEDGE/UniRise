@@ -12,7 +12,7 @@ import { useAnalyticsFilter } from '../mgmt/filters';
 import { listColumns } from '../../lib/entities';
 import { RecordDetail } from './RecordDetail';
 
-const GROUP_TITLE: Record<string, string> = { publications: 'Publication Reports', grants: 'Project Reports', fdps: 'FDP Reports', conferences: 'Conference Reports' };
+const GROUP_TITLE: Record<string, string> = { publications: 'Publication Reports', grants: 'Project Reports', fdps: 'FDP Reports', conferences: 'Conference Reports', awards: 'Honours & Awards Reports' };
 
 export function ReportsPage() {
   const { group = 'publications' } = useParams();
@@ -68,7 +68,7 @@ export function ReportsPage() {
               <button className="btn secondary" type="button" onClick={() => window.print()}>Print</button>
             </div>
           </form>
-          <p className="note">Dates use the publication month, the grant applied date, or the programme / conference start date. {def.mode === 'group' && 'A record with several internal authors appears under each of them; the total counts it once.'}</p>
+          <p className="note">Dates use the publication month, the grant applied date, the programme / conference start date, or the date an honour was received. {def.mode === 'group' && 'A record with several internal authors appears under each of them; the total counts it once.'}</p>
           <DataTable rows={result.rows} columns={cols} rowKey={(r) => r.join('|')} pageSize={25}
             footer={result.total ? <tr>{result.total.map((v, i) => <td key={i} className={result.numeric[i] ? 'num' : ''}>{fmtCell(v, i)}</td>)}</tr> : undefined} />
         </Panel>
@@ -133,16 +133,16 @@ export function AnnualReport() {
         <h2>Summary</h2>
         <div className="tbl-wrap">
           <table className="tbl">
-            <thead><tr><th>Department</th><th className="num">Faculty</th><th className="num">Publications</th><th className="num">Q1+Q2</th><th className="num">Grant proposals</th><th className="num">Sanctioned</th><th className="num">Seed money</th><th className="num">FDPs (hours)</th><th className="num">Conferences</th></tr></thead>
+            <thead><tr><th>Department</th><th className="num">Faculty</th><th className="num">Publications</th><th className="num">Q1+Q2</th><th className="num">Grant proposals</th><th className="num">Sanctioned</th><th className="num">Seed money</th><th className="num">FDPs (hours)</th><th className="num">Conferences</th><th className="num">Honours</th></tr></thead>
             <tbody>
               {depts.map((d) => {
                 const u = uniqueCounts(db, { ...filter, department: d });
                 return <tr key={d}><td>{d}</td><td className="num">{db.faculty.filter((f) => f.active && f.department === d).length}</td><td className="num">{u.pubs.length}</td>
                   <td className="num">{u.pubs.filter((p) => p.quartile === 'Q1' || p.quartile === 'Q2').length}</td><td className="num">{u.grants.length}</td><td className="num">{lakh(u.sanctionedAmount)}</td>
-                  <td className="num">{lakh(u.seedAmount)}</td><td className="num">{u.fdps.length} ({u.fdpHours})</td><td className="num">{u.confs.length}</td></tr>;
+                  <td className="num">{lakh(u.seedAmount)}</td><td className="num">{u.fdps.length} ({u.fdpHours})</td><td className="num">{u.confs.length}</td><td className="num">{u.awards.length}</td></tr>;
               })}
             </tbody>
-            {depts.length > 1 && <tfoot><tr><td>Institution (unique)</td><td className="num">{db.faculty.filter((f) => f.active).length}</td><td className="num">{all.pubs.length}</td><td className="num">{all.pubs.filter((p) => p.quartile === 'Q1' || p.quartile === 'Q2').length}</td><td className="num">{all.grants.length}</td><td className="num">{lakh(all.sanctionedAmount)}</td><td className="num">{lakh(all.seedAmount)}</td><td className="num">{all.fdps.length} ({all.fdpHours})</td><td className="num">{all.confs.length}</td></tr></tfoot>}
+            {depts.length > 1 && <tfoot><tr><td>Institution (unique)</td><td className="num">{db.faculty.filter((f) => f.active).length}</td><td className="num">{all.pubs.length}</td><td className="num">{all.pubs.filter((p) => p.quartile === 'Q1' || p.quartile === 'Q2').length}</td><td className="num">{all.grants.length}</td><td className="num">{lakh(all.sanctionedAmount)}</td><td className="num">{lakh(all.seedAmount)}</td><td className="num">{all.fdps.length} ({all.fdpHours})</td><td className="num">{all.confs.length}</td><td className="num">{all.awards.length}</td></tr></tfoot>}
           </table>
         </div>
         <h2>Sanctioned research grants ({all.sanctioned.length})</h2>
@@ -158,10 +158,11 @@ export function AnnualReport() {
             ...all.confs.filter((c) => c.participation === 'Invited Talk / Keynote' || c.participation === 'Organised').map((c) => `${c.participation}: ${c.conferenceName} — ${byId.get(c.facultyId)?.name}, ${c.venue}, ${fmtDate(c.fromDate)}`)];
           return org.length ? <ol>{org.map((x, i) => <li key={i}>{x}</li>)}</ol> : <p className="muted">None.</p>;
         })()}
-        <h2>Awards</h2>
+        <h2>Honours &amp; Awards ({all.awards.length + all.confs.filter((c) => c.award).length})</h2>
         {(() => {
-          const aw = all.confs.filter((c) => c.award);
-          return aw.length ? <ol>{aw.map((c) => <li key={c.id}>{c.award} — {byId.get(c.facultyId)?.name}, {c.conferenceName}</li>)}</ol> : <p className="muted">None recorded.</p>;
+          const aw = [...all.awards.map((a) => ({ id: a.id, text: `${a.title} — ${byId.get(a.facultyId)?.name}; conferred by ${a.awardedBy} (${a.level}), ${fmtDate(a.awardDate)}` })),
+            ...all.confs.filter((c) => c.award).map((c) => ({ id: c.id, text: `${c.award} — ${byId.get(c.facultyId)?.name}, ${c.conferenceName}` }))];
+          return aw.length ? <ol>{aw.map((x) => <li key={x.id}>{x.text}</li>)}</ol> : <p className="muted">None recorded.</p>;
         })()}
         <h2>Faculty-wise summary</h2>
         <FacultySummaryTable filter={filter} />
@@ -176,8 +177,8 @@ function FacultySummaryTable({ filter }: { filter: { from: string; to: string; d
   return (
     <div className="tbl-wrap">
       <table className="tbl">
-        <thead><tr><th>Faculty</th><th>Department</th><th className="num">Pubs</th><th className="num">Grants</th><th className="num">FDP h</th><th className="num">Conf.</th><th className="num">Score</th></tr></thead>
-        <tbody>{stats.map((s) => <tr key={s.faculty.id}><td><Link to={`/faculty/${s.faculty.id}`}>{s.faculty.title} {s.faculty.name}</Link></td><td>{s.faculty.department}</td><td className="num">{s.publications}</td><td className="num">{s.grantsApplied}{s.grantsSanctioned ? ` (${s.grantsSanctioned})` : ''}</td><td className="num">{s.fdpHours}</td><td className="num">{s.conferences}</td><td className="num">{s.score}</td></tr>)}</tbody>
+        <thead><tr><th>Faculty</th><th>Department</th><th className="num">Pubs</th><th className="num">Grants</th><th className="num">FDP h</th><th className="num">Conf.</th><th className="num">Awards</th><th className="num">Score</th></tr></thead>
+        <tbody>{stats.map((s) => <tr key={s.faculty.id}><td><Link to={`/faculty/${s.faculty.id}`}>{s.faculty.title} {s.faculty.name}</Link></td><td>{s.faculty.department}</td><td className="num">{s.publications}</td><td className="num">{s.grantsApplied}{s.grantsSanctioned ? ` (${s.grantsSanctioned})` : ''}</td><td className="num">{s.fdpHours}</td><td className="num">{s.conferences}</td><td className="num">{s.awards}</td><td className="num">{s.score}</td></tr>)}</tbody>
       </table>
     </div>
   );
