@@ -31,11 +31,11 @@ export const DEFAULT_WEIGHTS = {
   ...AWARD_WEIGHT_DEFAULTS,
 };
 
-const FIRST = ['Anita', 'Rahul', 'Priya', 'Suresh', 'Kavya', 'Arjun', 'Meera', 'Vikram', 'Divya', 'Karthik', 'Lakshmi', 'Nikhil',
-  'Shreya', 'Manoj', 'Pooja', 'Ravi', 'Sneha', 'Harish', 'Deepa', 'Ganesh', 'Asha', 'Rohan', 'Nandini', 'Sanjay', 'Fatima',
-  'Joseph', 'Swati', 'Aditya', 'Bhavana', 'Imran', 'Revathi', 'Varun', 'Gayathri', 'Prakash', 'Tanvi', 'Mohan', 'Ishita', 'Kiran'];
-const LAST = ['Rao', 'Sharma', 'Nair', 'Iyer', 'Menon', 'Kulkarni', 'Reddy', 'Pillai', 'Shetty', 'Bhat', 'Gupta', 'Das', 'Joshi',
-  'Hegde', 'Varma', 'Kamath', 'Krishnan', 'Pai', 'Mathew', 'Khan'];
+/** Placeholder labels instead of real-looking personal names: A, B, ... Z, AA, AB, ... */
+export const letterLabel = (i: number): string => (i < 26 ? String.fromCharCode(65 + i) : letterLabel(Math.floor(i / 26) - 1) + String.fromCharCode(65 + (i % 26)));
+// Same lengths as the name lists they replace, so the random sequence (and all other sample data) is unchanged.
+const FIRST = Array.from({ length: 38 }, (_, i) => letterLabel(i));
+const LAST = Array.from({ length: 20 }, (_, i) => String(i + 1));
 const DESIGNATIONS = ['Professor', 'Associate Professor', 'Associate Professor', 'Assistant Professor', 'Assistant Professor', 'Assistant Professor'];
 
 const TOPICS: Record<string, string[]> = {
@@ -79,9 +79,33 @@ const CONFS = [['International Conference on Computing and Communication Systems
   ['International Conference on Machine Learning and Data Engineering', 'Germany', 'International'],
   ['National Symposium on Emerging Trends in Engineering', 'India', 'National'], ['ACM India Joint Conference', 'India', 'National']] as const;
 const VENUES = ['Bengaluru', 'Chennai', 'Mumbai', 'Hyderabad', 'Pune', 'New Delhi', 'Kochi', 'Mangaluru'];
-const INSTITUTIONS = ['IIT Madras', 'NIT Trichy', 'University of Melbourne', 'IISc Bengaluru', 'Anna University', 'University of Leeds', 'VIT Vellore', 'NUS Singapore'];
+const INSTITUTIONS = ['PQR University', 'LMN Institute of Technology', 'DEF University', 'GHI Institute of Science', 'JKL University', 'STU University', 'VWX Institute', 'RST University'];
+/** Country of each placeholder partner institution (used for external co-authors on the collaboration map). */
+const COUNTRY_OF: Record<string, string> = { 'PQR University': 'India', 'LMN Institute of Technology': 'Germany', 'DEF University': 'Australia', 'GHI Institute of Science': 'Japan', 'JKL University': 'United States', 'STU University': 'United Kingdom', 'VWX Institute': 'Canada', 'RST University': 'Singapore' };
 
-export const SAMPLE_INSTITUTION = 'Sample Institute of Technology';
+/**
+ * SDGs a profile's own research-interest text speaks to, by plain keyword rules. Used to fill the sample profiles
+ * from what they already say; it never picks goals at random. Faculty correct or extend them in Edit Profile.
+ */
+const SDG_RULES: [number, RegExp][] = [
+  [3, /health|drug|biofilm|gene editing|crispr|medic/i],
+  [4, /education|teaching|curriculum|pedagog/i],
+  [5, /gender|women/i],
+  [6, /water/i],
+  [7, /energy|solar|hydrogenation|electrolyte/i],
+  [8, /fintech|microfinance|entrepreneur|payments|msme|hr analytics/i],
+  [9, /iot|5g|vlsi|fpga|edge computing|manufacturing|robotic|neural|scheduling|qubit|infrastructure/i],
+  [10, /rural|diaspora|postcolonial|inclusion/i],
+  [11, /concrete|pavement|traffic|seismic|cities/i],
+  [12, /green synthesis|esg|csr|supply chain|bioremediation|sustainable|consumer behaviour/i],
+  [13, /climate|co2|carbon|geopolymer/i],
+  [15, /plant|ecocriticism|heavy metals|biodiversity/i],
+  [16, /fraud|privacy|governance|audit|tax|cryptograph/i],
+  [17, /community engagement|partnership/i],
+];
+export const sdgsFromText = (text: string) => SDG_RULES.filter(([, re]) => re.test(text)).map(([n]) => n);
+
+export const SAMPLE_INSTITUTION = 'ABC Institute of Technology';
 
 export interface SeedOptions {
   name: string;
@@ -95,8 +119,8 @@ export interface SeedOptions {
 }
 
 export const DEFAULT_SEED: SeedOptions = {
-  name: SAMPLE_INSTITUTION, tagline: 'Faculty Research & Development Portal', emailDomain: 'sit.edu.in', seed: 20261104,
-  departments: DEFAULT_DEPARTMENTS, sizes: [8, 7, 6, 5, 5, 5], reviewerName: 'Dr. S. Mehta',
+  name: SAMPLE_INSTITUTION, tagline: 'Faculty Research & Development Portal', emailDomain: 'abc.edu.in', seed: 20261104,
+  departments: DEFAULT_DEPARTMENTS, sizes: [8, 7, 6, 5, 5, 5], reviewerName: 'Office of Research',
 };
 
 /** Builds one institution's sample data. Deterministic for a given seed. */
@@ -125,15 +149,14 @@ export function createSeed(opts: SeedOptions = DEFAULT_SEED): DB {
     const count = opts.sizes[di] ?? 4;
     const T = topicsOf(dept);
     for (let i = 0; i < count; i++) {
-      const first = FIRST[n % FIRST.length];
-      const last = LAST[(n * 7 + di) % LAST.length];
+      const label = letterLabel(n);
       const designation = i === 0 ? 'Professor' : pick(DESIGNATIONS);
       const id = `EMP${1001 + n}`;
       const joinYear = int(2008, 2022);
       faculty.push({
         id, title: designation === 'Assistant Professor' && rnd() < 0.3 ? (rnd() < 0.5 ? 'Mr.' : 'Ms.') : 'Dr.',
-        name: `${first} ${last}`, designation, department: dept,
-        email: `${first.toLowerCase()}.${last.toLowerCase()}@${opts.emailDomain}`,
+        name: `Faculty ${label}`, designation, department: dept,
+        email: `faculty.${label.toLowerCase()}@${opts.emailDomain}`,
         phone: `98${int(10000000, 99999999)}`, joiningDate: `${joinYear}-${pad(int(1, 12))}-01`,
         orcid: `0000-000${int(1, 3)}-${int(1000, 9999)}-${int(1000, 9999)}`,
         scopusId: `${int(55000000000, 59999999999)}`, active: true,
@@ -146,7 +169,7 @@ export function createSeed(opts: SeedOptions = DEFAULT_SEED): DB {
         address: complete > 0.35 ? `${int(1, 200)}, ${pick(['MG Road', 'Station Road', 'Lake View', 'Temple Street'])}, ${pick(VENUES)}` : '',
         summary: complete > 0.3 ? `${designation} in ${dept} with interests in ${T[0]} and ${T[1]}.` : '',
         researchInterests: complete > 0.25 ? `${T[int(0, 5)]}; ${T[int(0, 5)]}` : '',
-        googleScholar: complete > 0.5 ? `https://scholar.google.com/citations?user=${id}` : '',
+        googleScholar: '', // a real profile URL is added by the faculty member; never a made-up link
         phdGuided: designation === 'Professor' ? int(2, 9) : designation === 'Associate Professor' ? int(0, 3) : 0,
         phdOngoing: designation === 'Assistant Professor' ? int(0, 1) : int(1, 5),
         qualifications: [
@@ -158,8 +181,13 @@ export function createSeed(opts: SeedOptions = DEFAULT_SEED): DB {
           ...(rnd() < 0.6 ? [{ organisation: pick(['Infosys', 'Wipro', 'Anna University', 'VIT Vellore', 'TCS Research']), designation: pick(['Engineer', 'Lecturer', 'Research Associate']), from: String(joinYear - int(2, 6)), to: String(joinYear) }] : [])],
         awards: rnd() < 0.4 ? [{ title: pick(['Best Teacher Award', 'Young Scientist Award', 'Best Paper Award', 'Research Excellence Award']), by: pick(['Institution', 'IEEE', 'ISTE', 'DST']), year: String(int(2018, 2025)) }] : [],
         memberships: rnd() < 0.6 ? [{ body: pick(['IEEE', 'ISTE', 'IEI', 'ACM', 'AIMA', 'BRSI']), type: pick(['Member', 'Senior Member', 'Life Member']), since: String(int(2010, 2023)) }] : [],
+        // Researcher-profile fields. No photograph and no Google Scholar metrics: those are never invented.
+        expertise: complete > 0.3 ? `${T[0]}; ${T[1]}` : '', keywords: '', sdgs: [], photo: '',
+        scholar: { citations: null, hIndex: null, i10Index: null, updatedAt: '', updatedBy: '' },
         updatedAt: '2026-06-01T10:00:00.000Z',
       });
+      const b = biodata[biodata.length - 1];
+      b.sdgs = sdgsFromText(`${b.researchInterests}; ${b.expertise}`);
       n++;
     }
   });
@@ -180,7 +208,7 @@ export function createSeed(opts: SeedOptions = DEFAULT_SEED): DB {
     if (status === 'Draft') return h;
     h.push({ at: `${addDays(at, 1)}T10:00:00.000Z`, by: owner.name, action: 'Submitted' });
     if (status === 'Approved') h.push({ at: `${addDays(at, int(3, 12))}T11:00:00.000Z`, by: opts.reviewerName, action: 'Approved' });
-    if (status === 'Rework') h.push({ at: `${addDays(at, int(3, 12))}T11:00:00.000Z`, by: opts.reviewerName, action: 'Sent for rework', remark: 'Please attach the full-text PDF and check the DOI.' });
+    if (status === 'Rework') h.push({ at: `${addDays(at, int(3, 12))}T11:00:00.000Z`, by: opts.reviewerName, action: 'Returned for correction', remark: 'Please attach the full-text PDF and check the DOI.' });
     if (status === 'Rejected') h.push({ at: `${addDays(at, int(3, 12))}T11:00:00.000Z`, by: opts.reviewerName, action: 'Rejected', remark: 'Duplicate of an existing entry.' });
     return h;
   };
@@ -210,8 +238,10 @@ export function createSeed(opts: SeedOptions = DEFAULT_SEED): DB {
         const authors: Author[] = [facultyAuthor(f)];
         const ps = peer(f);
         if (ps.length && rnd() < 0.55) authors.push(facultyAuthor(pick(ps)));
-        if (rnd() < 0.45) authors.push({ kind: 'Student', code: `STU${int(220000, 239999)}`, name: `${pick(FIRST)} ${pick(LAST)}`, institution: INST, department: f.department, email: '' });
-        if (rnd() < 0.35) authors.push({ kind: 'External', code: '', name: `${pick(FIRST)} ${pick(LAST)}`, institution: pick(INSTITUTIONS), department: '', email: '' });
+        if (rnd() < 0.45) authors.push({ kind: 'Student', code: `STU${int(220000, 239999)}`, name: `Student ${pick(FIRST)}${pick(LAST)}`, institution: INST, department: f.department, email: '' });
+        if (rnd() < 0.35) authors.push({ kind: 'External', code: '', name: `External Author ${pick(FIRST)}${pick(LAST)}`, institution: pick(INSTITUTIONS), department: '', email: '' });
+        const ext = authors[authors.length - 1];
+        if (ext.kind === 'External') ext.country = COUNTRY_OF[ext.institution];
         const isJournal = entryType === 'Journal Article';
         const p: Publication = {
           ...base(f, at), id: nextId('PUB'), entryType,
@@ -349,7 +379,7 @@ export function createSeed(opts: SeedOptions = DEFAULT_SEED): DB {
       targets: { publicationsPerFaculty: 2, fdpHoursPerFaculty: 30, conferencesPerFaculty: 1, grantAppliedPerFaculty: 0.5 },
       weights: { ...DEFAULT_WEIGHTS },
     },
-    faculty, biodata, publications, grants, seedMoney, fdps, conferences, awards,
+    faculty, biodata, publications, grants, seedMoney, fdps, conferences, awards, profileChanges: [],
     notices: [
       { id: 'N1', at: '2026-10-20T09:00:00.000Z', title: 'Seed money window open', body: 'Applications for the Q3 seed money cycle are open until 30 November 2026.' },
       { id: 'N2', at: '2026-10-05T09:00:00.000Z', title: 'Update your profile', body: 'All faculty must complete their profiles before the NAAC peer team visit in January 2027.' },
@@ -368,6 +398,6 @@ export function emptyInstitution(name: string, tagline: string, departments: str
       targets: { publicationsPerFaculty: 2, fdpHoursPerFaculty: 30, conferencesPerFaculty: 1, grantAppliedPerFaculty: 0.5 },
       weights: { ...DEFAULT_WEIGHTS },
     },
-    faculty: [], biodata: [], publications: [], grants: [], seedMoney: [], fdps: [], conferences: [], awards: [], notices: [], seq: 1000,
+    faculty: [], biodata: [], publications: [], grants: [], seedMoney: [], fdps: [], conferences: [], awards: [], profileChanges: [], notices: [], seq: 1000,
   };
 }

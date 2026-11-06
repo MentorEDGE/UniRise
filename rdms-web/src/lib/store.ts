@@ -5,10 +5,9 @@
  */
 import { useSyncExternalStore } from 'react';
 import { emptyInstitution } from './seed';
-import type { AnyRecord, Biodata, DB, EntityKind, Faculty, Grant, Institution, Settings, User } from './types';
+import type { AnyRecord, Biodata, DB, EntityKind, Faculty, Institution, Settings, User } from './types';
 
 export { creditedFaculty, isEditable } from './domain';
-export type { Decision } from './domain';
 
 const EMPTY: DB = emptyInstitution('', '', []);
 
@@ -44,14 +43,16 @@ export const adminApi = api;
 
 // ---------- session ----------
 
+/** Re-reads the institution's data (after an Office of Research action changed it). */
+export const reloadData = () => loadData();
 async function loadData() {
-  if (snapshot.user && snapshot.user.role !== 'it_admin') set({ db: await api<DB>('GET', '/data') });
+  if (snapshot.user) set({ db: await api<DB>('GET', '/data') });
   else set({ db: EMPTY });
 }
 
 /** Sets the user only together with their data, so no screen ever renders a signed-in user without it. */
 async function enter(s: { user: User; institution: Institution | null }) {
-  const db = s.user.role === 'it_admin' ? EMPTY : await api<DB>('GET', '/data');
+  const db = await api<DB>('GET', '/data');
   set({ user: s.user, institution: s.institution, db });
 }
 
@@ -70,7 +71,6 @@ async function signInWith(path: string, email: string, password: string): Promis
   } catch (e) { return (e as Error).message; }
 }
 export const login = (email: string, password: string) => signInWith('/login', email, password);
-export const adminLogin = (email: string, password: string) => signInWith('/admin/login', email, password);
 
 export async function logout() {
   try { await api('POST', '/logout'); } finally { set({ user: null, institution: null, db: EMPTY }); }
@@ -80,10 +80,8 @@ export async function changePassword(current: string, next: string): Promise<str
   try { await api('POST', '/account/password', { current, next }); return null; } catch (e) { return (e as Error).message; }
 }
 
-export interface Registration { institutionId: string; role: 'faculty' | 'management'; title: string; name: string; email: string; password: string; employeeCode: string; department: string; designation: string; note: string }
-export const register = (r: Registration) => api('POST', '/register', r);
-export const publicInstitutions = () => api<{ id: string; name: string }[]>('GET', '/public/institutions');
-export const publicDepartments = (id: string) => api<string[]>('GET', `/public/institutions/${encodeURIComponent(id)}/departments`);
+/** Public "Talk to Our Team" enquiry from an institution. */
+export const sendEnquiry = (e: Record<string, string>) => api('POST', '/enquiries', e);
 
 // ---------- institution data ----------
 
@@ -98,14 +96,13 @@ const mutate = async <T = null>(method: string, path: string, body?: unknown) =>
 
 export const saveRecord = (kind: EntityKind, record: AnyRecord, submit: boolean) => mutate<string>('POST', `/records/${kind}`, { record, submit });
 export const deleteRecord = (kind: EntityKind, id: string) => mutate('DELETE', `/records/${kind}/${encodeURIComponent(id)}`);
-export const review = (kind: EntityKind, id: string, decision: 'Approved' | 'Rework' | 'Rejected', remark: string, extra?: { sanctionedAmount?: number }) =>
-  mutate('POST', `/records/${kind}/${encodeURIComponent(id)}/review`, { decision, remark, sanctionedAmount: extra?.sanctionedAmount });
-export const updateGrantOutcome = (id: string, patch: Pick<Grant, 'outcome' | 'sanctionDate' | 'sanctionedAmount' | 'receivedAmount'>) => mutate('POST', `/grants/${encodeURIComponent(id)}/outcome`, patch);
-export const saveBiodata = (b: Biodata) => mutate('PUT', `/biodata/${encodeURIComponent(b.facultyId)}`, b);
-export const saveFaculty = (f: Faculty, isNew = false) => (isNew ? mutate('POST', '/faculty', f) : mutate('PUT', `/faculty/${encodeURIComponent(f.id)}`, f));
+/** Office of Research: official details or deactivation of a faculty profile. */
+export const saveFaculty = (f: Faculty) => mutate('PUT', `/faculty/${encodeURIComponent(f.id)}`, f);
 export const saveSettings = (s: Settings) => mutate('PUT', '/settings', s);
 export const addNotice = (title: string, body: string) => mutate('POST', '/notices', { title, body });
 export const deleteNotice = (id: string) => mutate('DELETE', `/notices/${encodeURIComponent(id)}`);
+/** A faculty member's proposed profile update; it changes nothing until the Office of Research approves it. */
+export const proposeProfileChange = (biodata: Biodata, contact: Pick<Faculty, 'email' | 'phone' | 'orcid' | 'scopusId'>, submit: boolean) => mutate<string>('POST', '/profile-changes', { biodata, contact, submit });
 
 export function emptyBase(facultyId: string) {
   return { id: '', facultyId, status: 'Draft' as const, createdAt: '', updatedAt: '', history: [] };

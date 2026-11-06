@@ -4,13 +4,14 @@ import type { NextFunction, Request, Response } from 'express';
 import * as rules from '../src/lib/domain';
 import type { Actor } from '../src/lib/domain';
 import { RuleError } from '../src/lib/domain';
-import { emptyInstitution } from '../src/lib/seed';
-import type { EntityKind, Institution, User } from '../src/lib/types';
+import type { EntityKind, User } from '../src/lib/types';
 import {
   burnPasswordCheck, createSession, endAllSessions, endSession, hashPassword, passwordProblem, randomPassword, readSession, SESSION_COOKIE,
   Throttle, verifyPassword,
 } from './auth';
 import type { AccountRow, Storage } from './storage';
+import { defaultMailer, enquiryEmail } from './mail';
+import type { Mailer } from './mail';
 
 declare module 'express-serve-static-core' {
   interface Request { account?: AccountRow; actor?: Actor; institutionId?: string }
@@ -24,12 +25,11 @@ export function toUser(a: AccountRow): User {
   return { id: a.id, email: a.email, name: a.name, role: a.role, status: a.status, institutionId: a.institution_id, facultyId: a.faculty_id ?? undefined, designation: a.designation };
 }
 
-export function createApp(store: Storage, opts: { secureCookies?: boolean } = {}) {
+export function createApp(store: Storage, opts: { secureCookies?: boolean; mailer?: Mailer } = {}) {
   const app = express();
   const loginByEmail = new Throttle(5);
   const loginByIp = new Throttle(20);
-  const registerByIp = new Throttle(10, 60 * 60_000);
-
+  
   app.disable('x-powered-by');
   app.set('trust proxy', false);
   app.use((_req, res, next) => {
@@ -56,27 +56,35 @@ export function createApp(store: Storage, opts: { secureCookies?: boolean } = {}
     res.append('Set-Cookie', `${SESSION_COOKIE}=${token}; HttpOnly; SameSite=Strict; Path=/${opts.secureCookies ? '; Secure' : ''}`);
   const clearCookie = (res: Response) => res.append('Set-Cookie', `${SESSION_COOKIE}=; HttpOnly; SameSite=Strict; Path=/; Max-Age=0`);
 
-  /** Institution users only. The institution comes from the account, never from the request. */
+  /**
+   * Every signed-in user belongs to exactly one institution: faculty, Top-Level Management or that institution's
+   * Office of Research. The institution comes from the account, never from the request.
+   */
   const institutionUser = (req: Request, res: Response, next: NextFunction) => {
     const a = req.account;
     if (!a) return res.status(401).json({ error: 'Please sign in.' });
-    if (a.role === 'it_admin' || !a.institution_id) return res.status(403).json({ error: 'Institution data is not available to platform administrators.' });
-    const inst = store.institution(a.institution_id);
-    if (!inst || inst.status !== 'active') return res.status(403).json({ error: 'Your institution’s access is suspended. Contact the platform administrator.' });
+    const inst = a.institution_id ? store.institution(a.institution_id) : undefined;
+    if (!inst || inst.status !== 'active') return res.status(403).json({ error: 'Your institution’s access is suspended. Contact the UniRise team.' });
     if (a.role === 'faculty') {
       const f = store.tenant(inst.id).faculty.find((x) => x.id === a.faculty_id);
-      if (!f || !f.active) return res.status(403).json({ error: 'Your faculty profile is inactive. Contact your institution.' });
+      if (!f || !f.active) return res.status(403).json({ error: 'Your faculty profile is inactive. Contact your Office of Research.' });
       req.actor = { userId: a.id, name: f.name, role: 'faculty', facultyId: f.id };
     } else {
-      req.actor = { userId: a.id, name: a.name, role: 'management' };
+      req.actor = { userId: a.id, name: a.name, role: a.role === 'office' ? 'office' : 'management' };
     }
     req.institutionId = inst.id;
     next();
   };
-  const itAdmin = (req: Request, res: Response, next: NextFunction) => {
-    if (!req.account) return res.status(401).json({ error: 'Please sign in.' });
-    if (req.account.role !== 'it_admin') return res.status(403).json({ error: 'Not allowed.' });
+  /** The institution's Office of Research only (and only for its own institution). */
+  const office = (req: Request, res: Response, next: NextFunction) => institutionUser(req, res, () => {
+    if (req.account!.role !== 'office') return res.status(403).json({ error: 'Only the Office of Research can do this.' });
     next();
+  });
+  /** An account in the Office of Research's own institution (never another institution's, never another Office account). */
+  const ownAccount = (req: Request): AccountRow => {
+    const acc = store.platform.prepare('SELECT * FROM accounts WHERE id = ? AND institution_id = ?').get(String(req.params.id), req.institutionId) as AccountRow | undefined;
+    if (!acc || acc.role === 'office') throw new RuleError(404, 'User not found.');
+    return acc;
   };
 
   /** Runs a rule against the caller's own institution database and saves the result. */
@@ -92,83 +100,46 @@ export function createApp(store: Storage, opts: { secureCookies?: boolean } = {}
 
   // ---------- public ----------
 
-  app.get('/api/public/institutions', (_req, res) => {
-    res.json(store.institutions().filter((i) => i.status === 'active').map((i) => ({ id: i.id, name: i.name })));
-  });
-  app.get('/api/public/institutions/:id/departments', (req, res) => {
-    const inst = store.institution(String(req.params.id));
-    if (!inst || inst.status !== 'active') return res.status(404).json({ error: 'Institution not found.' });
-    res.json(store.tenant(inst.id).settings.departments);
-  });
-
-  app.post('/api/register', (req, res) => {
-    const ip = req.ip ?? '';
-    if (registerByIp.blocked(ip)) return res.status(429).json({ error: 'Too many requests. Try again later.' });
-    registerByIp.fail(ip);
-    const b = req.body ?? {};
-    const role = b.role === 'management' ? 'management' : b.role === 'faculty' ? 'faculty' : '';
-    const email = s(b.email, 200).toLowerCase();
-    const name = s(b.name, 200);
-    const password = typeof b.password === 'string' ? b.password : '';
-    const inst = store.institution(s(b.institutionId, 40));
-    if (!role) return res.status(400).json({ error: 'Choose Faculty or Top-Level Management.' });
-    if (!inst || inst.status !== 'active') return res.status(400).json({ error: 'Choose your institution.' });
-    if (!name) return res.status(400).json({ error: 'Enter your full name.' });
-    if (!EMAIL.test(email)) return res.status(400).json({ error: 'Enter a valid email address.' });
-    const pwErr = passwordProblem(password);
-    if (pwErr) return res.status(400).json({ error: pwErr });
-    const department = s(b.department, 200);
-    const employeeCode = s(b.employeeCode, 20);
-    if (role === 'faculty') {
-      if (!/^[A-Za-z0-9-]{3,20}$/.test(employeeCode)) return res.status(400).json({ error: 'Enter your employee code (3-20 letters or digits).' });
-      if (!store.tenant(inst.id).settings.departments.includes(department)) return res.status(400).json({ error: 'Choose your department.' });
-    }
-    // The same answer whether or not the email is already known, so the form cannot be used to find accounts.
-    const exists = store.platform.prepare('SELECT 1 FROM accounts WHERE email = ?').get(email);
-    if (!exists) {
-      const id = `acc_${crypto.randomBytes(8).toString('hex')}`;
-      store.platform.prepare(`INSERT INTO accounts (id, email, password_hash, role, institution_id, status, name, title, designation, department, employee_code, request_note, requested_at)
-        VALUES (?,?,?,?,?,'pending',?,?,?,?,?,?,?)`).run(id, email, hashPassword(password), role, inst.id, name, s(b.title, 10), s(b.designation, 100), department, employeeCode, s(b.note, 500), new Date().toISOString());
-      store.audit({ action: 'Access requested', target: email, institutionId: inst.id, detail: role });
-    } else {
-      store.audit({ action: 'Duplicate access request ignored', target: email, institutionId: inst.id });
-    }
-    res.json({ ok: true });
-  });
+  // Self-registration is closed: the Office of Research creates every account (POST /api/admin/users).
+  app.post('/api/register', (_req, res) => res.status(410).json({ error: 'Accounts are created by the Office of Research. Ask them for your sign-in details.' }));
 
   // ---------- sign in ----------
 
-  const signIn = (admin: boolean) => (req: Request, res: Response) => {
+  /**
+   * One sign-in for every role: the role comes from the account record, never from the request. `officeOnly` keeps
+   * the older Office of Research endpoint working for that role only. Office sessions get the shorter admin timeout.
+   */
+  const signIn = (officeOnly: boolean) => (req: Request, res: Response) => {
     const email = s(req.body?.email, 200).toLowerCase();
     const password = typeof req.body?.password === 'string' ? req.body.password : '';
     const ip = req.ip ?? '';
     if (loginByEmail.blocked(email) || loginByIp.blocked(ip)) return res.status(429).json({ error: 'Too many failed attempts. Try again in 15 minutes.' });
     const acc = store.platform.prepare('SELECT * FROM accounts WHERE email = ?').get(email) as AccountRow | undefined;
-    // Office of Research accounts cannot use the regular sign-in, and other accounts cannot use the admin one.
-    const eligible = acc && (acc.role === 'it_admin') === admin;
+    const eligible = acc && (!officeOnly || acc.role === 'office');
+    const admin = acc?.role === 'office';
     if (!acc || !eligible) burnPasswordCheck(password);
     if (!acc || !eligible || !verifyPassword(password, acc.password_hash)) {
       loginByEmail.fail(email); loginByIp.fail(ip);
-      if (admin) store.audit({ action: 'Admin sign-in failed', target: email });
+      if (officeOnly || admin) store.audit({ action: 'Office of Research sign-in failed', target: email });
       return res.status(401).json({ error: 'Invalid email or password.' });
     }
     loginByEmail.clear(email);
     const msg: Record<string, string> = {
-      pending: 'Your access request is waiting for approval by the platform administrator.',
-      rejected: 'Your access request was not approved. Contact the platform administrator if you think this is a mistake.',
-      suspended: 'Your account is suspended. Contact the platform administrator.',
+      pending: 'Your account has not been activated yet. Contact your Office of Research.',
+      rejected: 'Your account was not approved. Contact your Office of Research.',
+      suspended: 'Your account is suspended. Contact your Office of Research.',
       deactivated: 'Your account has been deactivated.',
     };
     if (acc.status !== 'active') return res.status(403).json({ error: msg[acc.status] });
     if (acc.institution_id) {
       const inst = store.institution(acc.institution_id);
-      if (!inst || inst.status !== 'active') return res.status(403).json({ error: 'Your institution’s access is suspended. Contact the platform administrator.' });
+      if (!inst || inst.status !== 'active') return res.status(403).json({ error: 'Your institution’s access is suspended. Contact the UniRise team.' });
       if (acc.role === 'faculty' && !store.tenant(inst.id).faculty.find((f) => f.id === acc.faculty_id)?.active) return res.status(403).json({ error: 'Your faculty profile is inactive. Contact your institution.' });
     }
     const old = cookie(req, SESSION_COOKIE);
     if (old) endSession(store, old);
     setCookie(res, createSession(store, acc.id, admin));
-    if (admin) store.audit({ actorId: acc.id, actorName: acc.name, action: 'Admin signed in' });
+    if (admin) store.audit({ actorId: acc.id, actorName: acc.name, action: 'Office of Research signed in' });
     res.json({ user: toUser(acc), institution: acc.institution_id ? store.institution(acc.institution_id) : null });
   };
   app.post('/api/login', signIn(false));
@@ -208,71 +179,108 @@ export function createApp(store: Storage, opts: { secureCookies?: boolean } = {}
   });
   app.post('/api/records/:kind', institutionUser, tenantAction((db, actor, req) => rules.saveRecord(db, actor, kindParam(req), req.body?.record ?? {}, req.body?.submit === true)));
   app.delete('/api/records/:kind/:id', institutionUser, tenantAction((db, actor, req) => rules.deleteRecord(db, actor, kindParam(req), String(req.params.id))));
+  // Kept so an old client gets a clear 403: only the Office of Research reviews entries (see /api/admin/approvals).
   app.post('/api/records/:kind/:id/review', institutionUser, tenantAction((db, actor, req) =>
     rules.review(db, actor, kindParam(req), String(req.params.id), req.body?.decision, s(req.body?.remark, 1000), req.body?.sanctionedAmount)));
+  // Kept for a clear 403: funding outcomes are recorded by the Office of Research (see /api/admin/approvals).
   app.post('/api/grants/:id/outcome', institutionUser, tenantAction((db, actor, req) => rules.updateGrantOutcome(db, actor, String(req.params.id), req.body ?? {})));
-  app.put('/api/biodata/:facultyId', institutionUser, tenantAction((db, actor, req) => rules.saveBiodata(db, actor, { ...(req.body ?? {}), facultyId: String(req.params.facultyId) })));
-  app.post('/api/faculty', institutionUser, tenantAction((db, actor, req) => rules.saveFaculty(db, actor, req.body ?? {}, true)));
+  /** Faculty propose a profile update; it waits for the Office of Research. Management gets 403 (read-only). */
+  app.post('/api/profile-changes', institutionUser, tenantAction((db, actor, req) => rules.proposeProfileChange(db, actor, { biodata: req.body?.biodata ?? {}, contact: req.body?.contact ?? {} }, req.body?.submit === true)));
+  // Faculty records are no longer edited by management; these answer 403 so old clients fail clearly.
+  app.put('/api/biodata/:facultyId', institutionUser, (_req, res) => res.status(403).json({ error: 'Profile updates are submitted for approval by the Office of Research.' }));
+  // Official faculty details and deactivation: the institution's Office of Research only (rules.saveFaculty checks the role).
+  app.post('/api/faculty', institutionUser, (_req, res) => res.status(403).json({ error: 'Faculty profiles are created with the account, under User Management.' }));
   app.put('/api/faculty/:id', institutionUser, tenantAction((db, actor, req) => rules.saveFaculty(db, actor, { ...(req.body ?? {}), id: String(req.params.id) }, false)));
+  // Institution & departments, targets & scoring and notices: the institution's Office of Research (checked in the rules).
   app.put('/api/settings', institutionUser, tenantAction((db, actor, req) => rules.saveSettings(db, actor, req.body ?? {})));
   app.post('/api/notices', institutionUser, tenantAction((db, actor, req) => rules.addNotice(db, actor, req.body?.title, req.body?.body)));
   app.delete('/api/notices/:id', institutionUser, tenantAction((db, actor, req) => rules.deleteNotice(db, actor, String(req.params.id))));
 
-  // ---------- Office of Research (platform level: accounts and institutions, never research data) ----------
+  // ---------- Office of Research: approvals (own institution) ----------
+  // The only place entries and profile updates are approved, returned for correction or rejected. Management and
+  // faculty get 403 here and from the rules themselves (rules.review accepts only the 'office' actor).
 
-  app.get('/api/admin/requests', itAdmin, (req, res) => {
-    const status = ['pending', 'rejected'].includes(String(req.query.status)) ? String(req.query.status) : 'pending';
-    res.json((store.platform.prepare('SELECT * FROM accounts WHERE status = ? ORDER BY requested_at').all(status) as AccountRow[]).map(requestView));
+  const decisionAction = (d: unknown, what: string) => ({ Approved: `${what} approved`, Rework: `${what} returned for correction`, Rejected: `${what} rejected` } as Record<string, string>)[String(d)] ?? `${what} reviewed`;
+
+  /** view=pending (default): the queue. view=decided: entries already approved, returned or rejected, newest first. */
+  app.get('/api/office/approvals', office, (req, res) => {
+    const db = store.tenant(req.institutionId!);
+    const decided = req.query.view === 'decided';
+    const reviewed = (h: { action: string }[]) => h.some((x) => ['Approved', 'Sent for rework', 'Returned for correction', 'Rejected'].includes(x.action));
+    const pick = <T extends { status: string; history: { action: string }[]; updatedAt: string }>(xs: T[]) => (decided
+      ? xs.filter((r) => ['Approved', 'Rework', 'Rejected'].includes(r.status) && reviewed(r.history)).sort((a, b) => b.updatedAt.localeCompare(a.updatedAt)).slice(0, 300)
+      : xs.filter((r) => r.status === 'Submitted'));
+    const profiles = pick(db.profileChanges ?? []);
+    res.json({
+      records: Object.fromEntries(KINDS.map((k) => [k, pick(db[k] as never[])])),
+      profiles,
+      currentProfiles: Object.fromEntries(profiles.map((c) => [c.facultyId, db.biodata.find((b) => b.facultyId === c.facultyId) ?? null])),
+    });
+  });
+  app.get('/api/office/approvals/count', office, (req, res) => {
+    const db = store.tenant(req.institutionId!);
+    res.json({ total: KINDS.reduce((a, k) => a + (db[k] as { status: string }[]).filter((r) => r.status === 'Submitted').length, 0) + (db.profileChanges ?? []).filter((c) => c.status === 'Submitted').length });
+  });
+  app.post('/api/office/approvals/profiles/:id/review', office, (req, res) => {
+    store.mutateTenant(req.institutionId!, (db) => rules.reviewProfileChange(db, req.actor!, String(req.params.id), req.body?.decision, s(req.body?.remark, 1000)));
+    store.audit({ actorId: req.account!.id, actorName: req.account!.name, action: decisionAction(req.body?.decision, 'Profile update'), target: String(req.params.id), institutionId: req.institutionId });
+    res.json({ ok: true });
+  });
+  app.post('/api/office/approvals/grants/:id/outcome', office, (req, res) => {
+    store.mutateTenant(req.institutionId!, (db) => rules.updateGrantOutcome(db, req.actor!, String(req.params.id), req.body ?? {}));
+    store.audit({ actorId: req.account!.id, actorName: req.account!.name, action: `Grant outcome set to ${s(req.body?.outcome, 40)}`, target: String(req.params.id), institutionId: req.institutionId });
+    res.json({ ok: true });
+  });
+  app.post('/api/office/approvals/:kind/:id/review', office, (req, res) => {
+    const kind = kindParam(req);
+    store.mutateTenant(req.institutionId!, (db) => rules.review(db, req.actor!, kind, String(req.params.id), req.body?.decision, s(req.body?.remark, 1000), req.body?.sanctionedAmount));
+    store.audit({ actorId: req.account!.id, actorName: req.account!.name, action: decisionAction(req.body?.decision, 'Entry'), target: String(req.params.id), institutionId: req.institutionId, detail: kind });
+    res.json({ ok: true });
   });
 
-  app.post('/api/admin/requests/:id/approve', itAdmin, (req, res) => {
-    const acc = store.platform.prepare('SELECT * FROM accounts WHERE id = ?').get(String(req.params.id)) as AccountRow | undefined;
-    if (!acc || acc.role === 'it_admin') return res.status(404).json({ error: 'Request not found.' });
-    if (acc.status !== 'pending') return res.status(400).json({ error: 'This request has already been decided.' });
+  // ---------- Office of Research: user management (own institution) ----------
+
+  app.get('/api/office/users', office, (req, res) => {
+    res.json((store.platform.prepare("SELECT * FROM accounts WHERE institution_id = ? ORDER BY role = 'office' DESC, role, name").all(req.institutionId) as AccountRow[]).map(requestView));
+  });
+
+  /** Creates a faculty or Top-Level Management account in the Office's own institution and returns a temporary password. */
+  app.post('/api/office/users', office, (req, res) => {
     const b = req.body ?? {};
-    if (b.affiliationVerified !== true) return res.status(400).json({ error: 'Confirm that you verified the person’s affiliation with the institution.' });
-    const role = b.role === 'management' ? 'management' : b.role === 'faculty' ? 'faculty' : acc.role;
-    const inst = store.institution(s(b.institutionId, 40) || acc.institution_id || '');
-    if (!inst || inst.status !== 'active') return res.status(400).json({ error: 'Choose an active institution.' });
+    const role = b.role === 'management' ? 'management' : b.role === 'faculty' ? 'faculty' : '';
+    const instId = req.institutionId!;
+    const name = s(b.name, 200);
+    const email = s(b.email, 200).toLowerCase();
+    if (!role) return res.status(400).json({ error: 'Choose Faculty or Top-Level Management.' });
+    if (!name) return res.status(400).json({ error: 'Enter the full name.' });
+    if (!EMAIL.test(email)) return res.status(400).json({ error: 'Enter a valid email address.' });
+    if (store.platform.prepare('SELECT 1 FROM accounts WHERE email = ?').get(email)) return res.status(400).json({ error: 'An account with this email already exists.' });
+    const designation = s(b.designation, 100);
+    const status = b.status === 'deactivated' ? 'deactivated' : 'active';
     let facultyId: string | null = null;
     if (role === 'faculty') {
-      const code = s(b.employeeCode, 20) || acc.employee_code;
-      facultyId = store.mutateTenant(inst.id, (db) => rules.ensureFacultyProfile(db, {
-        id: code, title: s(b.title, 10) || acc.title, name: acc.name, designation: s(b.designation, 100) || acc.designation,
-        department: s(b.department, 200) || acc.department, email: acc.email,
-      }));
-      const taken = store.platform.prepare("SELECT 1 FROM accounts WHERE institution_id = ? AND faculty_id = ? AND status IN ('active','suspended') AND id != ?").get(inst.id, facultyId, acc.id);
-      if (taken) return res.status(400).json({ error: `Faculty profile ${facultyId} is already linked to another account.` });
+      const code = s(b.employeeCode, 20);
+      if (!/^[A-Za-z0-9-]{3,20}$/.test(code)) return res.status(400).json({ error: 'Enter the employee code (3-20 letters or digits).' });
+      if (!store.tenant(instId).settings.departments.includes(s(b.department, 200))) return res.status(400).json({ error: 'Choose the department.' });
+      const taken = store.platform.prepare("SELECT 1 FROM accounts WHERE institution_id = ? AND faculty_id = ? AND status IN ('active','suspended')").get(instId, code);
+      if (taken) return res.status(400).json({ error: `Faculty profile ${code} is already linked to another account.` });
+      facultyId = store.mutateTenant(instId, (db) => rules.ensureFacultyProfile(db, { id: code, title: s(b.title, 10), name, designation, department: s(b.department, 200), email }));
     }
-    store.platform.prepare(`UPDATE accounts SET status = 'active', role = ?, institution_id = ?, faculty_id = ?, designation = ?, reviewed_by = ?, reviewed_at = ?, review_note = ?, affiliation_verified = 1 WHERE id = ?`)
-      .run(role, inst.id, facultyId, s(b.designation, 100) || acc.designation, req.account!.name, new Date().toISOString(), s(b.note, 500), acc.id);
-    store.audit({ actorId: req.account!.id, actorName: req.account!.name, action: 'Access approved', target: acc.email, institutionId: inst.id, detail: `${role}${facultyId ? ` · profile ${facultyId}` : ''}` });
-    res.json({ ok: true });
+    const temp = randomPassword();
+    const at = new Date().toISOString();
+    store.platform.prepare(`INSERT INTO accounts (id, email, password_hash, role, institution_id, faculty_id, status, name, title, designation, department, employee_code, request_note, requested_at, reviewed_by, reviewed_at, affiliation_verified)
+      VALUES (?,?,?,?,?,?,?,?,?,?,?,?,'',?,?,?,1)`).run(`acc_${crypto.randomBytes(8).toString('hex')}`, email, hashPassword(temp), role, instId, facultyId, status, name, s(b.title, 10), designation, s(b.department, 200), facultyId ?? '', at, req.account!.name, at);
+    store.audit({ actorId: req.account!.id, actorName: req.account!.name, action: 'Account created', target: email, institutionId: instId, detail: `${role}${facultyId ? ` · profile ${facultyId}` : ''}` });
+    res.json({ temporaryPassword: temp });
   });
 
-  app.post('/api/admin/requests/:id/reject', itAdmin, (req, res) => {
-    const acc = store.platform.prepare('SELECT * FROM accounts WHERE id = ?').get(String(req.params.id)) as AccountRow | undefined;
-    if (!acc || acc.role === 'it_admin') return res.status(404).json({ error: 'Request not found.' });
-    if (acc.status !== 'pending') return res.status(400).json({ error: 'This request has already been decided.' });
-    const reason = s(req.body?.reason, 500);
-    if (!reason) return res.status(400).json({ error: 'Give a reason for the rejection.' });
-    store.platform.prepare("UPDATE accounts SET status = 'rejected', reviewed_by = ?, reviewed_at = ?, review_note = ? WHERE id = ?").run(req.account!.name, new Date().toISOString(), reason, acc.id);
-    store.audit({ actorId: req.account!.id, actorName: req.account!.name, action: 'Access rejected', target: acc.email, institutionId: acc.institution_id, detail: reason });
-    res.json({ ok: true });
-  });
-
-  app.get('/api/admin/users', itAdmin, (_req, res) => {
-    res.json((store.platform.prepare("SELECT * FROM accounts WHERE status NOT IN ('pending','rejected') ORDER BY role = 'it_admin' DESC, institution_id, name").all() as AccountRow[]).map(requestView));
-  });
-
-  app.post('/api/admin/users/:id/status', itAdmin, (req, res) => {
-    const acc = store.platform.prepare('SELECT * FROM accounts WHERE id = ?').get(String(req.params.id)) as AccountRow | undefined;
-    if (!acc || ['pending', 'rejected'].includes(acc.status)) return res.status(404).json({ error: 'User not found.' });
-    if (acc.role === 'it_admin') return res.status(400).json({ error: 'Office of Research accounts are managed from the server command line.' });
+  app.post('/api/office/users/:id/status', office, (req, res) => {
+    const acc = ownAccount(req);
     const status = String(req.body?.status);
     if (!['active', 'suspended', 'deactivated'].includes(status)) return res.status(400).json({ error: 'Unknown status.' });
     const reason = s(req.body?.reason, 500);
     if (status !== 'active' && !reason) return res.status(400).json({ error: 'Give a reason.' });
+    if (status === 'active' && acc.role === 'faculty' && !acc.faculty_id) return res.status(400).json({ error: 'This account is not linked to a faculty profile. Create a new faculty account instead.' });
     if (status === 'active' && acc.faculty_id) {
       const taken = store.platform.prepare("SELECT 1 FROM accounts WHERE institution_id = ? AND faculty_id = ? AND status IN ('active','suspended') AND id != ?").get(acc.institution_id, acc.faculty_id, acc.id);
       if (taken) return res.status(400).json({ error: 'Another account is already linked to this faculty profile.' });
@@ -283,21 +291,19 @@ export function createApp(store: Storage, opts: { secureCookies?: boolean } = {}
     res.json({ ok: true });
   });
 
-  app.post('/api/admin/users/:id/role', itAdmin, (req, res) => {
-    const acc = store.platform.prepare('SELECT * FROM accounts WHERE id = ?').get(String(req.params.id)) as AccountRow | undefined;
-    if (!acc || acc.role === 'it_admin' || ['pending', 'rejected'].includes(acc.status)) return res.status(404).json({ error: 'User not found.' });
+  app.post('/api/office/users/:id/role', office, (req, res) => {
+    const acc = ownAccount(req);
     const role = req.body?.role === 'management' ? 'management' : req.body?.role === 'faculty' ? 'faculty' : '';
     if (!role) return res.status(400).json({ error: 'Unknown role.' });
-    if (role === 'faculty' && !acc.faculty_id) return res.status(400).json({ error: 'This account has no faculty profile. Ask the person to request faculty access instead.' });
+    if (role === 'faculty' && !acc.faculty_id) return res.status(400).json({ error: 'This account has no faculty profile. Create a faculty account instead.' });
     store.platform.prepare('UPDATE accounts SET role = ? WHERE id = ?').run(role, acc.id);
     endAllSessions(store, acc.id);
     store.audit({ actorId: req.account!.id, actorName: req.account!.name, action: `Role changed to ${role}`, target: acc.email, institutionId: acc.institution_id });
     res.json({ ok: true });
   });
 
-  app.post('/api/admin/users/:id/reset-password', itAdmin, (req, res) => {
-    const acc = store.platform.prepare('SELECT * FROM accounts WHERE id = ?').get(String(req.params.id)) as AccountRow | undefined;
-    if (!acc || acc.role === 'it_admin') return res.status(404).json({ error: 'User not found.' });
+  app.post('/api/office/users/:id/reset-password', office, (req, res) => {
+    const acc = ownAccount(req);
     const temp = randomPassword();
     store.platform.prepare('UPDATE accounts SET password_hash = ? WHERE id = ?').run(hashPassword(temp), acc.id);
     endAllSessions(store, acc.id);
@@ -305,45 +311,34 @@ export function createApp(store: Storage, opts: { secureCookies?: boolean } = {}
     res.json({ temporaryPassword: temp });
   });
 
-  app.get('/api/admin/institutions', itAdmin, (_req, res) => {
-    const counts = store.platform.prepare("SELECT institution_id, role, status, COUNT(*) n FROM accounts WHERE institution_id IS NOT NULL GROUP BY institution_id, role, status").all() as { institution_id: string; role: string; status: string; n: number }[];
-    res.json(store.institutions().map((i) => ({
-      ...i,
-      management: counts.filter((c) => c.institution_id === i.id && c.role === 'management' && c.status === 'active').reduce((a, c) => a + c.n, 0),
-      faculty: counts.filter((c) => c.institution_id === i.id && c.role === 'faculty' && c.status === 'active').reduce((a, c) => a + c.n, 0),
-      pending: counts.filter((c) => c.institution_id === i.id && c.status === 'pending').reduce((a, c) => a + c.n, 0),
-    })));
+  app.get('/api/office/audit', office, (req, res) => {
+    res.json(store.platform.prepare('SELECT * FROM audit WHERE institution_id = ? ORDER BY id DESC LIMIT 500').all(req.institutionId));
   });
 
-  app.post('/api/admin/institutions', itAdmin, (req, res) => {
+  // ---------- public: institutional enquiries (Talk to Our Team) ----------
+
+  const enquiryByIp = new Throttle(5, 60 * 60_000);
+  app.post('/api/enquiries', async (req, res) => {
+    const ip = req.ip ?? '';
+    if (enquiryByIp.blocked(ip)) return res.status(429).json({ error: 'Too many enquiries from this connection. Please try again later or email corporate@mentoredge.co.in.' });
     const b = req.body ?? {};
-    const name = s(b.name, 200);
-    const slug = s(b.slug, 40).toLowerCase();
-    const emailDomain = s(b.emailDomain, 100).toLowerCase().replace(/^@/, '');
-    const departments = (Array.isArray(b.departments) ? b.departments : []).map((d: unknown) => s(d, 200)).filter(Boolean);
-    if (!name) return res.status(400).json({ error: 'Enter the institution name.' });
-    if (!/^[a-z0-9-]{2,40}$/.test(slug)) return res.status(400).json({ error: 'Short code must be 2-40 lower-case letters, digits or hyphens.' });
-    if (!/^[a-z0-9.-]+\.[a-z]{2,}$/.test(emailDomain)) return res.status(400).json({ error: 'Enter the institution’s email domain, like college.edu.in.' });
-    if (!departments.length) return res.status(400).json({ error: 'Add at least one department.' });
-    if (store.institution(slug)) return res.status(400).json({ error: 'That short code is already used.' });
-    const inst: Institution = { id: slug, slug, name, tagline: s(b.tagline, 200) || 'Faculty Research & Development Portal', emailDomain, status: 'active', createdAt: new Date().toISOString() };
-    store.createInstitution(inst, emptyInstitution(inst.name, inst.tagline, departments));
-    store.audit({ actorId: req.account!.id, actorName: req.account!.name, action: 'Institution created', target: name, institutionId: slug });
+    if (s(b.website, 200)) return res.json({ ok: true }); // hidden field: only automated spam fills it in
+    const e = {
+      institutionName: s(b.institutionName, 200), institutionType: s(b.institutionType, 80), country: s(b.country, 80), state: s(b.state, 80), city: s(b.city, 80),
+      contactName: s(b.contactName, 200), designation: s(b.designation, 120), email: s(b.email, 200).toLowerCase(), phone: s(b.phone, 30),
+      facultyCount: s(b.facultyCount, 40), interest: s(b.interest, 120), message: s(b.message, 3000),
+    };
+    const missing = (Object.entries({ institutionName: 'Organisation name', institutionType: 'Organisation type', contactName: 'Contact name', email: 'Work email', country: 'Country', state: 'State', city: 'City', facultyCount: 'Approximate number of faculty', interest: 'Area of interest' }) as [keyof typeof e, string][])
+      .filter(([k]) => !e[k]).map(([, l]) => l);
+    if (missing.length) return res.status(400).json({ error: `Please fill in: ${missing.join(', ')}.` });
+    if (!EMAIL.test(e.email)) return res.status(400).json({ error: 'Enter a valid work email address.' });
+    if (e.phone && !/^[+\d][\d\s()-]{6,}$/.test(e.phone)) return res.status(400).json({ error: 'Enter a valid phone number.' });
+    if (b.consent !== 'yes' && b.consent !== true) return res.status(400).json({ error: 'Please agree that we may contact you about this enquiry.' });
+    enquiryByIp.fail(ip);
+    const id = Number(store.platform.prepare('INSERT INTO enquiries (at, data) VALUES (?, ?)').run(new Date().toISOString(), JSON.stringify(e)).lastInsertRowid);
+    const sent = await (opts.mailer ?? defaultMailer)(enquiryEmail(e));
+    store.platform.prepare('UPDATE enquiries SET delivered = ?, delivery_note = ? WHERE id = ?').run(sent.ok ? 1 : 0, sent.note, id);
     res.json({ ok: true });
-  });
-
-  app.post('/api/admin/institutions/:id/status', itAdmin, (req, res) => {
-    const inst = store.institution(String(req.params.id));
-    if (!inst) return res.status(404).json({ error: 'Institution not found.' });
-    const status = req.body?.status === 'suspended' ? 'suspended' : 'active';
-    store.platform.prepare('UPDATE institutions SET status = ? WHERE id = ?').run(status, inst.id);
-    if (status === 'suspended') store.platform.prepare('DELETE FROM sessions WHERE account_id IN (SELECT id FROM accounts WHERE institution_id = ?)').run(inst.id);
-    store.audit({ actorId: req.account!.id, actorName: req.account!.name, action: `Institution ${status === 'active' ? 'reactivated' : 'suspended'}`, target: inst.name, institutionId: inst.id });
-    res.json({ ok: true });
-  });
-
-  app.get('/api/admin/audit', itAdmin, (_req, res) => {
-    res.json(store.platform.prepare('SELECT * FROM audit ORDER BY id DESC LIMIT 500').all());
   });
 
   // ---------- errors ----------

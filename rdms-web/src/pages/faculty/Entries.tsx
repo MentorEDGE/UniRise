@@ -183,7 +183,7 @@ export function GrantEntry() {
         {step === 3 && <Field label="Other remarks"><TextArea value={r.otherRemarks} onChange={(v) => u({ otherRemarks: v })} rows={5} /></Field>}
         {step === 4 && (
           <div className="note">
-            <p>Check the details before you submit. After submission the entry is locked until management approves it or sends it back for rework.
+            <p>Check the details before you submit. After submission the entry is locked until the Office of Research approves it or sends it back for rework.
               The funding outcome (sanctioned / received amounts) is recorded by the research office after approval.</p>
             <dl className="kv">
               <dt>Title</dt><dd>{r.title || '—'}</dd><dt>Agency</dt><dd>{r.agency || '—'}</dd>

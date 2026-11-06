@@ -57,8 +57,8 @@ export function readSession(store: Storage, token: string | undefined): AccountR
   if (t - s.last_seen > idle || t - s.created_at > ABSOLUTE_MS) { endSession(store, token); return null; }
   const acc = store.platform.prepare('SELECT * FROM accounts WHERE id = ?').get(s.account_id) as AccountRow | undefined;
   if (!acc || acc.status !== 'active') { endSession(store, token); return null; }
-  // An admin session can only belong to an Office of Research account, and a regular one never does.
-  if ((acc.role === 'it_admin') !== (s.admin === 1)) { endSession(store, token); return null; }
+  // An Office of Research session uses the shorter timeout; the flag must match the account's role.
+  if ((acc.role === 'office') !== (s.admin === 1)) { endSession(store, token); return null; }
   store.platform.prepare('UPDATE sessions SET last_seen = ? WHERE token_hash = ?').run(t, s.token_hash);
   return acc;
 }

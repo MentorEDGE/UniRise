@@ -253,14 +253,9 @@ export function ParticipationAnalytics() {
     { label: 'Holds a sanctioned grant', ...share((s) => s.grantsSanctioned > 0) },
     { label: 'Profile ≥ 80% complete', ...share((s) => s.biodata >= 80) },
   ];
-  const yearAgo = new Date(Date.now() - 365 * 86400000).toISOString().slice(0, 10);
-  const inactive = stats.filter((s) => !s.lastActivity || s.lastActivity < yearAgo);
   const noFdp = stats.filter((s) => s.fdpHours < t.fdpHoursPerFaculty);
   const lowBio = stats.filter((s) => s.biodata < 80).sort((a, b) => a.biodata - b.biodata);
 
-  const weekAgo = new Date(Date.now() - 7 * 86400000).toISOString();
-  const stale = (['publications', 'grants', 'seedMoney', 'fdps', 'conferences', 'awards'] as EntityKind[]).flatMap((k) =>
-    (db[k] as AnyRecord[]).filter((r) => r.status === 'Submitted' && r.updatedAt < weekAgo).map((r) => ({ k, r })));
   const missingDocs = [
     ...db.publications.filter((p) => p.status === 'Approved' && p.entryType !== 'Book' && !p.pdfName).map((r) => ({ k: 'publications' as EntityKind, r: r as AnyRecord })),
     ...db.fdps.filter((p) => p.status === 'Approved' && !p.certificateName).map((r) => ({ k: 'fdps' as EntityKind, r: r as AnyRecord })),
@@ -289,21 +284,12 @@ export function ParticipationAnalytics() {
           <table className="tbl"><tbody>{measures.map((m) => <tr key={m.label}><td style={{ width: '40%' }}>{m.label}</td><td><Attainment value={m.pct} target={100} /></td><td className="num" style={{ width: 90 }}>{m.count} / {n}</td></tr>)}</tbody></table>
         </section>
         <section className="card">
-          <h3>No approved activity in the last 12 months ({inactive.length})</h3><p className="sub">Candidates for a conversation with the HoD</p>
-          <DataTable rows={inactive} columns={[...simple, { key: 'last', label: 'Last activity', value: (r) => r.lastActivity, render: (r) => fmtDate(r.lastActivity) || 'Never' }]} rowKey={(r) => r.faculty.id} pageSize={8} exportName="inactive_faculty" empty="Everyone has recent activity." />
-        </section>
-        <section className="card">
           <h3>Below FDP-hours target ({noFdp.length})</h3><p className="sub">Target {t.fdpHoursPerFaculty} hours in the period</p>
           <DataTable rows={noFdp} columns={[...simple, { key: 'h', label: 'Hours', value: (r) => r.fdpHours, num: true }, { key: 'gap', label: 'Short by', value: (r) => t.fdpHoursPerFaculty - r.fdpHours, num: true }]} rowKey={(r) => r.faculty.id} pageSize={8} exportName="fdp_shortfall" empty="All faculty met the FDP target." />
         </section>
         <section className="card">
           <h3>Incomplete profiles ({lowBio.length})</h3><p className="sub">Below 80% — needed for accreditation files</p>
           <DataTable rows={lowBio} columns={[...simple, { key: 'b', label: 'Complete', value: (r) => r.biodata, render: (r) => <Attainment value={r.biodata} target={100} />, num: true }]} rowKey={(r) => r.faculty.id} pageSize={8} exportName="incomplete_profiles" empty="All profiles are at least 80% complete." />
-        </section>
-        <section className="card">
-          <h3>Approvals waiting over 7 days ({stale.length})</h3><p className="sub">Submitted entries not yet reviewed</p>
-          <DataTable rows={stale} columns={recCols} rowKey={(x) => x.r.id} pageSize={8} empty="No entries are waiting more than a week." />
-          {stale.length > 0 && <div className="btn-row left"><Link className="btn sm" to="/approvals">Open approvals</Link></div>}
         </section>
         <section className="card span-all">
           <h3>Approved entries without supporting documents ({missingDocs.length})</h3><p className="sub">Publications without full text and FDPs without certificate in the period</p>

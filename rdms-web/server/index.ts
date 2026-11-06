@@ -12,11 +12,11 @@ const host = process.env.HOST ?? '127.0.0.1';
 
 const store = new Storage(dir);
 if (!store.institutions().length) {
-  const { adminEmail, adminPassword } = seedDemo(store);
-  console.log(`\nCreated the demo platform in ${dir}`);
-  console.log(`  Management:  director@sit.edu.in, vc@greenfield.ac.in  /  ${DEMO_PASSWORDS.management}`);
-  console.log(`  Faculty:     e.g. anita.rao@sit.edu.in  /  ${DEMO_PASSWORDS.faculty}`);
-  console.log(`  Office of Research:    ${adminEmail}  /  ${adminPassword}   (sign in at /#/admin; shown only now)\n`);
+  seedDemo(store);
+  console.log('\nDemo platform created (two institutions, each with its own database). Sign in at /#/login:');
+  console.log(`  Office of Research:  office@abc.edu.in, office@xyz.ac.in  /  ${DEMO_PASSWORDS.office}`);
+  console.log(`  Management:          director@abc.edu.in, vc@xyz.ac.in  /  ${DEMO_PASSWORDS.management}`);
+  console.log(`  Faculty:             e.g. faculty.a@abc.edu.in  /  ${DEMO_PASSWORDS.faculty}\n`);
 }
 
 const app = createApp(store, { secureCookies: production });

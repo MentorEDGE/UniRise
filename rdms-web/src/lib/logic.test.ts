@@ -9,6 +9,7 @@ import type { DB, Fdp, Publication } from './types';
 
 let db: DB;
 const mgmt: Actor = { userId: 'm', name: 'Dean', role: 'management' };
+const office: Actor = { userId: 'o', name: 'Office of Research', role: 'office' };
 const fac = (id: string): Actor => ({ userId: id, name: id, role: 'faculty', facultyId: id });
 const fdp = (): Record<string, unknown> => ({
   role: 'Attended', programmeType: 'FDP', title: 'Test FDP', organiser: 'NPTEL', sponsoredBy: '', mode: 'Online', level: 'National',
@@ -19,19 +20,20 @@ const find = (kind: 'fdps', id: string) => db[kind].find((x) => x.id === id)!;
 beforeEach(() => { db = createSeed(); });
 
 describe('workflow rules', () => {
-  it('faculty create and submit; management approves; approved entries are locked', () => {
+  it('faculty create and submit; only the Office of Research approves; approved entries are locked', () => {
     const id = rules.saveRecord(db, fac('EMP1001'), 'fdps', fdp(), true);
     expect(find('fdps', id).status).toBe('Submitted');
-    expect(() => rules.review(db, fac('EMP1002'), 'fdps', id, 'Approved', '')).toThrow(/Management/);
-    rules.review(db, mgmt, 'fdps', id, 'Approved', '');
+    expect(() => rules.review(db, fac('EMP1002'), 'fdps', id, 'Approved', '')).toThrow(/Office of Research/);
+    expect(() => rules.review(db, mgmt, 'fdps', id, 'Approved', '')).toThrow(/Office of Research/);
+    rules.review(db, office, 'fdps', id, 'Approved', '');
     expect(find('fdps', id).status).toBe('Approved');
     expect(() => rules.saveRecord(db, fac('EMP1001'), 'fdps', { ...find('fdps', id) }, false)).toThrow(/approved/);
   });
 
   it('rework and reject need a remark; rework re-opens editing', () => {
     const id = rules.saveRecord(db, fac('EMP1002'), 'fdps', fdp(), true);
-    expect(() => rules.review(db, mgmt, 'fdps', id, 'Rework', '  ')).toThrow(/remark/);
-    rules.review(db, mgmt, 'fdps', id, 'Rework', 'Attach certificate');
+    expect(() => rules.review(db, office, 'fdps', id, 'Rework', '  ')).toThrow(/remark/);
+    rules.review(db, office, 'fdps', id, 'Rework', 'Attach certificate');
     rules.saveRecord(db, fac('EMP1002'), 'fdps', { ...find('fdps', id), hours: 24 }, true);
     expect(find('fdps', id).status).toBe('Submitted');
     expect(find('fdps', id).history.map((h) => h.action)).toContain('Resubmitted');
@@ -83,17 +85,46 @@ describe('workflow rules', () => {
 
   it('management cannot create entries; faculty cannot change settings or others’ biodata', () => {
     expect(() => rules.saveRecord(db, mgmt, 'fdps', fdp(), false)).toThrow(/faculty/);
-    expect(() => rules.saveSettings(db, fac('EMP1001'), db.settings)).toThrow(/Management/);
-    expect(() => rules.saveBiodata(db, fac('EMP1001'), db.biodata.find((b) => b.facultyId === 'EMP1002')!)).toThrow(/own/);
+    expect(() => rules.saveSettings(db, fac('EMP1001'), db.settings)).toThrow(/Office of Research/);
+    expect(() => rules.saveSettings(db, mgmt, db.settings)).toThrow(/Office of Research/);
+    expect(() => rules.addNotice(db, mgmt, 'x', 'y')).toThrow(/Office of Research/);
   });
 
-  it('faculty edits to their profile keep management-owned fields', () => {
+  it('management is read-only: no faculty edits, profile edits or grant outcomes', () => {
     const f = db.faculty.find((x) => x.id === 'EMP1001')!;
-    rules.saveFaculty(db, fac('EMP1001'), { ...f, designation: 'Professor', department: 'Civil Engineering', phone: '9000000000' });
-    const after = db.faculty.find((x) => x.id === 'EMP1001')!;
-    expect(after.phone).toBe('9000000000');
-    expect(after.department).toBe(f.department);
-    expect(after.designation).toBe(f.designation);
+    expect(() => rules.saveFaculty(db, mgmt, { ...f, designation: 'Professor' })).toThrow(/Office of Research/);
+    expect(() => rules.saveFaculty(db, fac('EMP1001'), { ...f, designation: 'Professor' })).toThrow(/Office of Research/);
+    expect(() => rules.proposeProfileChange(db, mgmt, { biodata: db.biodata[0], contact: f }, true)).toThrow(/faculty member/);
+    const g = db.grants.find((x) => x.status === 'Approved')!;
+    expect(() => rules.updateGrantOutcome(db, mgmt, g.id, { outcome: 'Completed', sanctionDate: '', sanctionedAmount: 0, receivedAmount: 0 })).toThrow(/Office of Research/);
+    rules.updateGrantOutcome(db, office, g.id, { outcome: 'Completed', sanctionDate: '', sanctionedAmount: 0, receivedAmount: 0 });
+    expect(db.grants.find((x) => x.id === g.id)!.outcome).toBe('Completed');
+  });
+
+  it('profile updates wait for the Office of Research; returned or rejected updates never change the approved profile', () => {
+    const f = db.faculty.find((x) => x.id === 'EMP1001')!;
+    const before = structuredClone(db.biodata.find((x) => x.facultyId === 'EMP1001')!);
+    const b = rules.normalizeBiodata(before);
+    const contact = { email: f.email, phone: '9000000000', orcid: f.orcid, scopusId: f.scopusId };
+    expect(() => rules.proposeProfileChange(db, fac('EMP1001'), { biodata: b, contact: f }, true)).toThrow(/Nothing has changed/);
+    const id = rules.proposeProfileChange(db, fac('EMP1001'), { biodata: { ...b, summary: 'New biography' }, contact }, true);
+    const pending = db.profileChanges.find((c) => c.id === id)!;
+    expect(pending.status).toBe('Submitted');
+    expect(pending.changed).toEqual(expect.arrayContaining(['Biography', 'Phone']));
+    expect(db.biodata.find((x) => x.facultyId === 'EMP1001')!.summary).toBe(before.summary);
+    expect(rules.scopeFor(db, mgmt).profileChanges).toEqual([]);
+    expect(rules.scopeFor(db, fac('EMP1002')).profileChanges).toEqual([]);
+    expect(() => rules.reviewProfileChange(db, mgmt, id, 'Approved', '')).toThrow(/Office of Research/);
+    rules.reviewProfileChange(db, office, id, 'Rework', 'Add your ORCID');
+    expect(db.biodata.find((x) => x.facultyId === 'EMP1001')!.summary).toBe(before.summary);
+    // editing the returned update reuses it; approval then applies it
+    expect(rules.proposeProfileChange(db, fac('EMP1001'), { biodata: { ...b, summary: 'New biography' }, contact }, true)).toBe(id);
+    rules.reviewProfileChange(db, office, id, 'Approved', '');
+    expect(db.biodata.find((x) => x.facultyId === 'EMP1001')!.summary).toBe('New biography');
+    expect(db.faculty.find((x) => x.id === 'EMP1001')!.phone).toBe('9000000000');
+    const rej = rules.proposeProfileChange(db, fac('EMP1001'), { biodata: { ...b, summary: 'Wrong' }, contact }, true);
+    rules.reviewProfileChange(db, office, rej, 'Rejected', 'Not accurate');
+    expect(db.biodata.find((x) => x.facultyId === 'EMP1001')!.summary).toBe('New biography');
   });
 });
 
@@ -106,7 +137,7 @@ describe('honours and awards', () => {
     expect(id).toMatch(/^AWD/);
     expect(rec.status).toBe('Submitted');
     expect(rules.scopeFor(db, fac('EMP1002')).awards.some((x) => x.id === id)).toBe(false);
-    rules.review(db, mgmt, 'awards', id, 'Approved', '');
+    rules.review(db, office, 'awards', id, 'Approved', '');
     expect(db.awards.find((x) => x.id === id)!.status).toBe('Approved');
   });
 
@@ -120,7 +151,7 @@ describe('honours and awards', () => {
     const f = { from: '2026-08-01', to: '2026-08-31', department: '' };
     const before = facultyStats(db, f).find((s) => s.faculty.id === 'EMP1001')!;
     const id = rules.saveRecord(db, fac('EMP1001'), 'awards', { ...honour(), level: 'International' }, true);
-    rules.review(db, mgmt, 'awards', id, 'Approved', '');
+    rules.review(db, office, 'awards', id, 'Approved', '');
     const after = facultyStats(db, f).find((s) => s.faculty.id === 'EMP1001')!;
     expect(after.awards).toBe(before.awards + 1);
     expect(after.score - before.score).toBeCloseTo(db.settings.weights.awardInternational);
@@ -185,5 +216,42 @@ describe('reports', () => {
 describe('csv', () => {
   it('quotes commas and neutralises formulas', () => {
     expect(toCsv(['a', 'b'], [['x,y', '=SUM(A1)'], [-5, 'ok']])).toBe('a,b\r\n"x,y",\'=SUM(A1)\r\n-5,ok');
+  });
+});
+
+describe('management scope and researcher profiles', () => {
+  it('management receives approved records only, without review remarks', () => {
+    const id = rules.saveRecord(db, fac('EMP1001'), 'fdps', fdp(), true);
+    const seen = rules.scopeFor(db, mgmt);
+    for (const k of ['publications', 'grants', 'seedMoney', 'fdps', 'conferences', 'awards'] as const) {
+      expect((seen[k] as { status: string }[]).every((r) => r.status === 'Approved')).toBe(true);
+    }
+    expect(seen.fdps.some((x) => x.id === id)).toBe(false);
+    expect(seen.publications.every((p) => p.history.every((h) => !h.remark))).toBe(true);
+  });
+
+  it('Google Scholar metrics are kept as entered, blank means not available, and changes are stamped', () => {
+    const b = rules.normalizeBiodata(db.biodata.find((x) => x.facultyId === 'EMP1001')!);
+    expect(b.scholar.citations).toBeNull();
+    const f = db.faculty.find((x) => x.id === 'EMP1001')!;
+    const save = (bio: typeof b) => rules.reviewProfileChange(db, office, rules.proposeProfileChange(db, fac('EMP1001'), { biodata: bio, contact: f }, true), 'Approved', '');
+    save({ ...b, googleScholar: 'https://scholar.google.com/citations?user=abc', scholar: { ...b.scholar, citations: 420, hIndex: 11, i10Index: 13 } });
+    const saved = db.biodata.find((x) => x.facultyId === 'EMP1001')!;
+    expect(saved.scholar).toMatchObject({ citations: 420, hIndex: 11, i10Index: 13, updatedBy: 'EMP1001' });
+    expect(saved.scholar.updatedAt).not.toBe('');
+    expect(() => save({ ...saved, scholar: { ...saved.scholar, hIndex: 40 } })).toThrow(/h-index/);
+    expect(() => save({ ...saved, googleScholar: 'https://example.com/me' })).toThrow(/scholar.google/);
+    save({ ...saved, scholar: { ...saved.scholar, citations: null, hIndex: null, i10Index: null } });
+    expect(db.biodata.find((x) => x.facultyId === 'EMP1001')!.scholar.citations).toBeNull();
+  });
+
+  it('SDGs are limited to goals 1-17 and the sample data never invents metrics or photos', () => {
+    const b = rules.normalizeBiodata(db.biodata.find((x) => x.facultyId === 'EMP1001')!);
+    const f = db.faculty.find((x) => x.id === 'EMP1001')!;
+    rules.reviewProfileChange(db, office, rules.proposeProfileChange(db, fac('EMP1001'), { biodata: { ...b, sdgs: [3, 3, 0, 18, 9] }, contact: f }, true), 'Approved', '');
+    expect(db.biodata.find((x) => x.facultyId === 'EMP1001')!.sdgs).toEqual([3, 9]);
+    const fresh = createSeed();
+    expect(fresh.biodata.every((x) => x.scholar.citations === null && x.photo === '')).toBe(true);
+    expect(fresh.faculty.every((f) => /^Faculty [A-Z]+$/.test(f.name))).toBe(true);
   });
 });

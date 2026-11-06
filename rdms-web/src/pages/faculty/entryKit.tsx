@@ -83,7 +83,7 @@ export function AuthorTable({ value, onChange, error }: { value: Author[]; onCha
       <button type="button" className="btn sm" onClick={() => onChange([...value, { kind: 'Faculty', code: '', name: '', institution: db.settings.institutionName, department: '', email: '' }])}>Add New Author</button>
       <div className="tbl-wrap" style={{ marginTop: 6 }}>
         <table className="tbl">
-          <thead><tr><th>#</th><th>Internal / External</th><th>Roll No / Employee Code</th><th>Author Name</th><th>Institution Name</th><th>Department / Course</th><th>Mail Id</th><th /></tr></thead>
+          <thead><tr><th>#</th><th>Internal / External</th><th>Roll No / Employee Code</th><th>Author Name</th><th>Institution Name</th><th>Country (external)</th><th>Department / Course</th><th>Mail Id</th><th /></tr></thead>
           <tbody>
             {value.map((a, i) => (
               <tr key={i}>
@@ -94,6 +94,7 @@ export function AuthorTable({ value, onChange, error }: { value: Author[]; onCha
                   onBlur={(e) => { if (a.kind === 'Faculty') { const f = lookupFaculty(e.target.value); if (f) set(i, f); } }} list="faculty-codes" /></td>
                 <td><input type="text" value={a.name} onChange={(e) => set(i, { name: e.target.value })} aria-label={`Author ${i + 1} name`} /></td>
                 <td><input type="text" value={a.institution} onChange={(e) => set(i, { institution: e.target.value })} aria-label={`Author ${i + 1} institution`} /></td>
+                <td><input type="text" value={a.country ?? ''} disabled={a.kind !== 'External'} list="country-names" onChange={(e) => set(i, { country: e.target.value })} aria-label={`Author ${i + 1} country`} /></td>
                 <td><input type="text" value={a.department} onChange={(e) => set(i, { department: e.target.value })} aria-label={`Author ${i + 1} department`} /></td>
                 <td><input type="email" value={a.email} onChange={(e) => set(i, { email: e.target.value })} aria-label={`Author ${i + 1} email`} /></td>
                 <td className="row-actions">
@@ -104,6 +105,7 @@ export function AuthorTable({ value, onChange, error }: { value: Author[]; onCha
             ))}
           </tbody>
         </table>
+        <CountryList />
         {!value.length && <div className="empty">No authors yet.</div>}
       </div>
       <datalist id="faculty-codes">{db.faculty.filter((f) => f.active).map((f) => <option key={f.id} value={f.id}>{f.name}</option>)}</datalist>
@@ -121,7 +123,7 @@ export function InvestigatorTable({ value, onChange, error }: { value: Investiga
       <button type="button" className="btn sm" onClick={() => onChange([...value, { kind: 'Faculty', code: '', name: '', role: 'Co-PI', institution: db.settings.institutionName, department: '', sharePct: 0 }])}>Add New Investigator</button>
       <div className="tbl-wrap" style={{ marginTop: 6 }}>
         <table className="tbl">
-          <thead><tr><th>Internal / External</th><th>Roll No / Employee Code</th><th>Name</th><th>Investigator Type</th><th>Institution Name</th><th>Department</th><th className="num">Share %</th><th /></tr></thead>
+          <thead><tr><th>Internal / External</th><th>Roll No / Employee Code</th><th>Name</th><th>Investigator Type</th><th>Institution Name</th><th>Country (external)</th><th>Department</th><th className="num">Share %</th><th /></tr></thead>
           <tbody>
             {value.map((a, i) => (
               <tr key={i}>
@@ -132,6 +134,7 @@ export function InvestigatorTable({ value, onChange, error }: { value: Investiga
                 <td><input type="text" value={a.name} onChange={(e) => set(i, { name: e.target.value })} aria-label="Name" /></td>
                 <td><Select value={a.role} onChange={(v) => set(i, { role: v as Investigator['role'] })} options={['PI', 'Co-PI', 'Co-I']} aria-label="Role" /></td>
                 <td><input type="text" value={a.institution} onChange={(e) => set(i, { institution: e.target.value })} aria-label="Institution" /></td>
+                <td><input type="text" value={a.country ?? ''} disabled={a.kind !== 'External'} list="country-names" onChange={(e) => set(i, { country: e.target.value })} aria-label="Country" /></td>
                 <td><input type="text" value={a.department} onChange={(e) => set(i, { department: e.target.value })} aria-label="Department" /></td>
                 <td style={{ width: 80 }}><NumberInput value={a.sharePct} onChange={(v) => set(i, { sharePct: v })} min={0} max={100} aria-label="Share percent" /></td>
                 <td><button type="button" className="link-btn" disabled={i === 0} onClick={() => onChange(value.filter((_, j) => j !== i))}>Remove</button></td>
@@ -140,6 +143,7 @@ export function InvestigatorTable({ value, onChange, error }: { value: Investiga
           </tbody>
           <tfoot><tr><td colSpan={6}>Total share</td><td className="num" style={{ color: total === 100 ? undefined : 'var(--bad)' }}>{total}%</td><td /></tr></tfoot>
         </table>
+        <CountryList />
       </div>
       <datalist id="faculty-codes-inv">{db.faculty.filter((f) => f.active).map((f) => <option key={f.id} value={f.id}>{f.name}</option>)}</datalist>
       {error && <div className="field"><span className="err">{error}</span></div>}
@@ -167,3 +171,9 @@ export function validateInvestigators(list: Investigator[], selfId: string, errs
 }
 
 export const BlockedEntry = ({ msg }: { msg: string }) => <div className="panel"><Alert kind="error">{msg}</Alert></div>;
+
+/** Suggestions for the country of an external collaborator (shown on the collaboration map). Free text is allowed. */
+const COUNTRIES = ['Australia', 'Austria', 'Bangladesh', 'Belgium', 'Brazil', 'Canada', 'China', 'Denmark', 'Egypt', 'Finland', 'France', 'Germany', 'Hong Kong', 'India', 'Indonesia', 'Iran', 'Ireland', 'Israel', 'Italy', 'Japan', 'Kenya', 'Malaysia', 'Mexico', 'Nepal', 'Netherlands', 'New Zealand', 'Nigeria', 'Norway', 'Oman', 'Pakistan', 'Poland', 'Portugal', 'Qatar', 'Russia', 'Saudi Arabia', 'Singapore', 'South Africa', 'South Korea', 'Spain', 'Sri Lanka', 'Sweden', 'Switzerland', 'Taiwan', 'Thailand', 'Turkey', 'United Arab Emirates', 'United Kingdom', 'United States', 'Vietnam'];
+function CountryList() {
+  return <datalist id="country-names">{COUNTRIES.map((c) => <option key={c} value={c} />)}</datalist>;
+}
