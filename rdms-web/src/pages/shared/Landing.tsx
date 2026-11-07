@@ -236,9 +236,10 @@ export function IntroLanding() {
 
         <section className="me-section me-pb-only" id="rise">
           <div className="me-container">
-            <p className="me-eyebrow me-mb">The RISE framework</p>
-            <h2 className="me-h2 narrow">From research activity to institutional intelligence</h2>
-            <RiseStrip items={RISE} />
+            <RiseStrip items={RISE}>
+              <p className="me-eyebrow me-mb">The RISE framework</p>
+              <h2 className="me-h2 narrow">From research activity to institutional intelligence</h2>
+            </RiseStrip>
           </div>
         </section>
 

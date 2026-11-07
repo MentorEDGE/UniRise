@@ -4,7 +4,7 @@ import { SdgTile } from '../../components/sdg';
 
 /**
  * Motion for the public introduction page: words that rise into place, a shuffling stack of product cards in the hero,
- * sections that fade up as they scroll into view, and the RISE framework as an expanding strip. Everything stays still
+ * sections that fade up as they scroll into view, and the RISE framework as a strip that opens panel by panel as you scroll. Everything stays still
  * for people who ask their device for reduced motion, and the moving parts have a pause button.
  */
 
@@ -133,36 +133,60 @@ function NetworkCard() {
   );
 }
 
-/** The four RISE disciplines as panels: one open with its text, the rest slim; it moves on by itself or with the arrows. */
-export function RiseStrip({ items }: { items: string[][] }) {
+/** The four RISE disciplines as panels. On wide screens the strip stays pinned while the page scrolls and the open panel
+ *  follows the scroll (R, I, S, E); clicking a slim panel scrolls to it. On phones and for reduced motion it is a plain, clickable list. */
+export function RiseStrip({ items, children }: { items: string[][]; children?: ReactNode }) {
   const [open, setOpen] = useState(0);
-  const [paused, setPaused] = useState(() => prefersReducedMotion());
-  const hold = useRef(false);
+  const [pinned, setPinned] = useState(false);
+  const wrap = useRef<HTMLDivElement>(null);
+  const stick = useRef<HTMLDivElement>(null);
   useEffect(() => {
-    if (paused) return;
-    const t = setInterval(() => { if (!hold.current && !document.hidden) setOpen((o) => (o + 1) % items.length); }, 5200);
-    return () => clearInterval(t);
-  }, [paused, items.length]);
-  const go = (d: number) => setOpen((o) => (o + d + items.length) % items.length);
+    const mq = matchMedia('(min-width: 861px) and (prefers-reduced-motion: no-preference)');
+    const sync = () => setPinned(mq.matches);
+    sync(); mq.addEventListener('change', sync);
+    return () => mq.removeEventListener('change', sync);
+  }, []);
+  /** Scroll distance (px) over which the strip is pinned, and the page offset where pinning starts. */
+  const span = () => {
+    const w = wrap.current!, st = stick.current!;
+    const top = parseFloat(getComputedStyle(st).top) || 0;
+    return { top, dist: Math.max(1, w.offsetHeight - st.offsetHeight), start: w.getBoundingClientRect().top + scrollY - top };
+  };
+  useEffect(() => {
+    if (!pinned) return;
+    let raf = 0;
+    const update = () => {
+      raf = 0;
+      const { start, dist } = span();
+      const p = Math.min(0.999, Math.max(0, (scrollY - start) / dist));
+      setOpen(Math.floor(p * items.length));
+    };
+    const on = () => { if (!raf) raf = requestAnimationFrame(update); };
+    update();
+    addEventListener('scroll', on, { passive: true }); addEventListener('resize', on);
+    return () => { removeEventListener('scroll', on); removeEventListener('resize', on); cancelAnimationFrame(raf); };
+  }, [pinned, items.length]);
+  const jump = (i: number) => {
+    if (!pinned) return setOpen(i);
+    const { start, dist } = span();
+    scrollTo({ top: start + ((i + 0.5) / items.length) * dist, behavior: 'smooth' });
+  };
   return (
-    <div className="rs" onMouseEnter={() => { hold.current = true; }} onMouseLeave={() => { hold.current = false; }} onFocus={() => { hold.current = true; }} onBlur={() => { hold.current = false; }}>
-      <div className="rs-tools">
-        <button type="button" onClick={() => setPaused((p) => !p)} aria-label={paused ? 'Play' : 'Pause'} aria-pressed={paused}>
-          {paused ? <svg viewBox="0 0 16 16" aria-hidden><path d="M5 3.5v9l7.5-4.5Z" /></svg> : <svg viewBox="0 0 16 16" aria-hidden><path d="M5 3.5h2v9H5zM9 3.5h2v9H9z" /></svg>}
-        </button>
-        <button type="button" onClick={() => go(-1)} aria-label="Previous"><svg viewBox="0 0 16 16" aria-hidden><path d="M10 3 5 8l5 5" /></svg></button>
-        <button type="button" onClick={() => go(1)} aria-label="Next"><svg viewBox="0 0 16 16" aria-hidden><path d="m6 3 5 5-5 5" /></svg></button>
+    <div className={`rs ${pinned ? 'rs-pinned' : ''}`} ref={wrap} style={pinned ? { height: `calc(var(--rs-h) + ${(items.length - 1) * 55}vh)` } : undefined}>
+      <div className="rs-stick" ref={stick}>
+        {children}
+        <ol className="rs-row">
+          {items.map(([l, t, d], i) => (
+            <li key={l} className={`rs-panel ${i === open ? 'open' : ''}`}>
+              <button type="button" className="rs-head" onClick={() => jump(i)} aria-expanded={i === open}>
+                <span className="rs-letter">{l}</span><span className="rs-name">{t}</span>
+              </button>
+              <div className="rs-body" aria-hidden={i !== open}><h3>{t}</h3><p>{d}</p><span className="rs-step">{i + 1} / {items.length}</span></div>
+            </li>
+          ))}
+        </ol>
+        {pinned && <div className="rs-prog" aria-hidden><i style={{ transform: `scaleX(${(open + 1) / items.length})` }} /></div>}
       </div>
-      <ol className="rs-row">
-        {items.map(([l, t, d], i) => (
-          <li key={l} className={`rs-panel ${i === open ? 'open' : ''}`}>
-            <button type="button" className="rs-head" onClick={() => setOpen(i)} aria-expanded={i === open}>
-              <span className="rs-letter">{l}</span><span className="rs-name">{t}</span>
-            </button>
-            <div className="rs-body" aria-hidden={i !== open}><h3>{t}</h3><p>{d}</p><span className="rs-step">{i + 1} / {items.length}</span></div>
-          </li>
-        ))}
-      </ol>
     </div>
   );
 }

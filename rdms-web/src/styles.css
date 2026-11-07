@@ -1641,7 +1641,7 @@ a.rp-title:hover, button.rp-title:hover { text-decoration: underline; }
 .hs-card.front .hc-net line { stroke-dashoffset: 0; }
 
 /* RISE as an expanding strip */
-.rs { margin-top: calc(var(--r) * 2.5); }
+.rs { margin-top: 0; }
 .rs-tools { display: flex; justify-content: flex-end; gap: 8px; margin-bottom: 12px; }
 .rs-tools button { width: 36px; height: 36px; border-radius: 8px; border: 1px solid var(--me-hair, #e5e7eb); background: var(--me-card); display: grid; place-items: center; cursor: pointer; }
 .rs-tools svg { fill: none; stroke: var(--me-h); stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; }
@@ -2051,3 +2051,13 @@ a.rp-title:hover, button.rp-title:hover { text-decoration: underline; }
   .eco-line { z-index: 1; }
 }
 @media (prefers-reduced-motion: reduce) { .eco-photo { transition: opacity .2s; transform: none; } }
+
+/* RISE: pinned while scrolling (wide screens, motion allowed) */
+.rs-pinned { --rs-h: max(600px, calc(90vh - 24px)); margin-top: 0; }
+/* the heading and the strip are pinned together and fill the screen under the header */
+.rs-pinned .rs-stick { position: sticky; top: max(10vh, 64px); height: var(--rs-h); display: flex; flex-direction: column; justify-content: center; }
+.rs-pinned .rs-stick .me-mb { margin-bottom: calc(var(--r) * 1) !important; }
+.rs-pinned .rs-stick .me-h2 { margin-bottom: calc(var(--r) * 1.25) !important; font-size: clamp(28px, 3.4vw, 44px); }
+.rs-pinned .rs-row { flex: none; height: 340px; }
+.rs-prog { height: 3px; margin-top: 16px; border-radius: 3px; background: var(--me-hair); overflow: hidden; }
+.rs-prog i { display: block; height: 100%; background: var(--me-yellow, #ffc61a); transform-origin: left; transition: transform .6s cubic-bezier(.6, 0, .2, 1); }
