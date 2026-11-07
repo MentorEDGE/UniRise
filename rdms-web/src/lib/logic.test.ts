@@ -159,6 +159,61 @@ describe('honours and awards', () => {
   });
 });
 
+describe('intellectual property', () => {
+  const patent = (): Record<string, unknown> => ({ ipType: 'Patent', ipTypeOther: '', title: 'A system for testing', description: 'A test invention.', stage: 'Filed', applicationNumber: '202641100001', filingDate: '2026-08-10', grantDate: '', office: 'Indian Patent Office', owner: 'University', ownerOther: '', funding: '', licensed: false, licensee: '', coOwners: '', documentName: 'r.pdf', agreementName: '', declared: true });
+
+  it('is entered by faculty, approved only by the Office of Research, and shown to management once approved', () => {
+    const id = rules.saveRecord(db, fac('EMP1001'), 'ipr', patent(), true);
+    expect(id).toMatch(/^IPR/);
+    expect(db.ipr.find((x) => x.id === id)!.status).toBe('Submitted');
+    expect(() => rules.saveRecord(db, mgmt, 'ipr', patent(), false)).toThrow(/faculty/);
+    expect(rules.scopeFor(db, mgmt).ipr.some((x) => x.id === id)).toBe(false);
+    expect(rules.scopeFor(db, fac('EMP1002')).ipr.some((x) => x.id === id)).toBe(false);
+    expect(() => rules.review(db, mgmt, 'ipr', id, 'Approved', '')).toThrow(/Office of Research/);
+    rules.review(db, office, 'ipr', id, 'Approved', '');
+    expect(rules.scopeFor(db, mgmt).ipr.some((x) => x.id === id)).toBe(true);
+  });
+
+  it('checks the form: type, description length, status, dates, owner, licence partner, duplicates, attachment and declaration', () => {
+    const save = (x: Record<string, unknown>, submit = false) => rules.saveRecord(db, fac('EMP1001'), 'ipr', { ...patent(), ...x }, submit);
+    expect(() => save({ ipType: 'Utility model' })).toThrow(/type of IP/);
+    expect(() => save({ ipType: 'Other' })).toThrow(/type of IP \(other\)/);
+    expect(() => save({ description: Array(51).fill('word').join(' ') })).toThrow(/50 words/);
+    expect(() => save({ stage: 'Granted' })).toThrow(/status/);
+    expect(() => save({ filingDate: '2999-01-01' })).toThrow(/after it has been filed/);
+    expect(() => save({ grantDate: '2026-01-01' })).toThrow(/before the filing date/);
+    expect(() => save({ office: ' ' })).toThrow(/Office \/ country/);
+    expect(() => save({ owner: 'Nobody' })).toThrow(/owner/);
+    expect(() => save({ licensed: true })).toThrow(/Partner name/);
+    expect(() => save({ documentName: '' }, true)).toThrow(/filing receipt/);
+    expect(() => save({ declared: false }, true)).toThrow(/declaration/);
+    save({ applicationNumber: 'DUP-1' });
+    expect(() => save({ applicationNumber: 'dup-1', ipType: 'Design' })).toThrow(/already entered/);
+    expect(save({ ipType: 'Other', ipTypeOther: 'Plant variety', stage: 'Granted / Registered', applicationNumber: 'PV-1', grantDate: '2026-09-01', owner: 'Joint', licensed: true, licensee: 'A seed company' })).toMatch(/^IPR/);
+  });
+
+  it('approved patents count for the faculty member and score as granted or filed', () => {
+    const f = { from: '2026-08-01', to: '2026-08-31', department: '' };
+    const before = facultyStats(db, f).find((s) => s.faculty.id === 'EMP1001')!;
+    const id = rules.saveRecord(db, fac('EMP1001'), 'ipr', { ...patent(), applicationNumber: 'SCORE-1', stage: 'Granted / Registered', grantDate: '2026-09-01' }, true);
+    rules.review(db, office, 'ipr', id, 'Approved', '');
+    const after = facultyStats(db, f).find((s) => s.faculty.id === 'EMP1001')!;
+    expect(after.ipr).toBe(before.ipr + 1);
+    expect(after.patents).toBe(before.patents + 1);
+    expect(after.score - before.score).toBeCloseTo(db.settings.weights.patentGranted);
+    expect(uniqueCounts(db, f).ipr.some((x) => x.id === id)).toBe(true);
+  });
+
+  it('older IP records are brought up to the form fields without losing what was entered', () => {
+    const old = { id: 'IPR1', facultyId: 'EMP1001', status: 'Approved', createdAt: '', updatedAt: '', history: [], ipType: 'Copyright', title: 'T', stage: 'Registered', applicationNumber: 'SW-1', filingDate: '2024-01-01', registrationNumber: 'SW-1/2025', grantDate: '2025-01-01', country: 'India', office: 'Copyright Office', coOwners: '', description: '', documentName: 'c.pdf' };
+    const x = rules.normalizeIp(old as never);
+    expect(x.stage).toBe('Granted / Registered');
+    expect(x.office).toBe('Copyright Office, India');
+    expect(x.owner).toBe('University');
+    expect('country' in x || 'registrationNumber' in x).toBe(false);
+  });
+});
+
 describe('what faculty receive', () => {
   it('own records in any state, colleagues’ approved publications only, no colleague biodata or contact details', () => {
     const me = 'EMP1005';

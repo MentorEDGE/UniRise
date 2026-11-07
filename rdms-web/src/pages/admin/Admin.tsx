@@ -28,7 +28,7 @@ function useAdmin<T>(path: string) {
 
 // ---------------- Record approvals ----------------
 
-const KINDS: EntityKind[] = ['publications', 'grants', 'seedMoney', 'fdps', 'conferences', 'awards'];
+const KINDS: EntityKind[] = ['publications', 'grants', 'seedMoney', 'fdps', 'conferences', 'awards', 'ipr'];
 type QueueKind = EntityKind | 'profiles';
 interface ApprovalQueue { records: Record<EntityKind, AnyRecord[]>; profiles: ProfileChange[]; currentProfiles: Record<string, Biodata | null> }
 const decisionOf = (h: HistoryItem[]) => [...h].reverse().find((x) => ['Approved', 'Sent for rework', 'Returned for correction', 'Rejected'].includes(x.action));

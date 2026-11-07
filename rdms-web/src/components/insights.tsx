@@ -1,7 +1,8 @@
 import { useMemo, useState } from 'react';
 import { Bar, BarChart, CartesianGrid, Cell, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts';
 import { dateOf, inr, isSanctioned, lakh } from '../lib/analytics';
-import type { AnyRecord, Conference, DB, EntityKind, Fdp, Grant, Honour, Publication, SeedMoney } from '../lib/types';
+import type { AnyRecord, Conference, DB, EntityKind, Fdp, Grant, Honour, IntellectualProperty, Publication, SeedMoney } from '../lib/types';
+import { ipIsGranted, ipTypeLabel } from '../lib/types';
 import { useTheme } from '../lib/theme';
 
 /**
@@ -46,6 +47,10 @@ function config(kind: EntityKind, deptOf: (r: AnyRecord) => string) {
       noun: 'honours and awards', metrics: [count],
       dims: [yr, dept, { id: 'type', label: 'Category', of: (r: AnyRecord) => (r as Honour).category, order: 'count' }, { id: 'level', label: 'Level', of: (r: AnyRecord) => (r as Honour).level, order: 'count' }] as Dim[],
     };
+    case 'ipr': return {
+      noun: 'patents, copyrights and trademarks', metrics: [count],
+      dims: [yr, { id: 'type', label: 'Type', of: (r: AnyRecord) => ipTypeLabel(r as IntellectualProperty), order: 'count' }, { id: 'stage', label: 'Status', of: (r: AnyRecord) => (r as IntellectualProperty).stage, order: 'count' }, { id: 'owner', label: 'Owner', of: (r: AnyRecord) => (r as IntellectualProperty).owner, order: 'count' }, dept] as Dim[],
+    };
     default: return {
       noun: 'conferences', metrics: [count],
       dims: [yr, dept, { id: 'level', label: 'Level', of: (r: AnyRecord) => (r as Conference).level, order: 'count' }, { id: 'type', label: 'Participation', of: (r: AnyRecord) => (r as Conference).participation, order: 'count' }] as Dim[],
@@ -82,6 +87,11 @@ function summary(kind: EntityKind, rows: AnyRecord[]): [string, string][] {
   if (kind === 'awards') {
     const a = rows as Honour[];
     return [['Total honours and awards', n], ['International', String(a.filter((x) => x.level === 'International').length)], ['National', String(a.filter((x) => x.level === 'National').length)], ['Faculty recognised', String(new Set(a.map((x) => x.facultyId)).size)]];
+  }
+  if (kind === 'ipr') {
+    const x = rows as IntellectualProperty[];
+    const patents = x.filter((r) => r.ipType === 'Patent');
+    return [['Total intellectual property', n], ['Patents filed', String(patents.length)], ['Patents granted', String(patents.filter((r) => ipIsGranted(r.stage)).length)], ['Licensed / commercialised', String(x.filter((r) => r.licensed).length)]];
   }
   const c = rows as Conference[];
   return [['Total conferences', n], ['National', String(c.filter((x) => x.level !== 'International').length)], ['International', String(c.filter((x) => x.level === 'International').length)], ['Papers presented', String(c.filter((x) => x.participation.includes('Presented')).length)]];

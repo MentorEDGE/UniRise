@@ -9,8 +9,8 @@ import Database from 'better-sqlite3';
 import fs from 'node:fs';
 import path from 'node:path';
 import type { DB, Institution } from '../src/lib/types';
-import { AWARD_WEIGHT_DEFAULTS } from '../src/lib/types';
-import { normalizeBiodata } from '../src/lib/domain';
+import { AWARD_WEIGHT_DEFAULTS, IP_WEIGHT_DEFAULTS } from '../src/lib/types';
+import { normalizeBiodata, normalizeIp } from '../src/lib/domain';
 
 export interface AccountRow {
   id: string; email: string; password_hash: string; role: 'office' | 'management' | 'faculty'; institution_id: string | null; faculty_id: string | null;
@@ -19,7 +19,7 @@ export interface AccountRow {
   affiliation_verified: number;
 }
 
-const COLLECTIONS = ['faculty', 'biodata', 'publications', 'grants', 'seedMoney', 'fdps', 'conferences', 'awards', 'profileChanges', 'notices'] as const;
+const COLLECTIONS = ['faculty', 'biodata', 'publications', 'grants', 'seedMoney', 'fdps', 'conferences', 'awards', 'ipr', 'profileChanges', 'notices'] as const;
 const keyOf = (c: (typeof COLLECTIONS)[number], row: Record<string, unknown>) => String(c === 'biodata' ? row.facultyId : row.id);
 
 export class Storage {
@@ -148,9 +148,10 @@ export class Storage {
         else if (row.key === 'version') data.version = Number(row.value);
       }
       // Institutions created before Honours & Awards existed get the default award weights.
-      if (data.settings.weights) data.settings.weights = { ...AWARD_WEIGHT_DEFAULTS, ...data.settings.weights };
+      if (data.settings.weights) data.settings.weights = { ...AWARD_WEIGHT_DEFAULTS, ...IP_WEIGHT_DEFAULTS, ...data.settings.weights };
       // Profiles stored before the researcher-profile fields existed get empty values (never invented ones).
       data.biodata = data.biodata.map(normalizeBiodata);
+      data.ipr = (data.ipr ?? []).map((x) => normalizeIp(x as never));
       t = { conn, data };
       this.tenants.set(institutionId, t);
     }

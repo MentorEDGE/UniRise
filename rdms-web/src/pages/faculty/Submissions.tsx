@@ -9,7 +9,7 @@ import type { AnyRecord, EntityKind, HistoryItem, Status } from '../../lib/types
 import { STATUS_LABEL } from '../../lib/types';
 import { RecordDetail } from '../shared/RecordDetail';
 
-const KINDS: EntityKind[] = ['publications', 'grants', 'seedMoney', 'fdps', 'conferences', 'awards'];
+const KINDS: EntityKind[] = ['publications', 'grants', 'seedMoney', 'fdps', 'conferences', 'awards', 'ipr'];
 interface Row { key: string; kind: EntityKind | 'profile'; id: string; what: string; title: string; status: Status; updatedAt: string; comment: string }
 const lastRemark = (h: HistoryItem[]) => [...h].reverse().find((x) => x.remark)?.remark ?? '';
 

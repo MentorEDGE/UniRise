@@ -1,7 +1,8 @@
 import type {
+  IntellectualProperty,
   Author, Biodata, Conference, DB, Faculty, Fdp, Grant, HistoryItem, Honour, Investigator, Publication, SeedMoney, Status,
 } from './types';
-import { AWARD_WEIGHT_DEFAULTS, MONTHS } from './types';
+import { AWARD_WEIGHT_DEFAULTS, IP_WEIGHT_DEFAULTS, MONTHS } from './types';
 
 /** Deterministic PRNG so the sample data is identical on every machine. */
 function mulberry32(seed: number) {
@@ -29,6 +30,7 @@ export const DEFAULT_WEIGHTS = {
   fdpAttended: 2, fdpOrganised: 4, fdpResource: 3,
   confPresented: 3, confInvited: 4, confChair: 2, confAttended: 1, confOrganised: 4,
   ...AWARD_WEIGHT_DEFAULTS,
+  ...IP_WEIGHT_DEFAULTS,
 };
 
 /** Placeholder labels instead of real-looking personal names: A, B, ... Z, AA, AB, ... */
@@ -368,6 +370,38 @@ export function createSeed(opts: SeedOptions = DEFAULT_SEED): DB {
   }
   awards.sort((a, z) => a.awardDate.localeCompare(z.awardDate));
 
+  // Intellectual property: patents for the more active researchers, then designs, copyrights for software and course material, and trademarks.
+  const ipr: IntellectualProperty[] = [];
+  const IP_OFFICE: Record<string, string> = { Patent: 'Indian Patent Office', Design: 'Indian Patent Office (Designs)', Copyright: 'Copyright Office, India', Trademark: 'Trade Marks Registry, India' };
+  for (const f of faculty) {
+    const a = activity.get(f.id)!;
+    const n = a > 0.9 ? int(1, 3) : a > 0.6 ? (rnd() < 0.5 ? 1 : 0) : rnd() < 0.15 ? 1 : 0;
+    for (let i = 0; i < n; i++) {
+      const roll = rnd();
+      const ipType = roll < 0.6 ? 'Patent' : roll < 0.7 ? 'Design' : roll < 0.9 ? 'Copyright' : 'Trademark';
+      const filed = dateIn(pick([2020, 2021, 2022, 2023, 2024, 2025, 2026]));
+      const age = 2026 - Number(filed.slice(0, 4));
+      const stage = ipType === 'Patent' ? (age >= 4 ? 'Granted / Registered' : age >= 2 ? 'Published' : 'Filed') : age >= 1 ? 'Granted / Registered' : 'Filed';
+      const grantYear = Math.min(2026, Number(filed.slice(0, 4)) + (ipType === 'Patent' ? 3 : 1));
+      const grantDate = stage === 'Granted / Registered' ? `${grantYear}-${filed.slice(5, 7)}-${filed.slice(8, 10)}` : '';
+      const topic = pick(topicsOf(f.department));
+      const title = ipType === 'Patent' ? `A system and method for ${topic.toLowerCase()}` : ipType === 'Design' ? `Enclosure design for a ${topic.toLowerCase()} device` : ipType === 'Copyright' ? `${topic}: software and course material` : `${topic.split(' ')[0]}Lab`;
+      const no = String(int(100000, 999999));
+      const owner = pick(['University', 'University', 'University', 'Joint', 'Individual(s)']);
+      const licensed = stage === 'Granted / Registered' && rnd() < 0.2;
+      ipr.push({
+        ...base(f, filed), id: nextId('IPR'), ipType, ipTypeOther: '', title, stage,
+        description: ipType === 'Patent' ? `An invention in ${topic.toLowerCase()} that improves accuracy at lower cost.` : ipType === 'Design' ? 'The shape and configuration of the device enclosure.' : ipType === 'Copyright' ? 'Source code, documentation and course material.' : 'Name and logo of the research lab.',
+        applicationNumber: ipType === 'Patent' ? `${filed.slice(0, 4)}4110${no}` : ipType === 'Design' ? `${int(300000, 420000)}-001` : ipType === 'Copyright' ? `SW-${no}/${filed.slice(0, 4)}` : `${int(4000000, 6999999)}`,
+        filingDate: filed, grantDate: grantDate > '2026-10-31' ? '2026-10-31' : grantDate, office: IP_OFFICE[ipType],
+        owner, ownerOther: '', funding: rnd() < 0.3 ? pick(['DST', 'SERB', 'AICTE', 'Institution seed money']) : '', licensed, licensee: licensed ? pick(['Bharat Electronics Ltd', 'A regional start-up', 'Tata Consultancy Services']) : '',
+        coOwners: owner === 'Joint' ? `Dr. External Collaborator, ${pick(['IIT Madras', 'IISc Bengaluru', 'NIT Karnataka'])}` : '',
+        documentName: `IPR_${f.id}_${filed.slice(0, 4)}.pdf`, agreementName: owner === 'Joint' ? `AGREEMENT_${f.id}.pdf` : '', declared: true,
+      });
+    }
+  }
+  ipr.sort((a, z) => a.filingDate.localeCompare(z.filingDate));
+
   return {
     version: 1,
     settings: {
@@ -379,7 +413,7 @@ export function createSeed(opts: SeedOptions = DEFAULT_SEED): DB {
       targets: { publicationsPerFaculty: 2, fdpHoursPerFaculty: 30, conferencesPerFaculty: 1, grantAppliedPerFaculty: 0.5 },
       weights: { ...DEFAULT_WEIGHTS },
     },
-    faculty, biodata, publications, grants, seedMoney, fdps, conferences, awards, profileChanges: [],
+    faculty, biodata, publications, grants, seedMoney, fdps, conferences, awards, ipr, profileChanges: [],
     notices: [
       { id: 'N1', at: '2026-10-20T09:00:00.000Z', title: 'Seed money window open', body: 'Applications for the Q3 seed money cycle are open until 30 November 2026.' },
       { id: 'N2', at: '2026-10-05T09:00:00.000Z', title: 'Update your profile', body: 'All faculty must complete their profiles before the NAAC peer team visit in January 2027.' },
@@ -398,6 +432,6 @@ export function emptyInstitution(name: string, tagline: string, departments: str
       targets: { publicationsPerFaculty: 2, fdpHoursPerFaculty: 30, conferencesPerFaculty: 1, grantAppliedPerFaculty: 0.5 },
       weights: { ...DEFAULT_WEIGHTS },
     },
-    faculty: [], biodata: [], publications: [], grants: [], seedMoney: [], fdps: [], conferences: [], awards: [], profileChanges: [], notices: [], seq: 1000,
+    faculty: [], biodata: [], publications: [], grants: [], seedMoney: [], fdps: [], conferences: [], awards: [], ipr: [], profileChanges: [], notices: [], seq: 1000,
   };
 }

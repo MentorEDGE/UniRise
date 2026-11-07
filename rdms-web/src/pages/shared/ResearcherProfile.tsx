@@ -6,14 +6,14 @@ import { activityByYear, ActivitySpark, Avatar, SdgIcon, splitList } from '../..
 import { fmtDate, inr, isSanctioned } from '../../lib/analytics';
 import { creditedFaculty } from '../../lib/domain';
 import { saveFaculty, useStore } from '../../lib/store';
-import type { EntityKind, Faculty, Grant, Honour, Publication, SeedMoney } from '../../lib/types';
-import { EMPTY_SCHOLAR, SDGS } from '../../lib/types';
+import type { EntityKind, Faculty, Grant, Honour, IntellectualProperty, Publication, SeedMoney } from '../../lib/types';
+import { EMPTY_SCHOLAR, SDGS, ipTypeLabel } from '../../lib/types';
 import { RecordDetail } from './RecordDetail';
 import { NetworkGraph, outputsOf } from '../../components/network';
 
 const CollabMap = lazy(() => import('../../components/CollabMap'));
 
-type Tab = 'overview' | 'network' | 'projects' | 'publications' | 'grants' | 'fdps' | 'conferences' | 'awards';
+type Tab = 'overview' | 'network' | 'projects' | 'publications' | 'grants' | 'fdps' | 'conferences' | 'awards' | 'ipr';
 type NetTab = 'graph' | 'map' | 'profiles' | 'units';
 
 const PUB_GROUPS: { label: string; types: Publication['entryType'][] }[] = [
@@ -54,6 +54,7 @@ export function ResearcherProfile({ facultyId }: { facultyId: string }) {
     const grants = mine('grants', db.grants).sort((a, z) => z.appliedDate.localeCompare(a.appliedDate));
     const seed = mine('seedMoney', db.seedMoney).sort((a, z) => z.appliedDate.localeCompare(a.appliedDate));
     const awards = db.awards.filter((a) => a.status === 'Approved' && a.facultyId === facultyId).sort((a, z) => z.awardDate.localeCompare(a.awardDate));
+    const ipr = db.ipr.filter((a) => a.status === 'Approved' && a.facultyId === facultyId).sort((a, z) => z.filingDate.localeCompare(a.filingDate));
     const fdps = db.fdps.filter((a) => a.status === 'Approved' && a.facultyId === facultyId).sort((a, z) => z.fromDate.localeCompare(a.fromDate));
     const confs = db.conferences.filter((a) => a.status === 'Approved' && a.facultyId === facultyId).sort((a, z) => z.fromDate.localeCompare(a.fromDate));
     const projects = [
@@ -62,7 +63,7 @@ export function ResearcherProfile({ facultyId }: { facultyId: string }) {
     ].sort((a, z) => z.start.localeCompare(a.start));
     const src = outputsOf(db, facultyId);
     const externalPeople = [...src.people.values()].filter((p) => p.type === 'external').map((p) => ({ p, n: src.items.filter((i) => i.who.includes(p.key)).length })).sort((a, z) => z.n - a.n || a.p.name.localeCompare(z.p.name));
-    return { pubs, grants, seed, awards, fdps, confs, projects, activity: activityByYear(db, facultyId), network: networkOf(db, facultyId, pubs, grants, seed), externalPeople };
+    return { pubs, grants, seed, awards, ipr, fdps, confs, projects, activity: activityByYear(db, facultyId), network: networkOf(db, facultyId, pubs, grants, seed), externalPeople };
   }, [db, facultyId]);
 
   if (!f) return <Panel><Alert kind="error">Faculty member not found.</Alert></Panel>;
@@ -79,6 +80,7 @@ export function ResearcherProfile({ facultyId }: { facultyId: string }) {
     { id: 'fdps', label: 'FDPs', n: data.fdps.length, icon: I.cap },
     { id: 'conferences', label: 'Conferences', n: data.confs.length, icon: I.screen },
     { id: 'awards', label: 'Honours & Awards', n: data.awards.length, icon: I.trophy },
+    { id: 'ipr', label: 'Intellectual Property', n: data.ipr.length, icon: I.bulb },
   ];
   const profileLink = (id: string, label: ReactNode) => (isMgmt ? <Link to={`/faculty/${id}`}>{label}</Link> : <>{label}</>);
 
@@ -297,6 +299,22 @@ export function ResearcherProfile({ facultyId }: { facultyId: string }) {
             ) : <p className="muted">No approved honours or awards yet.</p>}
           </Section>
         )}
+
+        {tab === 'ipr' && (
+          <Section icon={I.bulb} title="Intellectual property">
+            {data.ipr.length ? (
+              <ol className="rp-list">{data.ipr.map((x: IntellectualProperty) => (
+                <li key={x.id}>
+                  <button type="button" className="rp-title link-btn" onClick={() => setOpen({ kind: 'ipr', id: x.id })}>{x.title}</button>
+                  <div className="rp-meta">{x.office} · application {x.applicationNumber} · filed {fmtDate(x.filingDate)}{x.grantDate ? ` · granted / registered ${fmtDate(x.grantDate)}` : ''}</div>
+                  {x.description && <div className="rp-cite">{x.description}</div>}
+                  {x.coOwners && <div className="rp-cite">With {x.coOwners}</div>}
+                  <div className="rp-tags"><span className="tag">{ipTypeLabel(x)}</span><span className="tag">{x.stage}</span>{x.licensed && <span className="tag">Licensed</span>}</div>
+                </li>
+              ))}</ol>
+            ) : <p className="muted">No approved intellectual property yet.</p>}
+          </Section>
+        )}
       </div>
       {open && <RecordDetail kind={open.kind} id={open.id} onClose={() => setOpen(null)} />}
       {editing && <OfficialDetails f={f} onClose={() => setEditing(false)} />}
@@ -402,5 +420,6 @@ const I = {
   coin: ic(<><circle cx="12" cy="12" r="8" /><path d="M14.8 9.2c-.6-.8-1.6-1.2-2.8-1.2-1.6 0-2.8.8-2.8 2s1.2 1.7 2.8 2 2.8.8 2.8 2-1.2 2-2.8 2c-1.2 0-2.2-.4-2.8-1.2M12 6.5V8M12 16v1.5" /></>),
   cap: ic(<><path d="m12 4 9 4.5-9 4.5-9-4.5Z" /><path d="M7 10.8v4.4c1.4 1.3 3.1 1.9 5 1.9s3.6-.6 5-1.9v-4.4M21 8.5v5" /></>),
   screen: ic(<><rect x="3.5" y="4" width="17" height="11" rx="1.8" /><path d="M12 15v3.5M8 20.5h8M7.5 8.5h9M7.5 11.5h5" /></>),
+  bulb: ic(<><path d="M9 18h6M10 21h4" /><path d="M12 3a6 6 0 0 0-3.6 10.8c.8.6 1.1 1.4 1.1 2.2h5c0-.8.3-1.6 1.1-2.2A6 6 0 0 0 12 3Z" /></>),
   trophy: ic(<><path d="M7.5 4h9v5a4.5 4.5 0 0 1-9 0Z" /><path d="M7.5 6H4.5a3 3 0 0 0 3 3.5M16.5 6h3a3 3 0 0 1-3 3.5M12 13.5V17M8.5 20h7M9.5 17h5v3h-5Z" /></>),
 };

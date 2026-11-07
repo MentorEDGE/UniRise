@@ -116,6 +116,8 @@ export function FacultySearch() {
         {q && <p className="dir-q">Showing results for “{q}” · <button type="button" className="link-btn" onClick={() => { setDraft(''); update((p) => p.delete('q')); }}>clear search</button></p>}
       </section>
 
+      <PortalCounts />
+
       <div className="dir-body">
         <aside className="dir-filters" aria-label="Filters">
           <div className="dir-filters-head">
@@ -208,3 +210,28 @@ function PersonCard({ e }: { e: Entry }) {
 }
 
 const PersonGlyph = () => <svg className="dir-glyph" viewBox="0 0 40 44" aria-hidden><circle cx="20" cy="15" r="8.5" /><path d="M4 44c0-9.5 7.2-16 16-16s16 6.5 16 16Z" /></svg>;
+
+/** What the institution holds, counted from approved records, as icons with numbers under the search (like a research portal home). */
+function PortalCounts() {
+  const { db } = useStore();
+  const ok = <T extends { status: string }>(xs: T[] | undefined) => (xs ?? []).filter((r) => r.status === 'Approved').length;
+  const items: { label: string; n: number; to: string; d: string }[] = [
+    { label: 'Profiles', n: db.faculty.filter((f) => f.active).length, to: '/faculty', d: 'M16 15a6 6 0 1 0 0-12 6 6 0 0 0 0 12Zm-11 15c1-6.5 5.4-10 11-10s10 3.5 11 10Z' },
+    { label: 'Research units', n: db.settings.departments.length, to: '/analytics/departments', d: 'M2 15 16 3l14 12h-4v14h-7v-8h-6v8H6V15Z' },
+    { label: 'Projects', n: ok(db.grants) + ok(db.seedMoney), to: '/grants', d: 'm16 2 13 6v15l-13 7-13-7V8Zm0 3.3L6.6 9.6 16 14l9.4-4.4ZM5 11.4v10.4l10 5.4V15.8Z' },
+    { label: 'Outputs', n: ok(db.publications), to: '/publications', d: 'M3 6c4.5-1.6 8.6-1.4 12 1.2V28c-3.4-2.6-7.5-2.8-12-1.2Zm26 0c-4.5-1.6-8.6-1.4-12 1.2V28c3.4-2.6 7.5-2.8 12-1.2Z' },
+    { label: 'Intellectual property', n: ok(db.ipr), to: '/ipr', d: 'M16 2a10 10 0 0 0-6 18c1.3 1 2 2.3 2 3.8V25h8v-1.2c0-1.5.7-2.8 2-3.8A10 10 0 0 0 16 2Zm-4 25h8v2h-8Zm1 3h6v1h-6Z' },
+    { label: 'Prizes', n: ok(db.awards), to: '/awards', d: 'M9 3h14v8a7 7 0 0 1-14 0Zm0 2H3a6 6 0 0 0 6 7Zm14 0h6a6 6 0 0 1-6 7Zm-9 13h4v5h-4Zm-4 6h12v5H10Z' },
+    { label: 'Activities', n: ok(db.fdps) + ok(db.conferences), to: '/conferences', d: 'M11 4h10v4h8v20H3V8h8Zm2 2v2h6V6ZM3 15h26v2H3Z' },
+  ];
+  return (
+    <nav className="portal-counts" aria-label="What the institution holds">
+      {items.map((x) => (
+        <Link key={x.label} to={x.to} className="pc-item">
+          <span className="pc-ic"><svg viewBox="0 0 32 32" aria-hidden><path d={x.d} fillRule="evenodd" /></svg><b>{x.n.toLocaleString('en-IN')}</b></span>
+          <span className="pc-label">{x.label}</span>
+        </Link>
+      ))}
+    </nav>
+  );
+}

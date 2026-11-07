@@ -6,7 +6,8 @@
 import type {
   AnyRecord, Author, Biodata, DB, EntityKind, Faculty, Grant, Investigator, Notice, ProfileChange, Publication, Settings, Status,
 } from './types';
-import { AUTHOR_KINDS, AWARD_CATEGORIES, EMPTY_SCHOLAR, LEVELS, PUB_TYPES } from './types';
+import { AUTHOR_KINDS, AWARD_CATEGORIES, EMPTY_SCHOLAR, IP_DESCRIPTION_WORDS, IP_OWNERS, IP_STATUSES, IP_TYPES, LEVELS, PUB_TYPES, wordCount } from './types';
+import type { IntellectualProperty } from './types';
 
 /** 'office' is the Office of Research acting on one institution's database (record approvals only). */
 export interface Actor { userId: string; name: string; role: 'management' | 'faculty' | 'office'; facultyId?: string }
@@ -44,7 +45,7 @@ export function canView(actor: Actor, kind: EntityKind, r: AnyRecord) {
   return creditedFaculty(kind, r).includes(actor.facultyId!);
 }
 
-const KINDS: EntityKind[] = ['publications', 'grants', 'seedMoney', 'fdps', 'conferences', 'awards'];
+const KINDS: EntityKind[] = ['publications', 'grants', 'seedMoney', 'fdps', 'conferences', 'awards', 'ipr'];
 
 /** The slice of the institution's data this actor may receive. */
 export function scopeFor(db: DB, actor: Actor): DB {
@@ -64,7 +65,7 @@ export function scopeFor(db: DB, actor: Actor): DB {
     faculty: db.faculty.filter((f) => f.id === me || f.active).map((f) => (f.id === me ? f : { id: f.id, title: f.title, name: f.name, department: f.department, designation: '', email: '', phone: '', joiningDate: '', orcid: '', scopusId: '', active: true })),
     biodata: db.biodata.filter((b) => b.facultyId === me),
     profileChanges: (db.profileChanges ?? []).filter((c) => c.facultyId === me),
-    publications: [], grants: [], seedMoney: [], fdps: [], conferences: [], awards: [],
+    publications: [], grants: [], seedMoney: [], fdps: [], conferences: [], awards: [], ipr: [],
   };
   for (const k of KINDS) (out[k] as AnyRecord[]) = (db[k] as AnyRecord[]).filter((r) => canView(actor, k, r));
   return out;
@@ -80,6 +81,7 @@ const SPECS: Record<EntityKind, Spec> = {
   fdps: { role: 'string', programmeType: 'string', title: 'string', organiser: 'string', sponsoredBy: 'string', mode: 'string', level: 'string', fromDate: 'string', toDate: 'string', hours: 'number', outcome: 'string', certificateName: 'string' },
   conferences: { participation: 'string', conferenceName: 'string', paperTitle: 'string', organiser: 'string', venue: 'string', country: 'string', level: 'string', mode: 'string', fromDate: 'string', toDate: 'string', proceedingsIndexed: 'string', funding: 'string', registrationFee: 'number', amountClaimed: 'number', award: 'string', certificateName: 'string' },
   awards: { category: 'string', title: 'string', awardedBy: 'string', level: 'string', awardDate: 'string', citation: 'string', prizeAmount: 'number', certificateName: 'string' },
+  ipr: { ipType: 'string', ipTypeOther: 'string', title: 'string', description: 'string', stage: 'string', applicationNumber: 'string', filingDate: 'string', grantDate: 'string', office: 'string', owner: 'string', ownerOther: 'string', funding: 'string', licensed: 'boolean', licensee: 'string', coOwners: 'string', documentName: 'string', agreementName: 'string', declared: 'boolean' },
 };
 const str = (v: unknown, max = 2000) => (typeof v === 'string' ? v.slice(0, max) : '');
 const num = (v: unknown) => (typeof v === 'number' && Number.isFinite(v) ? v : 0);
@@ -143,11 +145,30 @@ function validate(db: DB, kind: EntityKind, r: AnyRecord, submit: boolean) {
     if (a.awardDate > today) throw invalid('Enter an honour after it has been received.');
     if (a.prizeAmount < 0) throw invalid('Prize amount cannot be negative.');
   }
+  if (kind === 'ipr') {
+    const x = r as unknown as IntellectualProperty;
+    if (!IP_TYPES.includes(x.ipType)) throw invalid('Choose the type of IP.');
+    if (x.ipType === 'Other') need(x.ipTypeOther, 'The type of IP (other)');
+    need(x.title, 'Title'); need(x.description, 'Brief description');
+    if (wordCount(x.description) > IP_DESCRIPTION_WORDS) throw invalid(`Keep the brief description to ${IP_DESCRIPTION_WORDS} words.`);
+    if (!IP_STATUSES.includes(x.stage)) throw invalid('Choose the status.');
+    need(x.applicationNumber, 'Application / registration number'); need(x.filingDate, 'Filing date'); need(x.office, 'Office / country');
+    if (x.filingDate > today) throw invalid('Enter it after it has been filed.');
+    if (x.grantDate && x.grantDate < x.filingDate) throw invalid('The grant / registration date cannot be before the filing date.');
+    if (x.grantDate > today) throw invalid('The grant / registration date cannot be in the future.');
+    if (!IP_OWNERS.includes(x.owner)) throw invalid('Choose the registered owner / applicant.');
+    if (x.owner === 'Other') need(x.ownerOther, 'The registered owner / applicant (other)');
+    if (x.licensed) need(x.licensee, 'Partner name');
+    const dup = db.ipr.find((y) => y.id !== r.id && y.applicationNumber.trim().toLowerCase() === x.applicationNumber.trim().toLowerCase());
+    if (dup) throw invalid(`This application / registration number is already entered as ${dup.id}.`);
+    if (submit && !x.documentName) throw invalid('Attach the filing receipt or registration certificate before submitting.');
+    if (submit && !x.declared) throw invalid('Confirm the declaration before submitting.');
+  }
 }
 
 // ---------- workflow records ----------
 
-const PREFIX: Record<EntityKind, string> = { publications: 'PUB', grants: 'GRT', seedMoney: 'SM', fdps: 'FDP', conferences: 'CNF', awards: 'AWD' };
+const PREFIX: Record<EntityKind, string> = { publications: 'PUB', grants: 'GRT', seedMoney: 'SM', fdps: 'FDP', conferences: 'CNF', awards: 'AWD', ipr: 'IPR' };
 
 function requireFaculty(actor: Actor, db: DB) {
   if (actor.role !== 'faculty' || !actor.facultyId) throw forbid('Entries are made by faculty members.');
@@ -399,4 +420,17 @@ export function addNotice(db: DB, actor: Actor, title: string, body: string) {
 export function deleteNotice(db: DB, actor: Actor, id: string) {
   requireOffice(actor); // institution settings and notices are not managed by Top-Level Management
   db.notices = db.notices.filter((n) => n.id !== id);
+}
+
+/** Fills in fields added after an IP record was saved (older records used per-type stages and a separate country). */
+export function normalizeIp(x: Partial<IntellectualProperty> & Pick<IntellectualProperty, 'stage' | 'office' | 'status'> & Record<string, unknown>): IntellectualProperty {
+  const STAGE: Record<string, string> = { Applied: 'Filed', 'Under Examination': 'Published', Granted: 'Granted / Registered', Registered: 'Granted / Registered' };
+  const country = typeof x.country === 'string' ? x.country : '';
+  const { country: _c, registrationNumber: _r, ...rest } = x;
+  return {
+    ipTypeOther: '', description: '', grantDate: '', owner: 'University', ownerOther: '', funding: '', licensed: false, licensee: '', coOwners: '', agreementName: '', declared: x.status !== 'Draft',
+    ...rest,
+    stage: STAGE[x.stage] ?? x.stage,
+    office: x.office && country && !x.office.includes(country) ? `${x.office}, ${country}` : x.office || country,
+  } as IntellectualProperty;
 }

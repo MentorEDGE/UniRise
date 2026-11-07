@@ -1,6 +1,7 @@
 import { useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { creditedFaculty } from '../lib/domain';
+import { RecordDetail } from '../pages/shared/RecordDetail';
 import type { DB, Grant, Publication, SeedMoney } from '../lib/types';
 
 /**
@@ -117,6 +118,7 @@ export function NetworkGraph({ db, facultyId, linkProfiles }: { db: DB; facultyI
   const [counts, setCounts] = useState(false);
   const [q, setQ] = useState('');
   const [sel, setSel] = useState<{ edge?: Edge; node?: Person } | null>(null);
+  const [openRec, setOpenRec] = useState<Output | null>(null);
   const g = useMemo(() => buildGraph(src, f), [src, f]);
   const pos = useMemo(() => {
     const keys = g.nodes.map((n) => n.key);
@@ -192,19 +194,40 @@ export function NetworkGraph({ db, facultyId, linkProfiles }: { db: DB; facultyI
           {sel?.edge && (
             <>
               <h4>{name(sel.edge.a)} and {name(sel.edge.b)} · {sel.edge.outputs.length} shared output{sel.edge.outputs.length > 1 ? 's' : ''}</h4>
-              <ul>{[...sel.edge.outputs].sort((a, b) => b.year - a.year).map((o) => <li key={o.kind + o.id}><span className="tag">{KIND_LABEL[o.kind]}</span> {o.title} <span className="muted">· {o.year}</span></li>)}</ul>
+              <SharedOutputs outputs={sel.edge.outputs} onOpen={setOpenRec} />
             </>
           )}
           {sel?.node && (
             <>
               <h4>{sel.node.name}</h4>
               <p>{sel.node.type === 'profile' ? `Faculty · ${sel.node.department}, ${sel.node.institution}` : `External person · ${sel.node.institution || 'institution not recorded'}${sel.node.country ? `, ${sel.node.country}` : ''}`}</p>
-              {sel.node.type === 'profile' && sel.node.facultyId !== facultyId && linkProfiles && <Link to={`/faculty/${sel.node.facultyId}`}>Open research profile ›</Link>}
+              {sel.node.type === 'profile' && sel.node.facultyId !== facultyId && linkProfiles && <p><Link to={`/faculty/${sel.node.facultyId}`}>Open research profile ›</Link></p>}
+              {(() => {
+                const key = sel.node.key;
+                const mine = g.edges.filter((e) => e.a === key || e.b === key).map((e) => ({ other: e.a === key ? e.b : e.a, outputs: e.outputs })).sort((x, y) => y.outputs.length - x.outputs.length || name(x.other).localeCompare(name(y.other)));
+                if (!mine.length) return null;
+                return <div className="net-collabs">{mine.map((c) => (
+                  <section key={c.other}>
+                    <h5><button type="button" className="link-btn" onClick={() => { const p = src.people.get(c.other); if (p) setSel({ node: p }); }}>{name(c.other)}</button> <span className="muted">· {src.people.get(c.other)?.institution || '—'} · {c.outputs.length} shared output{c.outputs.length > 1 ? 's' : ''}</span></h5>
+                    <SharedOutputs outputs={c.outputs} onOpen={setOpenRec} />
+                  </section>
+                ))}</div>;
+              })()}
             </>
           )}
         </div>
       </div>
+      {openRec && <RecordDetail kind={openRec.kind} id={openRec.id} onClose={() => setOpenRec(null)} />}
     </div>
+  );
+}
+
+/** The papers and projects two people share, newest first; each opens the full record. */
+export function SharedOutputs({ outputs, onOpen }: { outputs: Output[]; onOpen: (o: Output) => void }) {
+  return (
+    <ul className="net-outputs">{[...outputs].sort((a, b) => b.year - a.year || a.title.localeCompare(b.title)).map((o) => (
+      <li key={o.kind + o.id}><span className={`net-kind ${o.kind}`}>{KIND_LABEL[o.kind]}</span><button type="button" className="link-btn" onClick={() => onOpen(o)}>{o.title}</button> <span className="muted">· {o.year}</span></li>
+    ))}</ul>
   );
 }
 

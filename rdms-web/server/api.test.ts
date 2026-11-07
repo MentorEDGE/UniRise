@@ -145,6 +145,22 @@ describe('faculty access', () => {
     await x.post(`/api/office/approvals/awards/${id}/review`, { decision: 'Rejected', remark: 'x' });
     expect(store.tenant('abc').awards.find((r) => r.id === id)!.status).toBe('Approved');
   });
+
+  it('intellectual property is entered by faculty, approved by the Office of Research and then visible to management', async () => {
+    const me = facultyOf('abc', 0);
+    const f = await signedIn(me.email, DEMO_PASSWORDS.faculty);
+    const record = { ipType: 'Trademark', ipTypeOther: '', title: 'APITESTMARK', description: 'Name of the lab.', stage: 'Filed', applicationNumber: 'TM-API-1', filingDate: '2026-07-01', grantDate: '', office: 'Trade Marks Registry, India', owner: 'University', ownerOther: '', funding: '', licensed: false, licensee: '', coOwners: '', documentName: 'r.pdf', agreementName: '', declared: true };
+    expect((await f.post('/api/records/ipr', { record: { ...record, stage: 'Registered' }, submit: false })).status).toBe(400);
+    const saved = await f.post('/api/records/ipr', { record, submit: true });
+    expect(saved.status).toBe(200);
+    const id = saved.body.result as unknown as string;
+    const m = await signedIn('director@abc.edu.in', DEMO_PASSWORDS.management);
+    expect(((await m.get('/api/data')).body as unknown as { ipr: { id: string }[] }).ipr.some((x) => x.id === id)).toBe(false);
+    expect((await m.post(`/api/office/approvals/ipr/${id}/review`, { decision: 'Approved', remark: '' })).status).toBe(403);
+    const a = await signedIn(ADMIN.email, ADMIN.password, '/api/admin/login');
+    expect((await a.post(`/api/office/approvals/ipr/${id}/review`, { decision: 'Approved', remark: '' })).status).toBe(200);
+    expect(((await m.get('/api/data')).body as unknown as { ipr: { id: string }[] }).ipr.some((x) => x.id === id)).toBe(true);
+  });
 });
 
 describe('read-only management and profile approval', () => {

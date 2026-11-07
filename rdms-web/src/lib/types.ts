@@ -272,7 +272,39 @@ export interface Honour extends Base {
   certificateName: string;
 }
 
-export type EntityKind = 'publications' | 'grants' | 'seedMoney' | 'fdps' | 'conferences' | 'awards';
+/** Intellectual property, as on the institution's IP submission form. */
+export const IP_TYPES = ['Patent', 'Design', 'Copyright', 'Trademark', 'Other'];
+export const IP_STATUSES = ['Filed', 'Published', 'Granted / Registered'];
+export const IP_OWNERS = ['University', 'Individual(s)', 'Joint', 'Other'];
+export const ipIsGranted = (stage: string) => stage === 'Granted / Registered';
+export const IP_DESCRIPTION_WORDS = 50;
+export const wordCount = (s: string) => s.trim().split(/\s+/).filter(Boolean).length;
+
+/** A patent, design, copyright, trademark or other IP held by a faculty member. */
+export interface IntellectualProperty extends Base {
+  ipType: string; // IP_TYPES
+  ipTypeOther: string; // when ipType is 'Other'
+  title: string;
+  description: string; // brief, at most IP_DESCRIPTION_WORDS words
+  stage: string; // IP_STATUSES
+  applicationNumber: string; // application / registration number
+  filingDate: string; // yyyy-mm-dd
+  grantDate: string; // grant / registration date, yyyy-mm-dd, '' if not yet
+  office: string; // office / country, e.g. Indian Patent Office, USPTO, PCT
+  owner: string; // IP_OWNERS
+  ownerOther: string; // when owner is 'Other'
+  funding: string; // funding source / sponsor, if any
+  licensed: boolean; // licensed or commercialised
+  licensee: string; // partner name, if licensed
+  coOwners: string; // co-inventors / co-creators (name, affiliation)
+  documentName: string; // filing receipt or registration certificate
+  agreementName: string; // funding or ownership agreement, if applicable
+  declared: boolean; // information accurate and all co-inventors listed
+}
+/** The type as shown: the text entered for 'Other'. */
+export const ipTypeLabel = (x: { ipType: string; ipTypeOther?: string }) => (x.ipType === 'Other' ? x.ipTypeOther?.trim() || 'Other' : x.ipType);
+
+export type EntityKind = 'publications' | 'grants' | 'seedMoney' | 'fdps' | 'conferences' | 'awards' | 'ipr';
 export const ENTITY_LABEL: Record<EntityKind, string> = {
   publications: 'Publication',
   grants: 'Grant',
@@ -280,6 +312,7 @@ export const ENTITY_LABEL: Record<EntityKind, string> = {
   fdps: 'FDP',
   conferences: 'Conference',
   awards: 'Honour / Award',
+  ipr: 'Intellectual Property',
 };
 
 export interface Weights {
@@ -289,10 +322,13 @@ export interface Weights {
   fdpAttended: number; fdpOrganised: number; fdpResource: number;
   confPresented: number; confInvited: number; confChair: number; confAttended: number; confOrganised: number;
   awardInternational: number; awardNational: number; awardOther: number;
+  patentGranted: number; patentFiled: number; design: number; copyright: number; trademark: number; ipOther: number;
 }
 
 /** Score weights for honours and awards; also fills them in for institutions created before the feature existed. */
 export const AWARD_WEIGHT_DEFAULTS = { awardInternational: 6, awardNational: 4, awardOther: 2 };
+/** Score weights for intellectual property; also fills them in for institutions created before the feature existed. */
+export const IP_WEIGHT_DEFAULTS = { patentGranted: 10, patentFiled: 4, design: 3, copyright: 3, trademark: 2, ipOther: 2 };
 
 export interface Targets {
   publicationsPerFaculty: number; // per academic year
@@ -347,9 +383,10 @@ export interface DB {
   fdps: Fdp[];
   conferences: Conference[];
   awards: Honour[];
+  ipr: IntellectualProperty[];
   profileChanges: ProfileChange[];
   notices: Notice[];
   seq: number;
 }
 
-export type AnyRecord = Publication | Grant | SeedMoney | Fdp | Conference | Honour;
+export type AnyRecord = Publication | Grant | SeedMoney | Fdp | Conference | Honour | IntellectualProperty;

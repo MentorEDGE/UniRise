@@ -1,11 +1,12 @@
 import { useState } from 'react';
+import type { ReactNode } from 'react';
 import { Field, FileName, Input, NumberInput, PageTitle, Panel, Select, TextArea, YesNo } from '../../components/ui';
 import { getDB, useStore } from '../../lib/store';
 import {
-  AWARD_CATEGORIES, CONF_PARTICIPATION, FDP_ROLES, FDP_TYPES, FUNDING, GRANT_SOURCES, GRANT_TYPES, GRANT_UNITS, INDEXING, LEVELS, MODES, MONTHS,
+  AWARD_CATEGORIES, CONF_PARTICIPATION, IP_DESCRIPTION_WORDS, IP_OWNERS, IP_STATUSES, IP_TYPES, wordCount, FDP_ROLES, FDP_TYPES, FUNDING, GRANT_SOURCES, GRANT_TYPES, GRANT_UNITS, INDEXING, LEVELS, MODES, MONTHS,
   PUB_CATEGORIES, PUB_TYPES, QUARTILES,
 } from '../../lib/types';
-import type { Conference, Fdp, Grant, Honour, PubType, Publication, SeedMoney } from '../../lib/types';
+import type { Conference, Fdp, Grant, Honour, IntellectualProperty, PubType, Publication, SeedMoney } from '../../lib/types';
 import { AuthorTable, BlockedEntry, InvestigatorTable, SaveBar, selfAuthor, selfInvestigator, useEntry, validateInvestigators } from './entryKit';
 import type { Errors } from './entryKit';
 
@@ -374,6 +375,123 @@ export function AwardEntry() {
           <Field label="Conferred By" required error={x.awardedBy} hint="Body, society, government or university" className="span2"><Input value={r.awardedBy} onChange={(v) => u({ awardedBy: v })} /></Field>
           <Field label="Citation / What it recognises" className="span3"><TextArea value={r.citation} onChange={(v) => u({ citation: v })} /></Field>
           <Field label="Certificate / Letter" error={x.certificate}><FileName value={r.certificateName} onChange={(v) => u({ certificateName: v })} accept=".pdf,.jpg,.png" /></Field>
+        </div>
+        <SaveBar onSave={e.save} isNew={e.isNew} />
+      </Panel>
+    </>
+  );
+}
+
+// ---------------- Intellectual Property ----------------
+
+/** One row of the IP submission form table: the label on the left, the answer on the right. */
+function Row({ label, required, hint, error, children }: { label: string; required?: boolean; hint?: string; error?: string; children: ReactNode }) {
+  return (
+    <tr>
+      <th scope="row">{label}{required && <span className="req"> *</span>}{hint && <small>{hint}</small>}</th>
+      <td>{children}{error && <span className="err" role="alert">{error}</span>}</td>
+    </tr>
+  );
+}
+/** Tick-one choices, shown like the boxes on the paper form. */
+function Choice({ name, value, options, onChange }: { name: string; value: string; options: string[]; onChange: (v: string) => void }) {
+  return (
+    <div className="ipf-choice" role="radiogroup">
+      {options.map((o) => (
+        <label key={o}><input type="radio" name={name} checked={value === o} onChange={() => onChange(o)} /> {o}</label>
+      ))}
+    </div>
+  );
+}
+
+export function IpEntry() {
+  const { db, user } = useStore();
+  const e = useEntry<IntellectualProperty>('ipr', () => ({
+    ipType: '', ipTypeOther: '', title: '', description: '', stage: '', applicationNumber: '', filingDate: '', grantDate: '', office: '',
+    owner: '', ownerOther: '', funding: '', licensed: false, licensee: '', coOwners: '', documentName: '', agreementName: '', declared: false,
+  }), (r, submit) => {
+    const errs: Errors = {};
+    required(errs, 'ipType', r.ipType, 'Type of IP');
+    if (r.ipType === 'Other') required(errs, 'ipType', r.ipTypeOther.trim(), 'The type of IP');
+    required(errs, 'title', r.title.trim(), 'Title');
+    required(errs, 'description', r.description.trim(), 'Brief description');
+    if (wordCount(r.description) > IP_DESCRIPTION_WORDS) errs.description = `Keep it to ${IP_DESCRIPTION_WORDS} words (now ${wordCount(r.description)}).`;
+    required(errs, 'stage', r.stage, 'Status');
+    required(errs, 'applicationNumber', r.applicationNumber.trim(), 'Application / registration number');
+    required(errs, 'filingDate', r.filingDate, 'Filing date');
+    if (r.filingDate > today()) errs.filingDate = 'Enter it after it has been filed.';
+    if (r.grantDate && r.filingDate && r.grantDate < r.filingDate) errs.grantDate = 'Cannot be before the filing date.';
+    if (r.grantDate > today()) errs.grantDate = 'Cannot be in the future.';
+    required(errs, 'office', r.office.trim(), 'Office / country');
+    required(errs, 'owner', r.owner, 'Registered owner / applicant');
+    if (r.owner === 'Other') required(errs, 'owner', r.ownerOther.trim(), 'The registered owner / applicant');
+    if (r.licensed) required(errs, 'licensee', r.licensee.trim(), 'Partner name');
+    const no = r.applicationNumber.trim().toLowerCase();
+    const dup = no && getDB().ipr.find((x) => x.id !== r.id && x.applicationNumber.trim().toLowerCase() === no);
+    if (dup) errs.applicationNumber = `This number is already entered as ${dup.id}.`;
+    if (submit && !r.documentName) errs.document = 'Attach the filing receipt or registration certificate before submitting.';
+    if (submit && !r.declared) errs.declared = 'Confirm the declaration before submitting.';
+    return errs;
+  });
+  if (e.blocked) return <BlockedEntry msg={e.blocked} />;
+  const { rec: r, update: u, errors: x } = e;
+  const me = db.faculty.find((f) => f.id === (r.facultyId || user?.facultyId));
+  const words = wordCount(r.description);
+  return (
+    <>
+      <PageTitle>Intellectual Property (IP) Submission Form</PageTitle>
+      {e.banner}
+      <Panel size="wide">
+        <p className="note" style={{ textAlign: 'center' }}>Fields marked <span className="req">*</span> are mandatory.</p>
+        <div className="ipf">
+          <h3>1. Submitter Details</h3>
+          <table className="ipf-table"><tbody>
+            <Row label="Full name" required><span className="ipf-fixed">{me ? `${me.title} ${me.name}` : '—'}</span></Row>
+            <Row label="Employee ID" required><span className="ipf-fixed">{me?.id ?? '—'}</span></Row>
+            <Row label="Department / school" required><span className="ipf-fixed">{me?.department ?? '—'}</span></Row>
+            <Row label="Email" required><span className="ipf-fixed">{me?.email ?? '—'}</span></Row>
+            <Row label="Co-inventors / co-creators" hint="(name, affiliation)"><TextArea value={r.coOwners} onChange={(v) => u({ coOwners: v })} /></Row>
+          </tbody></table>
+          <p className="ipf-note">Your details come from your profile. To change them, update your profile.</p>
+
+          <h3>2. IP Details</h3>
+          <table className="ipf-table"><tbody>
+            <Row label="Type of IP" required error={x.ipType}>
+              <Choice name="ipType" value={r.ipType} options={IP_TYPES} onChange={(v) => u({ ipType: v })} />
+              {r.ipType === 'Other' && <div className="ipf-other">Other: <Input value={r.ipTypeOther} onChange={(v) => u({ ipTypeOther: v })} /></div>}
+            </Row>
+            <Row label="Title" required error={x.title}><Input value={r.title} onChange={(v) => u({ title: v })} /></Row>
+            <Row label="Brief description" required hint={`(max. ${IP_DESCRIPTION_WORDS} words)`} error={x.description}>
+              <TextArea value={r.description} onChange={(v) => u({ description: v })} />
+              <span className={`ipf-count ${words > IP_DESCRIPTION_WORDS ? 'over' : ''}`}>{words} / {IP_DESCRIPTION_WORDS} words</span>
+            </Row>
+            <Row label="Status" required error={x.stage}><Choice name="stage" value={r.stage} options={IP_STATUSES} onChange={(v) => u({ stage: v })} /></Row>
+            <Row label="Application / registration number" required error={x.applicationNumber}><Input value={r.applicationNumber} onChange={(v) => u({ applicationNumber: v })} /></Row>
+            <Row label="Filing date" required error={x.filingDate}><input type="date" value={r.filingDate} max={today()} onChange={(ev) => u({ filingDate: ev.target.value })} /></Row>
+            <Row label="Grant / registration date" error={x.grantDate}><input type="date" value={r.grantDate} min={r.filingDate || undefined} max={today()} onChange={(ev) => u({ grantDate: ev.target.value })} /></Row>
+            <Row label="Office / country" required hint="(e.g., Indian Patent Office, USPTO, PCT)" error={x.office}><Input value={r.office} onChange={(v) => u({ office: v })} /></Row>
+            <Row label="Registered owner / applicant" required error={x.owner}>
+              <Choice name="owner" value={r.owner} options={IP_OWNERS} onChange={(v) => u({ owner: v })} />
+              {r.owner === 'Other' && <div className="ipf-other">Other: <Input value={r.ownerOther} onChange={(v) => u({ ownerOther: v })} /></div>}
+            </Row>
+            <Row label="Funding source / sponsor" hint="(if any)"><Input value={r.funding} onChange={(v) => u({ funding: v })} /></Row>
+            <Row label="Licensed or commercialised?" error={x.licensee}>
+              <Choice name="licensed" value={r.licensed ? 'Yes' : 'No'} options={['Yes', 'No']} onChange={(v) => u({ licensed: v === 'Yes', licensee: v === 'Yes' ? r.licensee : '' })} />
+              {r.licensed && <div className="ipf-other">If yes, partner name: <Input value={r.licensee} onChange={(v) => u({ licensee: v })} /></div>}
+            </Row>
+          </tbody></table>
+
+          <h3>3. Attachments and Declaration</h3>
+          <table className="ipf-table"><tbody>
+            <Row label="Filing receipt or registration certificate" required error={x.document}><FileName value={r.documentName} onChange={(v) => u({ documentName: v })} accept=".pdf,.jpg,.png" /></Row>
+            <Row label="Funding or ownership agreement" hint="(if applicable)"><FileName value={r.agreementName} onChange={(v) => u({ agreementName: v })} accept=".pdf,.jpg,.png" /></Row>
+          </tbody></table>
+          <label className="ipf-declare">
+            <input type="checkbox" checked={r.declared} onChange={(ev) => u({ declared: ev.target.checked })} />
+            <span>I confirm that the information above is accurate and that all co-inventors / co-creators have been listed.<span className="req"> *</span></span>
+          </label>
+          {x.declared && <span className="err" role="alert">{x.declared}</span>}
+          <p className="ipf-note">Submitting this form records your name and the date in place of a signature.</p>
         </div>
         <SaveBar onSave={e.save} isNew={e.isNew} />
       </Panel>

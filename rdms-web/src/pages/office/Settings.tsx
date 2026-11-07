@@ -56,6 +56,7 @@ const WEIGHT_LABELS: [keyof Weights, string][] = [
   ['fdpAttended', 'FDP attended'], ['fdpOrganised', 'FDP organised'], ['fdpResource', 'FDP resource person'], ['confPresented', 'Conference – presented'], ['confInvited', 'Conference – invited talk'],
   ['confChair', 'Conference – session chair'], ['confAttended', 'Conference – attended'], ['confOrganised', 'Conference – organised'],
   ['awardInternational', 'Honour / award – international'], ['awardNational', 'Honour / award – national'], ['awardOther', 'Honour / award – state / institutional'],
+  ['patentGranted', 'Patent – granted'], ['patentFiled', 'Patent – filed / published'], ['design', 'Design – registered'], ['copyright', 'Copyright – registered'], ['trademark', 'Trademark – registered'], ['ipOther', 'Other IP – granted / registered'],
 ];
 const TARGET_LABELS: [keyof Targets, string][] = [['publicationsPerFaculty', 'Publications per faculty'], ['fdpHoursPerFaculty', 'FDP hours per faculty'], ['conferencesPerFaculty', 'Conferences per faculty'], ['grantAppliedPerFaculty', 'Grant proposals per faculty']];
 

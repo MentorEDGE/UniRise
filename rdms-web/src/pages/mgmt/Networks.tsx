@@ -1,12 +1,13 @@
-import { lazy, Suspense, useMemo, useState } from 'react';
+import { lazy, Suspense, useEffect, useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
-import { NetworkGraph, forceLayout, outputsOf } from '../../components/network';
+import { NetworkGraph, SharedOutputs, forceLayout, outputsOf } from '../../components/network';
 import type { Edge, Output } from '../../components/network';
-import { SdgIcon } from '../../components/research';
+import { SdgTile } from '../../components/sdg';
 import { PageTitle, Panel } from '../../components/ui';
 import { useStore } from '../../lib/store';
 import { SDGS } from '../../lib/types';
 import { Tile } from './Analytics';
+import { RecordDetail } from '../shared/RecordDetail';
 
 const CollabMap = lazy(() => import('../../components/CollabMap'));
 const DEPT_COLORS = ['#7c3aed', '#db2777', '#d97706', '#0d9488', '#2563eb', '#65a30d', '#dc2626', '#0891b2', '#9333ea', '#ca8a04'];
@@ -21,6 +22,7 @@ export function InstitutionNetworks() {
   const [dept, setDept] = useState('');
   const [min, setMin] = useState(1);
   const [sel, setSel] = useState<{ edge?: Edge; node?: string } | null>(null);
+  const [openRec, setOpenRec] = useState<Output | null>(null);
   const active = useMemo(() => db.faculty.filter((f) => f.active), [db]);
   const byId = useMemo(() => new Map(active.map((f) => [f.id, f])), [active]);
 
@@ -73,9 +75,8 @@ export function InstitutionNetworks() {
     const fac = active.filter((f) => db.biodata.find((b) => b.facultyId === f.id)?.sdgs?.includes(g.n));
     const ids = new Set(fac.map((f) => f.id));
     const pubs = outputs.filter((o) => o.out.kind === 'publications' && o.faculty.some((id) => ids.has(id))).length;
-    return { ...g, faculty: fac.length, pubs };
+    return { ...g, faculty: fac.length, units: new Set(fac.map((f) => f.department)).size, pubs };
   });
-  const maxSdg = Math.max(1, ...sdgRows.map((r) => r.faculty));
   const name = (id: string) => { const f = byId.get(id); return f ? `${f.title} ${f.name}` : id; };
 
   return (
@@ -119,8 +120,20 @@ export function InstitutionNetworks() {
             ) : <p className="muted net-empty">No collaborations match these filters.</p>}
             <div className="net-detail">
               {!sel && <p className="muted">ⓘ Click a line to see the shared outputs, or a person to open their profile.</p>}
-              {sel?.edge && <><h4>{name(sel.edge.a)} and {name(sel.edge.b)} · {sel.edge.outputs.length} shared output{sel.edge.outputs.length > 1 ? 's' : ''}</h4><ul>{[...sel.edge.outputs].sort((a, b) => b.year - a.year).map((o) => <li key={o.kind + o.id}>{o.title} <span className="muted">· {o.year}</span></li>)}</ul></>}
-              {sel?.node && <><h4>{name(sel.node)}</h4><p>{byId.get(sel.node)?.designation}, {byId.get(sel.node)?.department} · {edges.filter((e) => e.a === sel.node || e.b === sel.node).length} collaborators</p><Link to={`/faculty/${sel.node}`}>Open research profile ›</Link></>}
+              {sel?.edge && <><h4>{name(sel.edge.a)} and {name(sel.edge.b)} · {sel.edge.outputs.length} shared output{sel.edge.outputs.length > 1 ? 's' : ''}</h4><SharedOutputs outputs={sel.edge.outputs} onOpen={setOpenRec} /></>}
+              {sel?.node && (() => {
+                const mine = edges.filter((e) => e.a === sel.node || e.b === sel.node).map((e) => ({ other: e.a === sel.node ? e.b : e.a, outputs: e.outputs })).sort((x, y) => y.outputs.length - x.outputs.length || name(x.other).localeCompare(name(y.other)));
+                return <>
+                  <h4>{name(sel.node)}</h4>
+                  <p>{byId.get(sel.node)?.designation}, {byId.get(sel.node)?.department} · {mine.length} collaborator{mine.length === 1 ? '' : 's'} · <Link to={`/faculty/${sel.node}`}>Open research profile ›</Link></p>
+                  {mine.length > 0 && <div className="net-collabs">{mine.map((c) => (
+                    <section key={c.other}>
+                      <h5><button type="button" className="link-btn" onClick={() => setSel({ node: c.other })}>{name(c.other)}</button> <span className="muted">· {byId.get(c.other)?.department} · {c.outputs.length} shared output{c.outputs.length > 1 ? 's' : ''}</span></h5>
+                      <SharedOutputs outputs={c.outputs} onOpen={setOpenRec} />
+                    </section>
+                  ))}</div>}
+                </>;
+              })()}
             </div>
           </>
         )}
@@ -139,22 +152,9 @@ export function InstitutionNetworks() {
 
         {tab === 'map' && <Suspense fallback={<p className="muted">Loading map…</p>}><CollabMap db={db} facultyIds={active.map((f) => f.id)} /></Suspense>}
 
-        {tab === 'sdg' && (
-          <>
-            <p className="rp-sub">Faculty who list each Sustainable Development Goal on their approved profile, and the approved publications of those faculty.</p>
-            <table className="tbl sdg-dist">
-              <thead><tr><th>Goal</th><th>Faculty</th><th className="num">Publications</th></tr></thead>
-              <tbody>{sdgRows.map((r) => (
-                <tr key={r.n}>
-                  <td><span className="sdg-row"><SdgIcon n={r.n} size={26} /> SDG {r.n} · {r.title}</span></td>
-                  <td style={{ width: '40%' }}><span className="sdg-bar"><span style={{ width: `${(r.faculty / maxSdg) * 100}%`, background: r.color }} /></span> <b>{r.faculty}</b></td>
-                  <td className="num">{r.pubs}</td>
-                </tr>
-              ))}</tbody>
-            </table>
-          </>
-        )}
+        {tab === 'sdg' && <SdgGrid rows={sdgRows} />}
       </Panel>
+      {openRec && <RecordDetail kind={openRec.kind} id={openRec.id} onClose={() => setOpenRec(null)} />}
     </>
   );
 }
@@ -177,3 +177,38 @@ export function MyCollaborations() {
     </>
   );
 }
+
+/** The 17 goals as coloured tiles (as on a university research portal). Choosing one shows what the institution has under it. */
+function SdgGrid({ rows }: { rows: { n: number; title: string; faculty: number; units: number; pubs: number }[] }) {
+  const [open, setOpen] = useState<number | null>(null);
+  useEffect(() => {
+    if (open == null) return;
+    const close = (e: MouseEvent | KeyboardEvent) => { if (e instanceof KeyboardEvent ? e.key === 'Escape' : !(e.target as Element).closest('.sdg-goal')) setOpen(null); };
+    document.addEventListener('mousedown', close); document.addEventListener('keydown', close);
+    return () => { document.removeEventListener('mousedown', close); document.removeEventListener('keydown', close); };
+  }, [open]);
+  return (
+    <>
+      <p className="rp-sub sdg-intro">Every great change begins with a question. Research turns questions into answers the world needs, and the 17 Sustainable Development Goals show where those answers matter most. Choose a goal to see who is answering it.</p>
+      <ul className="sdg-grid">
+        {rows.map((r) => (
+          <li key={r.n} className={`sdg-goal ${open === r.n ? 'on' : ''}`}>
+            <button type="button" aria-expanded={open === r.n} onClick={() => setOpen(open === r.n ? null : r.n)}>
+              <SdgTile n={r.n} size={72} />
+              <span className="sdg-goal-text"><b>SDG {r.n}</b><span>{r.title}</span></span>
+            </button>
+            {open === r.n && (
+              <div className="sdg-pop" role="dialog" aria-label={`SDG ${r.n}`}>
+                <Link to={`/faculty?sdg=${r.n}`}><PopIcon d="M12 12a4 4 0 1 0 0-8 4 4 0 0 0 0 8Zm-7 8c.8-3.6 3.6-5.5 7-5.5s6.2 1.9 7 5.5Z" /><b>{r.faculty}</b> Profiles</Link>
+                <Link to={`/faculty?sdg=${r.n}`}><PopIcon d="m3 11 9-7 9 7v9h-6v-5H9v5H3Z" /><b>{r.units}</b> Research units</Link>
+                <div><PopIcon d="M4 5c3-1 5.5-1 8 .8V20c-2.5-1.8-5-1.8-8-.8Zm16 0c-3-1-5.5-1-8 .8V20c2.5-1.8 5-1.8 8-.8Z" /><b>{r.pubs}</b> Outputs</div>
+              </div>
+            )}
+          </li>
+        ))}
+      </ul>
+    </>
+  );
+}
+const PopIcon = ({ d }: { d: string }) => <svg viewBox="0 0 24 24" className="sdg-pop-ic" aria-hidden><path d={d} /></svg>;
+

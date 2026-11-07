@@ -2,8 +2,8 @@ import type { ReactNode } from 'react';
 import type { Column } from '../components/ui';
 import { StatusBadge } from '../components/ui';
 import { dateOf, fmtDate, inr } from './analytics';
-import type { AnyRecord, Conference, DB, EntityKind, Fdp, Grant, Honour, Publication, SeedMoney } from './types';
-import { AWARD_CATEGORIES } from './types';
+import type { AnyRecord, Conference, DB, EntityKind, Fdp, Grant, Honour, IntellectualProperty, Publication, SeedMoney } from './types';
+import { AWARD_CATEGORIES, IP_TYPES, ipTypeLabel } from './types';
 
 export interface EntityConfig {
   kind: EntityKind;
@@ -140,6 +140,25 @@ export const ENTITIES: Record<EntityKind, EntityConfig> = {
         ['Citation', a.citation || '—'], ['Prize / Honorarium', a.prizeAmount ? inr(a.prizeAmount) : '—'], ['Certificate', file(a.certificateName)]];
     },
   },
+  ipr: {
+    kind: 'ipr', label: 'Intellectual Property', plural: 'Intellectual Property', entryPath: '/ipr/entry', viewPath: '/ipr',
+    typeOf: (r) => (r as IntellectualProperty).ipType, typeOptions: IP_TYPES,
+    title: (r) => (r as IntellectualProperty).title,
+    columns: [
+      { key: 'stage', label: 'IP Status', value: (r) => (r as IntellectualProperty).stage },
+      { key: 'appno', label: 'Application / Reg. No.', value: (r) => (r as IntellectualProperty).applicationNumber },
+      { key: 'date', label: 'Filed', value: (r) => (r as IntellectualProperty).filingDate, render: (r) => fmtDate((r as IntellectualProperty).filingDate) },
+    ],
+    details: (r) => {
+      const x = r as IntellectualProperty;
+      return [['Type of IP', ipTypeLabel(x)], ['Title', x.title], ['Brief description', x.description || '—'], ['Status', x.stage],
+        ['Application / registration number', x.applicationNumber], ['Filing date', fmtDate(x.filingDate)], ['Grant / registration date', x.grantDate ? fmtDate(x.grantDate) : '—'],
+        ['Office / country', x.office], ['Registered owner / applicant', x.owner === 'Other' ? x.ownerOther || 'Other' : x.owner], ['Funding source / sponsor', x.funding || '—'],
+        ['Licensed or commercialised?', x.licensed ? `Yes — ${x.licensee}` : 'No'], ['Co-inventors / co-creators', x.coOwners || '—'],
+        ['Filing receipt / registration certificate', file(x.documentName)], ['Funding or ownership agreement', x.agreementName ? file(x.agreementName) : '—'],
+        ['Declaration', x.declared ? 'Confirmed: the information is accurate and all co-inventors / co-creators are listed.' : 'Not confirmed']];
+    },
+  },
 };
 
 /** Common leading/trailing columns for every list. */
@@ -148,7 +167,7 @@ export function listColumns(db: DB, kind: EntityKind, opts: { showOwner: boolean
   const byId = new Map(db.faculty.map((f) => [f.id, f]));
   return [
     { key: 'id', label: `${cfg.label} ID`, value: (r) => r.id },
-    { key: 'type', label: kind === 'conferences' ? 'Participation' : kind === 'seedMoney' || kind === 'awards' ? 'Category' : 'Type Of Entry', value: (r) => cfg.typeOf(r) },
+    { key: 'type', label: kind === 'conferences' ? 'Participation' : kind === 'seedMoney' || kind === 'awards' ? 'Category' : kind === 'ipr' ? 'Type of IP' : 'Type Of Entry', value: (r) => cfg.typeOf(r) },
     { key: 'title', label: kind === 'conferences' ? 'Conference' : kind === 'awards' ? 'Honour / Award' : 'Title', value: (r) => cfg.title(r), className: 'title-cell' },
     ...(opts.showOwner ? [
       { key: 'owner', label: 'Faculty', value: (r: AnyRecord) => byId.get(r.facultyId)?.name ?? r.facultyId },

@@ -1,6 +1,7 @@
 import { academicYearOf, fmtDate, inr, isSanctioned } from './analytics';
 import { creditedFaculty } from './domain';
-import type { AnyRecord, Conference, DB, EntityKind, Faculty, Fdp, Grant, Honour, Publication } from './types';
+import type { AnyRecord, Conference, DB, EntityKind, Faculty, Fdp, Grant, Honour, IntellectualProperty, Publication } from './types';
+import { ipIsGranted, ipTypeLabel } from './types';
 
 export interface Ctx { db: DB; byId: Map<string, Faculty> }
 export interface ListCol { label: string; get: (r: AnyRecord, ctx: Ctx) => string | number; num?: boolean }
@@ -26,6 +27,7 @@ const grant = (r: AnyRecord) => r as Grant;
 const fdp = (r: AnyRecord) => r as Fdp;
 const conf = (r: AnyRecord) => r as Conference;
 const award = (r: AnyRecord) => r as Honour;
+const ip = (r: AnyRecord) => r as IntellectualProperty;
 const owner = (r: AnyRecord, c: Ctx) => c.byId.get(r.facultyId);
 const credited = (kind: EntityKind) => (r: AnyRecord, c: Ctx) => creditedFaculty(kind, r).filter((id) => c.byId.has(id));
 const facultyKey = (kind: EntityKind) => (r: AnyRecord, c: Ctx) => credited(kind)(r, c).map((id) => `${id} – ${c.byId.get(id)!.name}`);
@@ -101,6 +103,25 @@ const AWARD_LIST: ListCol[] = [
 ];
 const AWARD_MEASURES: Measure[] = [count, countWhere('International', (r) => award(r).level === 'International'), countWhere('National', (r) => award(r).level === 'National'),
   countWhere('State / Institutional', (r) => award(r).level === 'State' || award(r).level === 'Institutional'), sum('Prize (₹)', (r) => award(r).prizeAmount, true)];
+const IP_LIST: ListCol[] = [
+  { label: 'IP ID', get: (r) => r.id },
+  { label: 'Type of IP', get: (r) => ipTypeLabel(ip(r)) },
+  { label: 'Title', get: (r) => ip(r).title },
+  { label: 'Status', get: (r) => ip(r).stage },
+  { label: 'Application / Registration No.', get: (r) => ip(r).applicationNumber },
+  { label: 'Filed', get: (r) => fmtDate(ip(r).filingDate) },
+  { label: 'Granted / Registered', get: (r) => (ip(r).grantDate ? fmtDate(ip(r).grantDate) : '') },
+  { label: 'Office / Country', get: (r) => ip(r).office },
+  { label: 'Owner / Applicant', get: (r) => (ip(r).owner === 'Other' ? ip(r).ownerOther : ip(r).owner) },
+  { label: 'Licensed to', get: (r) => (ip(r).licensed ? ip(r).licensee : '') },
+  { label: 'Faculty', get: (r, c) => owner(r, c)?.name ?? '' },
+  { label: 'Department', get: (r, c) => owner(r, c)?.department ?? '' },
+  { label: 'Co-inventors / Co-creators', get: (r) => ip(r).coOwners },
+];
+const granted = (r: AnyRecord) => ipIsGranted(ip(r).stage);
+const IP_MEASURES: Measure[] = [count, countWhere('Patents', (r) => ip(r).ipType === 'Patent'), countWhere('Patents granted', (r) => ip(r).ipType === 'Patent' && granted(r)),
+  countWhere('Designs', (r) => ip(r).ipType === 'Design'), countWhere('Copyrights', (r) => ip(r).ipType === 'Copyright'), countWhere('Trademarks', (r) => ip(r).ipType === 'Trademark'),
+  countWhere('Licensed', (r) => ip(r).licensed)];
 const PUB_MEASURES: Measure[] = [count, countWhere('Journal', (r) => pub(r).entryType === 'Journal Article'), countWhere('Conf. paper', (r) => pub(r).entryType === 'Conference Paper'),
   countWhere('Book / chapter', (r) => pub(r).entryType === 'Book' || pub(r).entryType === 'Book Chapter'), countWhere('Q1', (r) => pub(r).quartile === 'Q1'), countWhere('Q2', (r) => pub(r).quartile === 'Q2'),
   countWhere('Scopus/WoS', (r) => /Scopus|Web of Science/.test(pub(r).indexing))];
@@ -161,6 +182,15 @@ export const REPORTS: ReportDef[] = [
   { id: 'awd-year', group: 'awards', title: 'Year wise', kind: 'awards', mode: 'group', groupLabel: 'Academic year', keys: ayKey((r) => award(r).awardDate), measures: AWARD_MEASURES },
   { id: 'awd-international', group: 'awards', title: 'International Recognition', kind: 'awards', mode: 'list', where: (r) => award(r).level === 'International', columns: AWARD_LIST },
   { id: 'awd-list', group: 'awards', title: 'Honours & Awards Details – All', kind: 'awards', mode: 'list', columns: AWARD_LIST },
+  // Intellectual Property
+  { id: 'ipr-faculty', group: 'ipr', title: 'Faculty wise Intellectual Property', kind: 'ipr', mode: 'group', groupLabel: 'Faculty', keys: facultyKey('ipr'), measures: IP_MEASURES },
+  { id: 'ipr-dept', group: 'ipr', title: 'Department wise Intellectual Property', kind: 'ipr', mode: 'group', groupLabel: 'Department', keys: deptKey('ipr'), measures: IP_MEASURES },
+  { id: 'ipr-type', group: 'ipr', title: 'Type and status wise', kind: 'ipr', mode: 'group', groupLabel: 'Type: status', keys: (r) => [`${ipTypeLabel(ip(r))}: ${ip(r).stage}`], measures: [count] },
+  { id: 'ipr-owner', group: 'ipr', title: 'Owner / applicant wise', kind: 'ipr', mode: 'group', groupLabel: 'Owner / applicant', keys: (r) => [ip(r).owner === 'Other' ? ip(r).ownerOther || 'Other' : ip(r).owner], measures: IP_MEASURES },
+  { id: 'ipr-licensed', group: 'ipr', title: 'Licensed or commercialised', kind: 'ipr', mode: 'list', where: (r) => ip(r).licensed, columns: IP_LIST },
+  { id: 'ipr-year', group: 'ipr', title: 'Year wise (by filing date)', kind: 'ipr', mode: 'group', groupLabel: 'Academic year', keys: ayKey((r) => ip(r).filingDate), measures: IP_MEASURES },
+  { id: 'ipr-granted', group: 'ipr', title: 'Patents Granted', kind: 'ipr', mode: 'list', where: (r) => ip(r).ipType === 'Patent' && granted(r), columns: IP_LIST },
+  { id: 'ipr-list', group: 'ipr', title: 'Intellectual Property Details – All', kind: 'ipr', mode: 'list', columns: IP_LIST },
 ];
 
 export interface ReportResult { header: string[]; rows: (string | number)[][]; numeric: boolean[]; money: boolean[]; total?: (string | number)[] }

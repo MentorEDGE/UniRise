@@ -16,6 +16,7 @@ const NAV_ICONS = {
   grants: nic(<><circle cx="12" cy="12" r="8" /><path d="M14.8 9.2c-.6-.8-1.6-1.2-2.8-1.2-1.6 0-2.8.8-2.8 2s1.2 1.7 2.8 2 2.8.8 2.8 2-1.2 2-2.8 2c-1.2 0-2.2-.4-2.8-1.2M12 6.5V8M12 16v1.5" /></>),
   fdp: nic(<><path d="m12 4 9 4.5-9 4.5-9-4.5Z" /><path d="M7 10.8v4.4c1.4 1.3 3.1 1.9 5 1.9s3.6-.6 5-1.9v-4.4M21 8.5v5" /></>),
   conferences: nic(<><rect x="3.5" y="4" width="17" height="11" rx="1.8" /><path d="M12 15v3.5M8 20.5h8M7.5 8.5h9M7.5 11.5h5" /></>),
+  ipr: nic(<><path d="M9 18h6M10 21h4" /><path d="M12 3a6 6 0 0 0-3.6 10.8c.8.6 1.1 1.4 1.1 2.2h5c0-.8.3-1.6 1.1-2.2A6 6 0 0 0 12 3Z" /></>),
   awards: nic(<><path d="M7.5 4h9v5a4.5 4.5 0 0 1-9 0Z" /><path d="M7.5 6H4.5a3 3 0 0 0 3 3.5M16.5 6h3a3 3 0 0 1-3 3.5M12 13.5V17M8.5 20h7" /></>),
   reports: nic(<><path d="M4 20h16" /><rect x="5.5" y="12" width="3" height="5.5" rx="0.8" /><rect x="10.5" y="8" width="3" height="9.5" rx="0.8" /><rect x="15.5" y="4.5" width="3" height="13" rx="0.8" /></>),
   settings: nic(<><circle cx="12" cy="12" r="3" /><path d="M12 3.5v2.2M12 18.3v2.2M3.5 12h2.2M18.3 12h2.2M6 6l1.6 1.6M16.4 16.4 18 18M6 18l1.6-1.6M16.4 7.6 18 6" /></>),
@@ -36,6 +37,7 @@ const RECORD_MENUS: MenuDef[] = [
   { label: 'Faculty Development Programmes', icon: 'fdp', items: [{ label: 'FDP View', to: '/fdp' }, { label: 'FDP Reports', to: '/reports/fdps' }] },
   { label: 'Conferences', icon: 'conferences', items: [{ label: 'Conference View', to: '/conferences' }, { label: 'Conference Reports', to: '/reports/conferences' }] },
   { label: 'Honours & Awards', icon: 'awards', items: [{ label: 'Honours & Awards View', to: '/awards' }, { label: 'Honours & Awards Reports', to: '/reports/awards' }] },
+  { label: 'Intellectual Property', icon: 'ipr', items: [{ label: 'Intellectual Property View', to: '/ipr' }, { label: 'Intellectual Property Reports', to: '/reports/ipr' }] },
 ];
 const REPORTS: MenuDef = { label: 'Reports', icon: 'reports', items: [{ label: 'Annual Activity Report', to: '/reports/annual' }, 'sep', { label: 'Institution Overview', to: '/analytics' }, { label: 'Department Comparison', to: '/analytics/departments' }, { label: 'Participation & Compliance', to: '/analytics/participation' }] };
 
@@ -49,6 +51,7 @@ export function menusFor(role: Role, pending: number): MenuDef[] {
       { label: 'My Faculty Development Programmes', icon: 'fdp', items: [{ label: 'My FDPs', to: '/fdp' }, { label: 'Add FDP', to: '/fdp/entry' }] },
       { label: 'My Conferences', icon: 'conferences', items: [{ label: 'My Conferences', to: '/conferences' }, { label: 'Add Conference', to: '/conferences/entry' }] },
       { label: 'My Honours & Awards', icon: 'awards', items: [{ label: 'My Honours & Awards', to: '/awards' }, { label: 'Add Honour / Award', to: '/awards/entry' }] },
+      { label: 'My Intellectual Property', icon: 'ipr', items: [{ label: 'My Intellectual Property', to: '/ipr' }, { label: 'Add Patent / Copyright / Trademark', to: '/ipr/entry' }] },
       { label: 'My Collaborations', icon: 'network', to: '/collaborations' },
       { label: 'My Submissions', icon: 'approvals', to: '/submissions' },
       SETTINGS,

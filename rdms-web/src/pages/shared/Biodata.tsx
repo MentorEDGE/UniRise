@@ -7,7 +7,7 @@ import { StatusBadge } from '../../components/ui';
 import { STATUS_LABEL } from '../../lib/types';
 import { blankBiodata, normalizeBiodata } from '../../lib/domain';
 import type { Biodata, Experience, Faculty, Membership, Qualification } from '../../lib/types';
-import { SDGS } from '../../lib/types';
+import { SDGS, ipTypeLabel } from '../../lib/types';
 import { Avatar, SdgIcon } from '../../components/research';
 
 function useTarget() {
@@ -30,6 +30,7 @@ export function BiodataView() {
   const fdps = approved(db.fdps).filter((x) => x.facultyId === facultyId).sort((a, z) => z.fromDate.localeCompare(a.fromDate));
   const confs = approved(db.conferences).filter((x) => x.facultyId === facultyId).sort((a, z) => z.fromDate.localeCompare(a.fromDate));
   const honours = approved(db.awards).filter((x) => x.facultyId === facultyId).sort((a, z) => z.awardDate.localeCompare(a.awardDate));
+  const ipr = approved(db.ipr ?? []).filter((x) => x.facultyId === facultyId).sort((a, z) => z.filingDate.localeCompare(a.filingDate));
   const legacyAwards = b?.awards ?? []; // noted in the profile before Honours & Awards became its own section
   const pct = biodataCompleteness(b, f);
   const editPath = '/biodata/edit';
@@ -77,9 +78,11 @@ export function BiodataView() {
             {legacyAwards.map((a, i) => <li key={`l${i}`}>{a.title}, {a.by} ({a.year})</li>)}
           </ol>
         ) : <p className="muted">No approved honours or awards.</p>}
+        <h2>Intellectual Property ({ipr.length})</h2>
+        {ipr.length ? <ol>{ipr.map((x) => <li key={x.id}>{ipTypeLabel(x)}: <b>{x.title}</b>, {x.office}, application / registration no. {x.applicationNumber}, filed {fmtDate(x.filingDate)} — {x.stage}{x.grantDate && ` (${fmtDate(x.grantDate)})`}{x.coOwners && `; with ${x.coOwners}`}</li>)}</ol> : <p className="muted">No approved intellectual property.</p>}
         <h2>Professional Memberships</h2>
         {b?.memberships.length ? <ol>{b.memberships.map((m, i) => <li key={i}>{m.type}, {m.body} (since {m.since})</li>)}</ol> : <p className="muted">Not entered.</p>}
-        <p className="muted" style={{ marginTop: 18, fontSize: 11 }}>Generated {fmtDate(new Date().toISOString())}. Publications, grants, FDPs, conferences and honours list approved entries only. Profile last updated {fmtDate(b?.updatedAt ?? '')}.</p>
+        <p className="muted" style={{ marginTop: 18, fontSize: 11 }}>Generated {fmtDate(new Date().toISOString())}. Publications, grants, FDPs, conferences, honours and intellectual property list approved entries only. Profile last updated {fmtDate(b?.updatedAt ?? '')}.</p>
       </article>
     </>
   );

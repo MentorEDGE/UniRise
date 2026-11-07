@@ -71,6 +71,7 @@ export function InstitutionAnalytics() {
           <Tile label="FDP hours" value={nf(u.fdpHours)} sub={`${u.fdps.length} programmes · ${nf(u.fdpHours / n)} h per faculty`} to="/fdp" />
           <Tile label="Conferences" value={u.confs.length} sub={`${u.confs.filter((c) => c.level === 'International').length} international`} to="/conferences" />
           <Tile label="Honours & Awards" value={u.awards.length} sub={`${u.awards.filter((a) => a.level === 'International').length} international · ${u.awards.filter((a) => a.level === 'National').length} national`} to="/reports/awards?r=awd-level" />
+          <Tile label="Intellectual Property" value={u.ipr.length} sub={`${u.ipr.filter((x) => x.ipType === 'Patent').length} patents · ${u.ipr.filter((x) => x.ipType !== 'Patent').length} copyrights / trademarks`} to="/ipr" />
           <Tile label="Collaboration" value={`${pct(intl, u.pubs.length)}%`} sub={`external co-authors · ${pct(student, u.pubs.length)}% with students`} />
         </div>
       </div>
@@ -202,6 +203,7 @@ export function facultyColumns(targets: { publicationsPerFaculty: number; fdpHou
     { key: 'fdp', label: 'FDP h', value: (r) => r.fdpHours, num: true, render: (r) => <span style={{ color: r.fdpHours >= targets.fdpHoursPerFaculty ? 'var(--ok)' : undefined }}>{r.fdpHours}</span> },
     { key: 'conf', label: 'Conf.', value: (r) => r.conferences, num: true },
     { key: 'awards', label: 'Awards', value: (r) => r.awards, num: true },
+    { key: 'ipr', label: 'IP', value: (r) => r.ipr, num: true, render: (r) => (r.ipr ? `${r.ipr}${r.patents ? ` (${r.patents} pat.)` : ''}` : 0) },
     { key: 'score', label: 'Score', value: (r) => r.score, num: true, render: (r) => <b>{nf(r.score)}</b> },
   ];
 }

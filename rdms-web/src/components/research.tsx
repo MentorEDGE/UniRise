@@ -27,7 +27,7 @@ export function SdgIcon({ n, size = 34 }: { n: number; size?: number }) {
 }
 
 /** Kinds counted as research activity (FDPs are professional development, not research output). */
-export const ACTIVITY_KINDS: EntityKind[] = ['publications', 'grants', 'seedMoney', 'conferences', 'awards'];
+export const ACTIVITY_KINDS: EntityKind[] = ['publications', 'grants', 'seedMoney', 'conferences', 'awards', 'ipr'];
 
 export interface YearActivity { year: number; publications: number; projects: number; other: number; total: number }
 

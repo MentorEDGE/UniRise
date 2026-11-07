@@ -11,7 +11,7 @@ import { RecordDetail } from '../shared/RecordDetail';
 import { Tile } from './Analytics';
 import { useAnalyticsFilter } from './filters';
 
-const KINDS: EntityKind[] = ['publications', 'grants', 'seedMoney', 'fdps', 'conferences', 'awards'];
+const KINDS: EntityKind[] = ['publications', 'grants', 'seedMoney', 'fdps', 'conferences', 'awards', 'ipr'];
 
 /** Performance view of one faculty member (scores, targets, trends); the research profile links here. */
 export function Faculty360({ facultyId: given }: { facultyId?: string }) {
@@ -64,6 +64,7 @@ export function Faculty360({ facultyId: given }: { facultyId?: string }) {
             <Tile label="FDP hours" value={s.fdpHours} sub={`Target ${t.fdpHoursPerFaculty}${dept(avg('fdpHours').toFixed(0))}`} />
             <Tile label="Conferences" value={s.conferences} sub={`${s.confPresented} presented`} />
             <Tile label="Honours & Awards" value={s.awards} sub="approved" />
+            <Tile label="Intellectual Property" value={s.ipr} sub={`${s.patents} patents · approved`} />
             <Tile label="Profile" value={`${s.biodata}%`} sub="complete" />
           </div>
         </div>

@@ -5,7 +5,7 @@ import { Layout } from './components/Layout';
 import { Alert, Panel, ToastProvider } from './components/ui';
 import { bootstrap, useStore } from './lib/store';
 import type { Role } from './lib/types';
-import { AwardEntry, ConferenceEntry, FdpEntry, GrantEntry, PublicationEntry, SeedMoneyEntry } from './pages/faculty/Entries';
+import { AwardEntry, ConferenceEntry, FdpEntry, GrantEntry, IpEntry, PublicationEntry, SeedMoneyEntry } from './pages/faculty/Entries';
 import { FacultyHome } from './pages/faculty/FacultyHome';
 import { MySubmissions } from './pages/faculty/Submissions';
 import { DepartmentAnalytics, FacultyPerformance, InstitutionAnalytics, ParticipationAnalytics } from './pages/mgmt/Analytics';
@@ -118,6 +118,7 @@ export default function App() {
             <Route path="fdp" element={<Only role={ALL}><RecordView kind="fdps" /></Only>} />
             <Route path="conferences" element={<Only role={ALL}><RecordView kind="conferences" /></Only>} />
             <Route path="awards" element={<Only role={ALL}><RecordView kind="awards" /></Only>} />
+            <Route path="ipr" element={<Only role={ALL}><RecordView kind="ipr" /></Only>} />
             <Route path="reports/annual" element={<Only role={VIEWERS}><AnnualReport /></Only>} />
             <Route path="reports/:group" element={<Only role={VIEWERS}><ReportsPage /></Only>} />
             <Route path="profile-search" element={<Navigate to="/faculty" replace />} />
@@ -130,6 +131,7 @@ export default function App() {
             <Route path="fdp/entry" element={<Only role="faculty"><FdpEntry /></Only>} />
             <Route path="conferences/entry" element={<Only role="faculty"><ConferenceEntry /></Only>} />
             <Route path="awards/entry" element={<Only role="faculty"><AwardEntry /></Only>} />
+            <Route path="ipr/entry" element={<Only role="faculty"><IpEntry /></Only>} />
             <Route path="biodata" element={<Only role="faculty"><BiodataView /></Only>} />
             <Route path="biodata/edit" element={<Only role="faculty"><BiodataEdit /></Only>} />
             <Route path="performance" element={<Only role="faculty"><SelfPerformance /></Only>} />

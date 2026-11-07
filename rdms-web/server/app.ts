@@ -17,7 +17,7 @@ declare module 'express-serve-static-core' {
   interface Request { account?: AccountRow; actor?: Actor; institutionId?: string }
 }
 
-const KINDS: EntityKind[] = ['publications', 'grants', 'seedMoney', 'fdps', 'conferences', 'awards'];
+const KINDS: EntityKind[] = ['publications', 'grants', 'seedMoney', 'fdps', 'conferences', 'awards', 'ipr'];
 const EMAIL = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 const s = (v: unknown, max = 300) => (typeof v === 'string' ? v.trim().slice(0, max) : '');
 

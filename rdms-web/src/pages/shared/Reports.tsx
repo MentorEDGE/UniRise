@@ -7,14 +7,14 @@ import { academicYearRange, dateOf, facultyStats, fmtDate, inr, lakh, uniqueCoun
 import { REPORTS, runReport } from '../../lib/reports';
 import { creditedFaculty, useStore } from '../../lib/store';
 import type { AnyRecord } from '../../lib/types';
-import { STATUS_LABEL, STATUSES } from '../../lib/types';
+import { STATUS_LABEL, STATUSES, ipTypeLabel } from '../../lib/types';
 import { useAnalyticsFilter } from '../mgmt/filters';
 import { listColumns } from '../../lib/entities';
 import { RecordDetail } from './RecordDetail';
 import { focusMatcher, RecordInsights } from '../../components/insights';
 import type { Focus } from '../../components/insights';
 
-const GROUP_TITLE: Record<string, string> = { publications: 'Publication Reports', grants: 'Project Reports', fdps: 'FDP Reports', conferences: 'Conference Reports', awards: 'Honours & Awards Reports' };
+const GROUP_TITLE: Record<string, string> = { publications: 'Publication Reports', grants: 'Project Reports', fdps: 'FDP Reports', conferences: 'Conference Reports', awards: 'Honours & Awards Reports', ipr: 'Intellectual Property Reports' };
 
 export function ReportsPage() {
   const { group = 'publications' } = useParams();
@@ -170,6 +170,8 @@ export function AnnualReport() {
             ...all.confs.filter((c) => c.award).map((c) => ({ id: c.id, text: `${c.award} — ${byId.get(c.facultyId)?.name}, ${c.conferenceName}` }))];
           return aw.length ? <ol>{aw.map((x) => <li key={x.id}>{x.text}</li>)}</ol> : <p className="muted">None recorded.</p>;
         })()}
+        <h2>Intellectual Property ({all.ipr.length})</h2>
+        {all.ipr.length ? <ol>{[...all.ipr].sort((a, z) => a.filingDate.localeCompare(z.filingDate)).map((x) => <li key={x.id}>{ipTypeLabel(x)} ({x.stage}): “{x.title}” — {byId.get(x.facultyId)?.name}; {x.office}, application / registration no. {x.applicationNumber}, filed {fmtDate(x.filingDate)}</li>)}</ol> : <p className="muted">None recorded.</p>}
         <h2>Faculty-wise summary</h2>
         <FacultySummaryTable filter={filter} />
       </article>
