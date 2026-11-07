@@ -3,7 +3,7 @@ import type { ReactNode } from 'react';
 import { Link, useLocation, useNavigate, useSearchParams } from 'react-router-dom';
 import { Logo } from '../../components/Logo';
 import { ThemeToggle } from '../../components/ThemeToggle';
-import { EcoCard, Faqs, HeroStack, OrbitPanel, ProductTour, ResearchFilm, ResearchGallery, RiseStrip, WordRise, tiltHandlers, useScrollProgress, useScrollReveal } from './landingMotion';
+import { EcoGrid, Faqs, HeroStack, OrbitPanel, ProductTour, ResearchFilm, ResearchGallery, RiseStrip, WordRise, tiltHandlers, useScrollProgress, useScrollReveal } from './landingMotion';
 
 /**
  * Public introduction page (route "/" when signed out). Structure, type sizes, spacing and colours follow
@@ -201,9 +201,7 @@ export function IntroLanding() {
         <section className="me-section" id="ecosystem">
           <div className="me-container">
             <p className="me-eyebrow me-mb">Unirise Ecosystem</p>
-            <div className="me-eco">
-              {ECOSYSTEM.map(([t, d], i) => <EcoCard key={t} i={i} title={t} text={d} />)}
-            </div>
+            <EcoGrid items={ECOSYSTEM} />
           </div>
         </section>
 
@@ -212,7 +210,7 @@ export function IntroLanding() {
           <div className="me-container">
             <p className="me-eyebrow me-mb">Inside the research</p>
             <h2 className="me-h2 narrow">Where great research happens</h2>
-            <p className="me-p narrow">In labs and libraries, out in the field and in front of an audience. UniRise brings all of it into one place.</p>
+            <p className="me-p wide-line">In labs and libraries, out in the field and in front of an audience. UniRise brings all of it into one place.</p>
             <ResearchGallery />
           </div>
         </section>
@@ -229,14 +227,14 @@ export function IntroLanding() {
           <div className="me-container">
             <p className="me-eyebrow me-mb">The UniRise research portal</p>
             <h2 className="me-h2 narrow">One Platform for your Research</h2>
-            <p className="me-p narrow">A unified research management platform that brings faculty achievements, publications, grants, research collaborations and institutional performance into one verified and intelligent system.</p>
+            <p className="me-p wide-line">A unified research management platform that brings faculty achievements, publications, grants, research collaborations and institutional performance into one verified and intelligent system.</p>
             <ProductTour />
           </div>
         </section>
 
         <section className="me-section me-pb-only" id="rise">
           <div className="me-container">
-            <p className="me-eyebrow me-mb">The RISE framework</p>
+            <p className="me-eyebrow me-mb">The RISE Framework</p>
             <h2 className="me-h2 narrow">From research activity to institutional intelligence</h2>
             <RiseStrip items={RISE} />
           </div>
