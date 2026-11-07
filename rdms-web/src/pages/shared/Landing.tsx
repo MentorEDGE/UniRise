@@ -175,7 +175,7 @@ export function IntroLanding() {
                     <p className="me-panel-title">A single view of research, partnerships and outcomes</p>
                   </div>
                   <div className="me-orbit">
-                    {ORBIT.map(([t, d]) => <div key={t}><p className="me-orbit-label">{t}</p><p className="me-orbit-text">{d}</p></div>)}
+                    {ORBIT.map(([t]) => <div key={t}><p className="me-orbit-name">{t}</p></div>)}
                   </div>
                 </div>
               </div>
@@ -228,7 +228,7 @@ export function IntroLanding() {
         <section className="me-section me-pb-only" id="perspectives">
           <div className="me-container">
             <p className="me-eyebrow me-mb">One platform. Three perspectives. A stronger research institution.</p>
-            <h2 className="me-h2 narrow">Built for everyone who shapes research.</h2>
+            <h2 className="me-h2 narrow">Built for everyone who shapes research</h2>
             <div className="me-three">{PERSPECTIVES.map((f) => <FeatureCard key={f.who} f={f} />)}</div>
           </div>
         </section>

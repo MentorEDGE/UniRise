@@ -23,7 +23,7 @@ const app = createApp(store, { secureCookies: production });
 const dist = path.resolve('dist');
 if (production && fs.existsSync(dist)) {
   app.use((_req, res, next) => {
-    res.set('Content-Security-Policy', "default-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; font-src 'self' data:; connect-src 'self'; frame-ancestors 'none'; base-uri 'self'; form-action 'self'");
+    res.set('Content-Security-Policy', "default-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data: https://images.unsplash.com; font-src 'self' data:; connect-src 'self'; frame-ancestors 'none'; base-uri 'self'; form-action 'self'");
     next();
   });
   app.use(express.static(dist, { index: 'index.html' }));

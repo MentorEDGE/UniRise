@@ -100,7 +100,7 @@ export function TalkToOurTeam() {
               <div className="ct-intro">
                 <span className="ct-badge">{BUILDING}</span>
                 <p className="ct-eyebrow">For organisations</p>
-                <h2>Bring Research And Opportunity Together.</h2>
+                <h2>Bring Research And Opportunity Together</h2>
                 <p className="ct-lead">Tell us about your organisation and the goals you’d like to explore together.</p>
                 <p className="ct-small">From institutional partnerships and faculty development to student research and industry–academia collaboration, let’s start a conversation.</p>
                 <div className="ct-alt">

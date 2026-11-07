@@ -1482,3 +1482,18 @@ a.rp-title:hover, button.rp-title:hover { text-decoration: underline; }
   .me .me-eco { border-radius: 24px; }
 }
 @media print { .me .me-hero, .me .me-cta { background: none; } .me .me-hero h1, .me .me-cta .me-h2 { color: #000; } }
+/* home page section labels ("For universities and research institutions", "Unirise Ecosystem", ...): larger */
+.me .me-section .me-eyebrow { font-size: calc(var(--r) * 1.25); line-height: 1.3; gap: 12px; }
+.me .me-section .me-eyebrow::before { width: 10px; height: 10px; }
+@media (max-width: 640px) { .me .me-section .me-eyebrow { font-size: calc(var(--r) * 1.1); } }
+/* "What UniRise orbits around": only the four names, same size as the panel heading */
+.me .me-orbit-name { font-size: calc(var(--r) * 1.3); line-height: 1.3; letter-spacing: -0.02em; font-weight: 600; color: var(--me-h); }
+/* section headings "One Platform for your Research", "From research activity to institutional intelligence",
+   "Built for everyone who shapes research" on one line on laptop and desktop screens */
+@media (min-width: 1024px) { .me .me-h2.narrow { max-width: none; white-space: nowrap; } }
+.me .me-section .me-eyebrow { font-size: calc(var(--r) * 1.45); gap: 14px; }
+.me .me-section .me-eyebrow::before { width: 11px; height: 11px; }
+@media (max-width: 640px) { .me .me-section .me-eyebrow { font-size: calc(var(--r) * 1.2); } }
+.me .me-panel-eyebrow { font-size: calc(var(--r) * 1); letter-spacing: 0.12em; margin-bottom: calc(var(--r) * 1) !important; }
+.me .me-feature-who { font-size: calc(var(--r) * 1.1); margin-bottom: 6px !important; }
+@media (min-width: 1024px) { .me #overview .me-about, .me .me-about:has(.me-panel) { align-items: center; } }
