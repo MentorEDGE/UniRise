@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
-import type { ReactNode } from 'react';
+import type { PointerEvent as RPointerEvent, ReactNode } from 'react';
 import { SdgTile } from '../../components/sdg';
 
 /**
@@ -174,10 +174,13 @@ const ECO_ICONS: ReactNode[] = [
   <><rect x="3" y="4" width="18" height="13" rx="2" /><path d="M8 21h8M12 17v4M7 9h4M7 12h7" /><circle cx="16.5" cy="9.5" r="1.5" /></>,
 ];
 
-/** An ecosystem box: an icon that draws in, an accent line and a light that follows the pointer. */
+const ECO_PHOTOS = ['/images/eco/support.jpg', '/images/eco/industry.jpg', '/images/eco/analytics.jpg', '/images/eco/rms.jpg'];
+
+/** An ecosystem box: an icon that draws in, an accent line, and on hover a photograph that fades in behind the text. */
 export function EcoCard({ i, title, text }: { i: number; title: string; text: string }) {
   return (
-    <div className="me-card eco-card" onPointerMove={(e) => { const r = e.currentTarget.getBoundingClientRect(); e.currentTarget.style.setProperty('--mx', `${e.clientX - r.left}px`); e.currentTarget.style.setProperty('--my', `${e.clientY - r.top}px`); }}>
+    <div className="me-card eco-card" tabIndex={0} onPointerMove={(e) => { const r = e.currentTarget.getBoundingClientRect(); e.currentTarget.style.setProperty('--mx', `${e.clientX - r.left}px`); e.currentTarget.style.setProperty('--my', `${e.clientY - r.top}px`); }}>
+      <span className="eco-photo" aria-hidden style={{ backgroundImage: `url("${ECO_PHOTOS[i % ECO_PHOTOS.length]}")` }} />
       <span className="eco-line" aria-hidden />
       <div className="eco-top">
         <svg className="eco-ic" viewBox="0 0 24 24" aria-hidden>{ECO_ICONS[i % ECO_ICONS.length]}</svg>
@@ -187,30 +190,22 @@ export function EcoCard({ i, title, text }: { i: number; title: string; text: st
   );
 }
 
-/** "What UniRise orbits around": a small orbit drawing, and the names lit one at a time as if in orbit. */
+const ORBIT_STEP = 2800;
+
+/** "What UniRise orbits around": the four focus areas, lit one at a time with a line that fills before moving on. */
 export function OrbitPanel({ names }: { names: string[] }) {
   const [on, setOn] = useState(0);
+  const [still] = useState(() => prefersReducedMotion());
   const hold = useRef(false);
   useEffect(() => {
-    if (prefersReducedMotion()) return;
-    const t = setInterval(() => { if (!hold.current && !document.hidden) setOn((o) => (o + 1) % names.length); }, 2400);
+    if (still) return;
+    const t = setInterval(() => { if (!hold.current && !document.hidden) setOn((o) => (o + 1) % names.length); }, ORBIT_STEP);
     return () => clearInterval(t);
-  }, [names.length]);
+  }, [still, names.length]);
   return (
     <div className="me-panel orbit-panel">
       <div className="me-blob p1" aria-hidden />
       <div className="me-blob p2" aria-hidden />
-      <svg className="orbit-art" viewBox="0 0 120 120" aria-hidden>
-        <g transform="rotate(-20 60 60)">
-          <path id="orbit-outer" className="ring" d="M8 60a52 22 0 1 0 104 0a52 22 0 1 0-104 0" />
-          {!prefersReducedMotion() && <circle className="planet a" r="4.5"><animateMotion dur="14s" repeatCount="indefinite"><mpath href="#orbit-outer" /></animateMotion></circle>}
-        </g>
-        <g transform="rotate(28 60 60)">
-          <path id="orbit-inner" className="ring" d="M26 60a34 14 0 1 0 68 0a34 14 0 1 0-68 0" />
-          {!prefersReducedMotion() && <circle className="planet b" r="3.5"><animateMotion dur="8s" repeatCount="indefinite" keyPoints="1;0" keyTimes="0;1" calcMode="linear"><mpath href="#orbit-inner" /></animateMotion></circle>}
-        </g>
-        <circle className="sun" cx="60" cy="60" r="8" />
-      </svg>
       <div className="me-panel-body">
         <div>
           <p className="me-panel-eyebrow">WHAT UNIRISE ORBITS AROUND</p>
@@ -221,6 +216,7 @@ export function OrbitPanel({ names }: { names: string[] }) {
             <div key={t} className={`orbit-row ${i === on ? 'on' : ''}`} style={{ ['--i' as string]: i }} onMouseEnter={() => { hold.current = true; setOn(i); }}>
               <span className="orbit-dot" aria-hidden />
               <p className="me-orbit-name">{t}</p>
+              <span className="orbit-fill" aria-hidden><i key={`${on}-${i}`} style={{ animationDuration: `${ORBIT_STEP}ms` }} /></span>
             </div>
           ))}
         </div>
@@ -232,10 +228,7 @@ export function OrbitPanel({ names }: { names: string[] }) {
 /** Photographs of research at work, in a mosaic that wipes in on scroll and drifts on hover. Photos from Unsplash. */
 const SHOTS = [
   { src: '/images/research/microscope.jpg', label: 'Life sciences', alt: 'A researcher in a lab coat looking through a microscope', credit: 'Trust “Tru” Katsande' },
-  { src: '/images/research/pipette.jpg', label: 'Experiments', alt: 'A scientist in blue gloves pipetting into a row of sample tubes', credit: 'Julia Koblitz' },
-  { src: '/images/research/presenting.jpg', label: 'Presenting findings', alt: 'A researcher presenting a chart on a screen to colleagues', credit: 'Vitaly Gariev' },
   { src: '/images/research/engineering.jpg', label: 'Engineering', alt: 'A 3D printer building parts in an engineering lab', credit: 'Jakub Żerdzicki' },
-  { src: '/images/research/field.jpg', label: 'Field research', alt: 'A surveyor looking through a surveying instrument in a green field', credit: 'Nazmul ahsan Meraz' },
   { src: '/images/research/library.jpg', label: 'Library research', alt: 'A researcher working on a laptop in a library lined with books', credit: 'Zoshua Colah' },
 ];
 export function ResearchGallery() {
@@ -321,4 +314,152 @@ export function Faqs({ items }: { items: [string, ReactNode][] }) {
       })}
     </div>
   );
+}
+
+/* ---------------- Product tour (the UniRise research portal) ---------------- */
+
+const TOUR = [
+  { id: 'faculty', who: 'Faculty', title: 'Record research once', text: 'Add a publication, grant or patent with its document and send it for verification in a few clicks.' },
+  { id: 'office', who: 'Office of Research', title: 'Verify with confidence', text: 'Review each submission with its evidence, then approve, return with comments or reject.' },
+  { id: 'leadership', who: 'Institutional Leadership', title: 'See the whole picture', text: 'Approved research rolls up into live dashboards across departments, years and goals.' },
+] as const;
+const TOUR_MS = 7000;
+
+/** Three roles, each with a small moving picture of the real screen; it advances by itself and on click. */
+export function ProductTour() {
+  const [on, setOn] = useState(0);
+  const [paused, setPaused] = useState(() => prefersReducedMotion());
+  const [seen, setSeen] = useState(false);
+  const box = useRef<HTMLDivElement>(null);
+  const hold = useRef(false);
+  useEffect(() => {
+    const el = box.current;
+    if (!el || !('IntersectionObserver' in window)) { setSeen(true); return; }
+    const io = new IntersectionObserver(([e]) => setSeen(e.isIntersecting), { threshold: 0.3 });
+    io.observe(el);
+    return () => io.disconnect();
+  }, []);
+  useEffect(() => {
+    if (paused || !seen) return;
+    const t = setTimeout(() => { if (!hold.current) setOn((o) => (o + 1) % TOUR.length); }, TOUR_MS);
+    return () => clearTimeout(t);
+  }, [on, paused, seen]);
+  const run = seen && !paused;
+  return (
+    <div ref={box} className={`pt ${run ? 'run' : ''}`} onMouseEnter={() => { hold.current = true; }} onMouseLeave={() => { hold.current = false; }}>
+      <div className="pt-tabs" role="tablist" aria-label="See UniRise by role">
+        {TOUR.map((t, i) => (
+          <button key={t.id} type="button" role="tab" aria-selected={i === on} className={`pt-tab ${i === on ? 'on' : ''}`} onClick={() => setOn(i)}>
+            <span className="pt-who">{t.who}</span>
+            <span className="pt-title">{t.title}</span>
+            <span className="pt-text">{t.text}</span>
+            <span className="pt-bar" aria-hidden><i key={`${on}-${run}`} style={{ animationDuration: `${TOUR_MS}ms` }} /></span>
+          </button>
+        ))}
+        <button type="button" className="pt-pause" onClick={() => setPaused((p) => !p)} aria-pressed={paused}>{paused ? 'Play the tour' : 'Pause the tour'}</button>
+      </div>
+      <div className="pt-window" aria-hidden>
+        <div className="pt-chrome"><i /><i /><i /><span>unirise · {TOUR[on].who}</span></div>
+        <div className="pt-screen" key={on}>
+          {on === 0 && <FacultyScreen />}
+          {on === 1 && <OfficeScreen />}
+          {on === 2 && <LeaderScreen />}
+          <span className={`pt-cursor c${on}`} />
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function FacultyScreen() {
+  return (
+    <div className="ps ps-fac">
+      <p className="ps-h">Add Publication</p>
+      <div className="ps-grid">
+        <label>Entry type<span className="ps-in">Journal Article</span></label>
+        <label>Year<span className="ps-in">2026</span></label>
+        <label className="w">Title<span className="ps-in ps-type"><b>Low-cost sensing for precision agriculture</b></span></label>
+        <label className="w">Journal<span className="ps-in ps-fade">Journal of Agricultural Engineering</span></label>
+        <label>Indexing<span className="ps-in ps-fade d2">Scopus · Q1</span></label>
+        <label>Full text<span className="ps-in ps-file">📎 paper.pdf</span></label>
+      </div>
+      <div className="ps-actions"><span className="ps-btn ghost">Save Draft</span><span className="ps-btn go">Submit for Approval</span></div>
+      <div className="ps-toast">✓ Submitted · Pending approval by the Office of Research</div>
+    </div>
+  );
+}
+function OfficeScreen() {
+  const rows = [
+    ['Publication', 'Low-cost sensing for precision agriculture', 'Dr. Faculty A'],
+    ['Patent', 'A modular soil moisture probe', 'Dr. Faculty M'],
+    ['Grant', 'Smart irrigation for semi-arid farms', 'Dr. Faculty Q'],
+    ['Conference', 'International Conference on AgriTech', 'Dr. Faculty E'],
+  ];
+  return (
+    <div className="ps ps-off">
+      <p className="ps-h">Approval <span className="ps-pill">Waiting for review</span></p>
+      <div className="ps-rows">
+        {rows.map(([k, t, who], i) => (
+          <div key={t} className={`ps-row r${i}`}>
+            <span className={`ps-kind k${i}`}>{k}</span>
+            <span className="ps-t">{t}<small>{who}</small></span>
+            {i === 0 ? <span className="ps-acts"><span className="ps-btn sm ret">Return</span><span className="ps-btn sm ok">Approve</span></span> : <span className="ps-btn sm ghost">Review</span>}
+          </div>
+        ))}
+      </div>
+      <div className="ps-toast">✓ Approved · now counted in profiles and reports</div>
+    </div>
+  );
+}
+function LeaderScreen() {
+  const bars = [38, 52, 47, 66, 72, 88];
+  const depts = [['Computer Science', 92], ['Electronics', 74], ['Mechanical', 61], ['Biotechnology', 55]] as const;
+  return (
+    <div className="ps ps-lead">
+      <p className="ps-h">Institution Overview</p>
+      <div className="ps-kpis">
+        <div><span>Publications</span><b className="ps-up">▲ rising</b></div>
+        <div><span>Funding</span><b className="ps-up">▲ rising</b></div>
+        <div><span>Collaboration</span><b className="ps-up">▲ wider</b></div>
+      </div>
+      <div className="ps-charts">
+        <div className="ps-bars">{bars.map((h, i) => <i key={i} style={{ height: `${h}%`, animationDelay: `${0.25 + i * 0.12}s` }} />)}
+          <svg viewBox="0 0 100 40" preserveAspectRatio="none"><path pathLength={1} d="M2 32 L20 26 L38 28 L56 18 L74 14 L98 4" /></svg>
+        </div>
+        <div className="ps-depts">{depts.map(([d, v], i) => <div key={d}><span>{d}</span><i style={{ width: `${v}%`, animationDelay: `${0.6 + i * 0.15}s` }} /></div>)}</div>
+      </div>
+      <div className="ps-sdgs">{[3, 6, 7, 9, 11, 13].map((n, i) => <span key={n} style={{ animationDelay: `${1.3 + i * 0.1}s` }}><SdgTile n={n} size={30} /></span>)}</div>
+    </div>
+  );
+}
+
+/** Tilts a card slightly towards the pointer with a soft light; flat for people who prefer less motion. */
+export function tiltHandlers() {
+  if (prefersReducedMotion()) return {};
+  return {
+    onPointerMove: (e: RPointerEvent<HTMLElement>) => {
+      const el = e.currentTarget; const r = el.getBoundingClientRect();
+      const x = (e.clientX - r.left) / r.width - 0.5, y = (e.clientY - r.top) / r.height - 0.5;
+      el.style.setProperty('--rx', `${(-y * 6).toFixed(2)}deg`); el.style.setProperty('--ry', `${(x * 8).toFixed(2)}deg`);
+      el.style.setProperty('--gx', `${(x + 0.5) * 100}%`); el.style.setProperty('--gy', `${(y + 0.5) * 100}%`);
+    },
+    onPointerLeave: (e: RPointerEvent<HTMLElement>) => { const el = e.currentTarget; el.style.setProperty('--rx', '0deg'); el.style.setProperty('--ry', '0deg'); },
+  };
+}
+
+/** A thin bar under the header that fills as the page scrolls; the hero photo drifts a little slower than the page. */
+export function useScrollProgress() {
+  useEffect(() => {
+    let raf = 0;
+    const update = () => {
+      raf = 0;
+      const max = document.documentElement.scrollHeight - innerHeight;
+      document.documentElement.style.setProperty('--scroll-p', String(max > 0 ? Math.min(1, scrollY / max) : 0));
+      if (!prefersReducedMotion()) document.documentElement.style.setProperty('--hero-shift', `${Math.min(scrollY, 900) * 0.18}px`);
+    };
+    const on = () => { if (!raf) raf = requestAnimationFrame(update); };
+    update();
+    addEventListener('scroll', on, { passive: true }); addEventListener('resize', on);
+    return () => { removeEventListener('scroll', on); removeEventListener('resize', on); cancelAnimationFrame(raf); document.documentElement.style.removeProperty('--hero-shift'); };
+  }, []);
 }

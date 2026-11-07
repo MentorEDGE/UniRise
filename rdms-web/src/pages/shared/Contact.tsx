@@ -102,7 +102,7 @@ export function TalkToOurTeam() {
                 <p className="ct-eyebrow">For organisations</p>
                 <h2>Bring Research And Opportunity Together</h2>
                 <p className="ct-lead">Tell us about your organisation and the goals you’d like to explore together.</p>
-                <p className="ct-small">From institutional partnerships and faculty development to student research and industry–academia collaboration, let’s start a conversation.</p>
+                <p className="ct-small">From institutional partnerships, faculty development and industry–academia collaboration, let’s start a conversation.</p>
                 <div className="ct-alt">
                   <p>Prefer to email us?</p>
                   <a href={`mailto:${ENQUIRY_EMAIL}`}>{MAIL}{ENQUIRY_EMAIL}</a>

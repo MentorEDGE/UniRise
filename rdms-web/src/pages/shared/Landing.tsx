@@ -3,7 +3,7 @@ import type { ReactNode } from 'react';
 import { Link, useLocation, useNavigate, useSearchParams } from 'react-router-dom';
 import { Logo } from '../../components/Logo';
 import { ThemeToggle } from '../../components/ThemeToggle';
-import { EcoCard, Faqs, HeroStack, OrbitPanel, ResearchFilm, ResearchGallery, RiseStrip, WordRise, useScrollReveal } from './landingMotion';
+import { EcoCard, Faqs, HeroStack, OrbitPanel, ProductTour, ResearchFilm, ResearchGallery, RiseStrip, WordRise, tiltHandlers, useScrollProgress, useScrollReveal } from './landingMotion';
 
 /**
  * Public introduction page (route "/" when signed out). Structure, type sizes, spacing and colours follow
@@ -36,7 +36,7 @@ const ECOSYSTEM = [
   ['Research Management System', 'A seamless, end-to-end digital infrastructure to streamline workflows and maximize institutional efficiency'],
 ];
 type Tone = 'blue' | 'violet' | 'emerald';
-interface Feature { title: string; icon: ReactNode; tone: Tone; points: string[]; who?: string }
+interface Feature { title: string; icon: ReactNode; tone: Tone; points: string[]; who?: string; photo?: string; photoAlt?: string }
 const UNLOCKS: Feature[] = [
   { title: 'Institution-Wide Research Strategy', icon: BOOK, tone: 'blue', points: ['Map faculty, labs and projects into strategic clusters', 'Track funded projects, grants and proposals in one place', 'Spot gaps where new chairs, labs or courses can unlock value', 'Align annual plans with accreditation and ranking requirements'] },
   { title: 'Partnerships And Co-Innovation', icon: USERS, tone: 'violet', points: ['Standardised engagement models for corporate partners', 'Co-branded research programs and joint labs with transparent KPIs', 'Capstone projects and live problem statements', 'Ecosystem for IP sharing, technology licensing and spin-outs'] },
@@ -52,9 +52,9 @@ const RISE = [
 ];
 // Matches what each role can actually do in the application.
 const PERSPECTIVES: Feature[] = [
-  { who: 'Faculty', title: 'Your research. Your achievements. Your identity.', icon: USERS, tone: 'blue', points: ['Build a living research profile that reflects every academic milestone.', 'Showcase verified achievements to peers, institutions, and collaborators.', 'Gain the visibility and recognition your research deserves.'] },
-  { who: 'Institutional Leadership', title: 'See the bigger picture. Shape what comes next.', icon: LANDMARK, tone: 'violet', points: ['Discover institutional strengths across disciplines, expertise, and research priorities.', 'Track research performance, funding, and emerging trends across departments.', 'Turn trusted evidence into strategic decisions and accreditation-ready insights.'] },
-  { who: 'Office of Research', title: 'Every achievement verified. Every decision accounted for.', icon: SHIELD, tone: 'emerald', points: ['Bring faculty affiliation, research submissions, and approvals into one seamless workflow.', 'Uphold institutional research standards through structured verification.', 'Maintain a complete, transparent record of research activity and approvals.'] },
+  { who: 'Faculty', photo: '/images/roles/faculty.jpg', photoAlt: 'A smiling professor in front of a board of formulas', title: 'Your research. Your achievements. Your identity.', icon: USERS, tone: 'blue', points: ['Build a living research profile that reflects every academic milestone.', 'Showcase verified achievements to peers, institutions, and collaborators.', 'Gain the visibility and recognition your research deserves.'] },
+  { who: 'Institutional Leadership', photo: '/images/roles/leadership.jpg', photoAlt: 'An analytics dashboard with charts on a laptop', title: 'See the bigger picture. Shape what comes next.', icon: LANDMARK, tone: 'violet', points: ['Discover institutional strengths across disciplines, expertise, and research priorities.', 'Track research performance, funding, and emerging trends across departments.', 'Turn trusted evidence into strategic decisions and accreditation-ready insights.'] },
+  { who: 'Office of Research', photo: '/images/roles/office.jpg', photoAlt: 'Two people reviewing a document together with a pen', title: 'Every achievement verified. Every decision accounted for.', icon: SHIELD, tone: 'emerald', points: ['Bring faculty affiliation, research submissions, and approvals into one seamless workflow.', 'Uphold institutional research standards through structured verification.', 'Maintain a complete, transparent record of research activity and approvals.'] },
 ];
 
 const scrollTo = (id: string) => document.getElementById(id)?.scrollIntoView({ behavior: 'smooth', block: 'start' });
@@ -66,6 +66,7 @@ export function PublicHeader() {
   const go = (id: string) => (loc.pathname === '/' ? scrollTo(id) : nav(`/?s=${id}`));
   return (
     <header className="me-head">
+      <span className="me-progress" aria-hidden />
       <Link className="me-logo" to="/" onClick={() => loc.pathname === '/' && scrollTo('top')} aria-label="UniRise by MentorEdge, overview"><Logo /></Link>
       <nav className="me-nav" aria-label="UniRise">
         <ul>
@@ -123,13 +124,15 @@ export function PublicFooter() {
 
 function FeatureCard({ f }: { f: Feature }) {
   return (
-    <div className={`me-feature ${f.tone}`}>
+    <div className={`me-feature ${f.tone} ${f.photo ? 'has-photo' : ''} tilt`} {...tiltHandlers()}>
+      <span className="tilt-glare" aria-hidden />
+      {f.photo && <div className="me-feature-photo"><img src={f.photo} alt={f.photoAlt ?? ''} loading="lazy" decoding="async" /></div>}
       <div className="me-feature-head">
         <span className="me-feature-ic">{svg(f.icon)}</span>
         <div>{f.who && <p className="me-feature-who">{f.who}</p>}<h3>{f.title}</h3></div>
       </div>
       <div className="me-feature-rule" />
-      <ul>{f.points.map((p) => <li key={p}>{svg(CHECK, 'me-check')}<span>{p}</span></li>)}</ul>
+      <ul>{f.points.map((p, i) => <li key={p} style={{ ['--li' as string]: i }}>{svg(CHECK, 'me-check')}<span>{p}</span></li>)}</ul>
     </div>
   );
 }
@@ -149,6 +152,7 @@ export function IntroLanding() {
   const [params] = useSearchParams();
   const target = params.get('s');
   useEffect(() => { if (target) setTimeout(() => scrollTo(target), 60); }, [target]);
+  useScrollProgress();
   useScrollReveal('.me main > .me-section .me-container > *, .me main .me-card, .me main .me-three > *, .me main .orbit-panel, .me-cta-section .me-container > *');
   return (
     <div className="me">
@@ -226,6 +230,7 @@ export function IntroLanding() {
             <p className="me-eyebrow me-mb">The UniRise research portal</p>
             <h2 className="me-h2 narrow">One Platform for your Research</h2>
             <p className="me-p narrow">A unified research management platform that brings faculty achievements, publications, grants, research collaborations and institutional performance into one verified and intelligent system.</p>
+            <ProductTour />
           </div>
         </section>
 
