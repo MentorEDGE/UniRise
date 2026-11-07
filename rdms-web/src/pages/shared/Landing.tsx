@@ -38,7 +38,7 @@ type Tone = 'blue' | 'violet' | 'emerald';
 interface Feature { title: string; icon: ReactNode; tone: Tone; points: string[]; who?: string }
 const UNLOCKS: Feature[] = [
   { title: 'Institution-Wide Research Strategy', icon: BOOK, tone: 'blue', points: ['Map faculty, labs and projects into strategic clusters', 'Track funded projects, grants and proposals in one place', 'Spot gaps where new chairs, labs or courses can unlock value', 'Align annual plans with accreditation and ranking requirements'] },
-  { title: 'Partnerships And Co-Innovation', icon: USERS, tone: 'violet', points: ['Standardised engagement models for corporate partners', 'Co-branded research programs and joint labs with transparent KPIs', 'Capstone projects and live problem statements for students', 'Ecosystem for IP sharing, technology licensing and spin-outs'] },
+  { title: 'Partnerships And Co-Innovation', icon: USERS, tone: 'violet', points: ['Standardised engagement models for corporate partners', 'Co-branded research programs and joint labs with transparent KPIs', 'Capstone projects and live problem statements', 'Ecosystem for IP sharing, technology licensing and spin-outs'] },
   { title: 'Impact, Analytics And Governance', icon: TREND, tone: 'emerald', points: ['Dashboards for publications, citations, grants and patents', 'View collaboration networks across departments and partners', 'Monitor pipeline health from ideas to pilots and products', 'Exportable reports that speak the language of accreditation'] },
 ];
 
@@ -164,7 +164,7 @@ export function IntroLanding() {
                 <h2 className="me-h2">Turning Academic Strength Into Industry-Visible Impact</h2>
                 <p className="me-p">Many universities invest in strong faculty and research labs but still struggle to translate that work into visible outcomes: industry-funded projects, high quality publications, patents and employable talent. UniRise is built as a connective tissue between your internal research ecosystem and the outside world.</p>
                 <p className="me-p">Inspired by global best practices in academia–industry collaboration, UniRise helps align institutional priorities with concrete programs: themed research clusters, joint industry chairs, co-developed curricula and startup pipelines that grow out of real research, not isolated hackathons.</p>
-                <p className="me-p">Institutions use UniRise to build a recurring partnership engine: clear engagement models for companies, transparent expectations for faculty and students, and a shared digital space where every collaboration, project and outcome is documented and measurable.</p>
+                <p className="me-p">Institutions use UniRise to build a recurring partnership engine: clear engagement models for companies, transparent expectations for faculty, and a shared digital space where every collaboration, project and outcome is documented and measurable.</p>
               </div>
               <div className="me-panel">
                 <div className="me-blob p1" aria-hidden />

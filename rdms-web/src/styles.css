@@ -1497,4 +1497,4 @@ a.rp-title:hover, button.rp-title:hover { text-decoration: underline; }
 .me .me-panel-eyebrow { font-size: calc(var(--r) * 1); letter-spacing: 0.12em; margin-bottom: calc(var(--r) * 1) !important; }
 .me .me-feature-who { font-size: calc(var(--r) * 1.1); margin-bottom: 6px !important; }
 @media (min-width: 1024px) { .me #overview .me-about, .me .me-about:has(.me-panel) { align-items: center; } }
-.me .me-panel-title, .me .me-orbit-name { color: var(--me-eyebrow); }
+.me .me-orbit-name { color: var(--me-eyebrow); }
