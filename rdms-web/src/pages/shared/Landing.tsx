@@ -3,7 +3,7 @@ import type { ReactNode } from 'react';
 import { Link, useLocation, useNavigate, useSearchParams } from 'react-router-dom';
 import { Logo } from '../../components/Logo';
 import { ThemeToggle } from '../../components/ThemeToggle';
-import { EcoCard, HeroStack, OrbitPanel, RiseStrip, WordRise, useScrollReveal } from './landingMotion';
+import { EcoCard, Faqs, HeroStack, OrbitPanel, ResearchFilm, ResearchGallery, RiseStrip, WordRise, useScrollReveal } from './landingMotion';
 
 /**
  * Public introduction page (route "/" when signed out). Structure, type sizes, spacing and colours follow
@@ -134,6 +134,17 @@ function FeatureCard({ f }: { f: Feature }) {
   );
 }
 
+const FAQS: [string, ReactNode][] = [
+  ['What is UniRise?', 'UniRise is a research management platform for universities and research institutions. It brings faculty profiles, publications, grants and fellowships, seed money, faculty development programmes, conferences, honours and awards, and intellectual property into one verified system, with reports and analytics built on top.'],
+  ['Who uses UniRise?', 'Three groups, each with their own view. Faculty record and track their own research. The Office of Research verifies every entry and manages the institution’s accounts. Institutional leadership sees approved, institution-wide research performance to plan and decide.'],
+  ['How does an entry get verified?', 'Faculty submit an entry with its supporting document. The Office of Research reviews it and approves it, returns it for correction with comments, or rejects it. Only approved entries count in reports, profiles and analytics, and every decision is kept in the entry’s history.'],
+  ['Can faculty see each other’s data?', 'Faculty see and manage only their own records. Colleagues appear by name so that co-authors and co-investigators can be added to an entry, but their records, contact details and pending submissions stay private.'],
+  ['What can institutional leadership see?', 'Leadership sees approved records across the institution: faculty profiles, research output, funding, collaboration networks, SDG alignment and department comparisons. It is a read-only view, so the record of research stays exactly as verified.'],
+  ['Is our data kept separate from other institutions?', 'Yes. Each institution has its own database. Accounts belong to one institution, and nothing from one institution is visible to another.'],
+  ['Does UniRise help with accreditation and rankings?', 'UniRise keeps a complete, verified record of research activity and produces annual activity reports, department and faculty-wise reports, and exports that institutions draw on when preparing accreditation and ranking submissions.'],
+  ['How to get started?', <>Talk to our team. We set up your institution and its Office of Research, who then create accounts for faculty and leadership. There is no public sign-up. <Link to="/talk-to-our-team">Start the conversation</Link>.</>],
+];
+
 export function IntroLanding() {
   const [params] = useSearchParams();
   const target = params.get('s');
@@ -161,6 +172,13 @@ export function IntroLanding() {
           </div>
         </section>
 
+        {/* ---------- research film ---------- */}
+        <section className="me-section rf-section" id="film">
+          <div className="me-container wide">
+            <ResearchFilm />
+          </div>
+        </section>
+
         <section className="me-section" id="about-unirise">
           <div className="me-container wide">
             <p className="me-eyebrow me-mb">For universities and research institutions</p>
@@ -185,6 +203,16 @@ export function IntroLanding() {
           </div>
         </section>
 
+        {/* ---------- research at work (photographs) ---------- */}
+        <section className="me-section me-pb-only" id="research-at-work">
+          <div className="me-container">
+            <p className="me-eyebrow me-mb">Inside the research</p>
+            <h2 className="me-h2 narrow">Where great research happens</h2>
+            <p className="me-p narrow">In labs and libraries, out in the field and in front of an audience. UniRise brings all of it into one place.</p>
+            <ResearchGallery />
+          </div>
+        </section>
+
         <section className="me-section me-pb-only">
           <div className="me-container">
             <p className="me-eyebrow me-mb">What UniRise unlocks for your campus</p>
@@ -205,7 +233,6 @@ export function IntroLanding() {
           <div className="me-container">
             <p className="me-eyebrow me-mb">The RISE framework</p>
             <h2 className="me-h2 narrow">From research activity to institutional intelligence</h2>
-            <p className="me-p narrow">Four disciplines that turn academic records into a coherent research strategy</p>
             <RiseStrip items={RISE} />
           </div>
         </section>
@@ -215,6 +242,15 @@ export function IntroLanding() {
             <p className="me-eyebrow me-mb">One platform. Three perspectives. A stronger research institution.</p>
             <h2 className="me-h2 narrow">Built for everyone who shapes research</h2>
             <div className="me-three">{PERSPECTIVES.map((f) => <FeatureCard key={f.who} f={f} />)}</div>
+          </div>
+        </section>
+
+        {/* ---------- FAQs ---------- */}
+        <section className="me-section me-pb-only" id="faqs">
+          <div className="me-container">
+            <p className="me-eyebrow me-mb">Frequently Asked Questions (FAQs)</p>
+            <Faqs items={FAQS} />
+            <p className="faq-more">Still have a question? <Link to="/talk-to-our-team">Talk to our team</Link></p>
           </div>
         </section>
 

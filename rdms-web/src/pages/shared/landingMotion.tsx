@@ -228,3 +228,97 @@ export function OrbitPanel({ names }: { names: string[] }) {
     </div>
   );
 }
+
+/** Photographs of research at work, in a mosaic that wipes in on scroll and drifts on hover. Photos from Unsplash. */
+const SHOTS = [
+  { src: '/images/research/microscope.jpg', label: 'Life sciences', alt: 'A researcher in a lab coat looking through a microscope', credit: 'Trust “Tru” Katsande' },
+  { src: '/images/research/pipette.jpg', label: 'Experiments', alt: 'A scientist in blue gloves pipetting into a row of sample tubes', credit: 'Julia Koblitz' },
+  { src: '/images/research/presenting.jpg', label: 'Presenting findings', alt: 'A researcher presenting a chart on a screen to colleagues', credit: 'Vitaly Gariev' },
+  { src: '/images/research/engineering.jpg', label: 'Engineering', alt: 'A 3D printer building parts in an engineering lab', credit: 'Jakub Żerdzicki' },
+  { src: '/images/research/field.jpg', label: 'Field research', alt: 'A surveyor looking through a surveying instrument in a green field', credit: 'Nazmul ahsan Meraz' },
+  { src: '/images/research/library.jpg', label: 'Library research', alt: 'A researcher working on a laptop in a library lined with books', credit: 'Zoshua Colah' },
+];
+export function ResearchGallery() {
+  return (
+    <>
+      <div className="rg">
+        {SHOTS.map((s, i) => (
+          <figure key={s.src} className={`rg-tile t${i}`} style={{ ['--i' as string]: i }}>
+            <img src={s.src} alt={s.alt} loading="lazy" decoding="async" />
+            <figcaption><span className="rg-dot" aria-hidden />{s.label}</figcaption>
+          </figure>
+        ))}
+      </div>
+      <p className="rg-credit">Photos: {SHOTS.map((s) => s.credit).filter((c, i, a) => a.indexOf(c) === i).join(', ')} on Unsplash</p>
+    </>
+  );
+}
+
+/** A short silent film of research at work beside a two-part line that appears as it scrolls into view. */
+export function ResearchFilm() {
+  const ref = useRef<HTMLVideoElement>(null);
+  const box = useRef<HTMLDivElement>(null);
+  const [shown, setShown] = useState(false);
+  const [paused, setPaused] = useState(() => prefersReducedMotion());
+  useEffect(() => {
+    const el = box.current;
+    if (!el) return;
+    if (!('IntersectionObserver' in window)) { setShown(true); return; }
+    const io = new IntersectionObserver(([e]) => {
+      if (e.isIntersecting) setShown(true);
+      const v = ref.current;
+      if (!v) return;
+      if (e.isIntersecting && !paused) v.play().catch(() => {}); else v.pause();
+    }, { threshold: 0.25 });
+    io.observe(el);
+    return () => io.disconnect();
+  }, [paused]);
+  const toggle = () => {
+    const v = ref.current;
+    if (!v) return;
+    if (v.paused) { v.play().catch(() => {}); setPaused(false); } else { v.pause(); setPaused(true); }
+  };
+  return (
+    <div ref={box} className={`rf ${shown ? 'shown' : ''}`}>
+      <h2 className="rf-line">
+        <span className="rf-a"><WordRise text="Every breakthrough begins with someone asking why" step={60} /></span>
+        <span className="rf-b">UniRise makes sure the world sees the answer</span>
+      </h2>
+      <div className="rf-media">
+        <img className="rf-peek l" src="/images/research/field.jpg" alt="" aria-hidden />
+        <img className="rf-peek r" src="/images/research/library.jpg" alt="" aria-hidden />
+        <div className="rf-frame">
+          <video ref={ref} src="/video/research-reel.mp4" poster="/video/research-reel.jpg" muted loop playsInline preload="metadata"
+            aria-label="Researchers at a microscope, sowing a seed, discussing at a whiteboard, working in a lab, over crop fields and studying a brain model on screen" />
+          <button type="button" className="rf-pause" onClick={toggle} aria-label={paused ? 'Play the video' : 'Pause the video'} aria-pressed={paused}>
+            {paused ? <svg viewBox="0 0 16 16" aria-hidden><path d="M5 3.5v9l7.5-4.5Z" /></svg> : <svg viewBox="0 0 16 16" aria-hidden><path d="M5 3.5h2v9H5zM9 3.5h2v9H9z" /></svg>}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+/** Questions institutions ask before they start; one answer open at a time. */
+export function Faqs({ items }: { items: [string, ReactNode][] }) {
+  const [open, setOpen] = useState<number | null>(0);
+  return (
+    <div className="faq">
+      {items.map(([q, a], i) => {
+        const on = open === i;
+        return (
+          <div key={q} className={`faq-item ${on ? 'on' : ''}`}>
+            <h3>
+              <button type="button" aria-expanded={on} aria-controls={`faq-a-${i}`} id={`faq-q-${i}`} onClick={() => setOpen(on ? null : i)}>
+                <span>{q}</span><span className="faq-ic" aria-hidden />
+              </button>
+            </h3>
+            <div className="faq-a" id={`faq-a-${i}`} role="region" aria-labelledby={`faq-q-${i}`}>
+              <div><div className="faq-a-in">{a}</div></div>
+            </div>
+          </div>
+        );
+      })}
+    </div>
+  );
+}

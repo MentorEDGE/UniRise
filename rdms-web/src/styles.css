@@ -1727,3 +1727,95 @@ a.rp-title:hover, button.rp-title:hover { text-decoration: underline; }
   .orbit-art .sun { animation: none; }
   .orbit-panel.rv .orbit-row { opacity: 1; transform: none; transition: none; }
 }
+
+/* "Where great research happens": photo mosaic */
+.rg { display: grid; grid-template-columns: 1.35fr 1fr 1fr 1fr; grid-template-rows: 270px 270px; gap: 14px; margin-top: calc(var(--r) * 2.5); }
+.rg-tile { position: relative; margin: 0; overflow: hidden; border-radius: 22px; background: var(--me-ink, #150f33); }
+.rg-tile.t0 { grid-column: 1; grid-row: 1 / 3; }
+.rg-tile.t1 { grid-column: 2; grid-row: 1; }
+.rg-tile.t2 { grid-column: 3 / 5; grid-row: 1; }
+.rg-tile.t3 { grid-column: 2; grid-row: 2; }
+.rg-tile.t4 { grid-column: 3; grid-row: 2; }
+.rg-tile.t5 { grid-column: 4; grid-row: 2; }
+.rg-tile img { width: 100%; height: 100%; object-fit: cover; display: block; transform: scale(1.04); transition: transform 1.6s cubic-bezier(.2, .7, .2, 1), filter .6s; }
+.rg-tile.t0 img { object-position: 30% 50%; }
+.rg-tile:hover img { transform: scale(1.12) translateY(-1.5%); }
+.rg-tile::after { content: ''; position: absolute; inset: 0; background: linear-gradient(to top, rgb(10 6 30 / .72), transparent 48%); pointer-events: none; }
+.rg-tile figcaption { position: absolute; left: 16px; bottom: 14px; z-index: 1; display: inline-flex; align-items: center; gap: 8px; color: #fff; font-size: 15.5px; font-weight: 650; letter-spacing: .01em; transition: transform .5s cubic-bezier(.2, .7, .2, 1); }
+.rg-tile:hover figcaption { transform: translateY(-4px); }
+.rg-dot { width: 8px; height: 8px; border-radius: 50%; background: var(--me-yellow, #ffc61a); box-shadow: 0 0 0 4px rgb(255 198 26 / .25); }
+.rg-credit { margin-top: 12px !important; font-size: 12.5px; color: var(--me-label, #64748b); text-align: right; }
+/* each photo wipes in, one after another, when the mosaic scrolls into view (triggered by the mosaic, not the clipped photos) */
+.rg.rv { opacity: 1; transform: none; }
+.rg.rv .rg-tile { clip-path: inset(0 0 100% 0 round 22px); transition: clip-path 1.1s cubic-bezier(.6, 0, .2, 1) calc(var(--i) * 110ms); }
+.rg.rv.in .rg-tile { clip-path: inset(0 0 0 0 round 22px); }
+.rg.rv .rg-tile img { transform: scale(1.18); }
+.rg.rv.in .rg-tile img { transform: scale(1.04); transition: transform 1.8s cubic-bezier(.2, .7, .2, 1) calc(var(--i) * 110ms); }
+.rg.rv.in .rg-tile:hover img { transform: scale(1.12) translateY(-1.5%); transition-delay: 0s; }
+@media (max-width: 900px) {
+  .rg { grid-template-columns: 1fr 1fr; grid-template-rows: 300px 200px 200px; }
+  .rg-tile.t0 { grid-column: 1 / 3; grid-row: 1; }
+  .rg-tile.t1 { grid-column: 1; grid-row: 2; } .rg-tile.t2 { grid-column: 2; grid-row: 2; }
+  .rg-tile.t3 { grid-column: 1; grid-row: 3; } .rg-tile.t4 { grid-column: 2; grid-row: 3; }
+  .rg-tile.t5 { display: none; }
+}
+@media (max-width: 520px) { .rg { grid-template-rows: 240px 160px 160px; gap: 10px; } .rg-tile figcaption { font-size: 13.5px; left: 12px; bottom: 10px; } }
+@media (prefers-reduced-motion: reduce) {
+  .rg.rv .rg-tile { clip-path: none; transition: none; }
+  .rg-tile img, .rg.rv .rg-tile img, .rg.rv.in .rg-tile img { transition: none; transform: none; }
+}
+
+/* ===== Research film: two-part line beside a looping video ===== */
+.rf { display: grid; grid-template-columns: 1fr; gap: calc(var(--r) * 2.5); align-items: center; }
+@media (min-width: 1024px) { .rf { grid-template-columns: minmax(0, 1fr) minmax(0, 1.05fr); gap: calc(var(--r) * 4); } }
+.rf-line { margin: 0; font-size: clamp(30px, 2.2vw + 18px, 58px); line-height: 1.08; letter-spacing: -0.035em; font-weight: 600; color: var(--me-h); }
+.rf-a, .rf-b { display: block; }
+.rf .wr-w { animation-play-state: paused; }
+.rf.shown .wr-w { animation-play-state: running; }
+.rf-b { margin-top: .45em; color: var(--me-eyebrow); position: relative; width: fit-content; opacity: 0; transform: translateY(18px); transition: opacity .8s ease 1.1s, transform .9s cubic-bezier(.2, .7, .2, 1) 1.1s; }
+.rf.shown .rf-b { opacity: 1; transform: none; }
+.rf-b::after { content: ''; position: absolute; left: 0; bottom: -.12em; height: .09em; width: 0; border-radius: 99px; background: var(--me-yellow, #ffc61a); transition: width 1s cubic-bezier(.6, 0, .2, 1) 1.9s; }
+.rf.shown .rf-b::after { width: 100%; }
+.rf-media { position: relative; height: clamp(300px, 34vw, 500px); }
+.rf-frame { position: absolute; inset: 0 12%; border-radius: 26px; overflow: hidden; background: var(--me-ink, #150f33); box-shadow: 0 40px 80px rgb(21 15 51 / .25); z-index: 2;
+  opacity: 0; transform: translateY(30px) scale(.96); transition: opacity .9s ease .2s, transform 1.1s cubic-bezier(.2, .7, .2, 1) .2s; }
+.rf.shown .rf-frame { opacity: 1; transform: none; }
+.rf-frame video { width: 100%; height: 100%; object-fit: cover; display: block; }
+.rf-peek { position: absolute; top: 14%; bottom: 14%; width: 30%; object-fit: cover; border-radius: 20px; z-index: 1; opacity: 0; filter: saturate(.85);
+  transition: opacity .9s ease .6s, transform 1.2s cubic-bezier(.34, 1.3, .5, 1) .6s; }
+.rf-peek.l { left: 0; transform: translateX(40%) scale(.9); }
+.rf-peek.r { right: 0; transform: translateX(-40%) scale(.9); }
+.rf.shown .rf-peek { opacity: .55; transform: none; }
+.rf-pause { position: absolute; left: 14px; bottom: 14px; width: 38px; height: 38px; border-radius: 50%; border: 1.5px solid rgb(255 255 255 / .7); background: rgb(10 6 30 / .35); backdrop-filter: blur(6px); display: grid; place-items: center; cursor: pointer; }
+.rf-pause svg { width: 14px; height: 14px; fill: #fff; }
+.rf-pause:hover { background: rgb(10 6 30 / .55); }
+.rf-section { padding-top: calc(var(--r) * 5) !important; }
+@media (max-width: 640px) { .rf-frame { inset: 0; } .rf-peek { display: none; } .rf-media { height: 240px; } }
+@media (prefers-reduced-motion: reduce) {
+  .rf-b, .rf-frame, .rf-peek { transition: none; opacity: 1; transform: none; }
+  .rf-peek { opacity: .55; }
+  .rf-b::after { transition: none; width: 100%; }
+}
+
+/* ===== FAQs ===== */
+.faq { margin-top: calc(var(--r) * 2.5); border-top: 1px solid var(--me-hair); }
+.faq-item { border-bottom: 1px solid var(--me-hair); }
+.faq-item h3 { margin: 0; }
+.faq-item button { all: unset; box-sizing: border-box; width: 100%; cursor: pointer; display: flex; align-items: center; justify-content: space-between; gap: 24px; padding: calc(var(--r) * 1.4) 4px;
+  font-size: calc(var(--r) * 1.2); font-weight: 600; letter-spacing: -0.02em; color: var(--me-h); transition: color .25s; }
+.faq-item button:hover, .faq-item.on button { color: var(--me-eyebrow); }
+.faq-item button:focus-visible { outline: 2px solid var(--me-eyebrow); outline-offset: 2px; border-radius: 6px; }
+.faq-ic { position: relative; width: 34px; height: 34px; flex: none; border-radius: 50%; border: 1.5px solid var(--me-hair); transition: background-color .3s, border-color .3s, transform .45s cubic-bezier(.34, 1.4, .5, 1); }
+.faq-ic::before, .faq-ic::after { content: ''; position: absolute; left: 50%; top: 50%; width: 12px; height: 1.8px; margin: -0.9px 0 0 -6px; border-radius: 2px; background: currentColor; transition: transform .35s ease; }
+.faq-ic::after { transform: rotate(90deg); }
+.faq-item.on .faq-ic { background: var(--me-eyebrow); border-color: var(--me-eyebrow); color: #fff; transform: rotate(180deg); }
+.faq-item.on .faq-ic::after { transform: rotate(0deg); }
+.faq-a { display: grid; grid-template-rows: 0fr; transition: grid-template-rows .45s cubic-bezier(.2, .7, .2, 1); }
+.faq-item.on .faq-a { grid-template-rows: 1fr; }
+.faq-a > div { overflow: hidden; }
+.faq-a-in { padding: 0 4px calc(var(--r) * 1.5); max-width: 860px; font-size: calc(var(--r) * 1); line-height: 1.7; color: var(--me-text); opacity: 0; transform: translateY(-6px); transition: opacity .35s ease, transform .45s ease; }
+.faq-item.on .faq-a-in { opacity: 1; transform: none; transition-delay: .1s; }
+.faq-a-in a, .faq-more a { color: var(--me-eyebrow); font-weight: 600; }
+.faq-more { margin-top: calc(var(--r) * 1.6) !important; font-size: calc(var(--r) * 1); color: var(--me-text); }
+@media (prefers-reduced-motion: reduce) { .faq-a, .faq-a-in, .faq-ic, .faq-ic::before, .faq-ic::after { transition: none; } }
+#faqs .faq { margin-top: 0; }
