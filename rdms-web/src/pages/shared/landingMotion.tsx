@@ -294,16 +294,20 @@ export function ResearchFilm() {
   const [shown, setShown] = useState(false);
   const [sound, setSound] = useState(true); // on by default; browsers may wait for the first click or key press
   const [still] = useState(() => prefersReducedMotion());
+  // One fade at a time: a new fade cancels the previous one, so quick scrolling never leaves music playing.
+  const fadeRaf = useRef(0);
   const fade = (to: number) => {
     const a = music.current;
     if (!a) return;
+    cancelAnimationFrame(fadeRaf.current);
     if (to > 0 && a.paused) { a.volume = 0; a.play().catch(() => armFirstGesture()); }
     const step = () => {
-      const v = a.volume + (to > a.volume ? 0.04 : -0.04);
-      a.volume = Math.max(0, Math.min(1, to > a.volume ? Math.min(v, to) : Math.max(v, to)));
-      if (Math.abs(a.volume - to) > 0.01) requestAnimationFrame(step); else if (to === 0) a.pause();
+      const v = to > a.volume ? Math.min(a.volume + 0.04, to) : Math.max(a.volume - 0.06, to);
+      a.volume = Math.max(0, Math.min(1, v));
+      if (Math.abs(a.volume - to) > 0.005) fadeRaf.current = requestAnimationFrame(step);
+      else if (to === 0) a.pause();
     };
-    requestAnimationFrame(step);
+    fadeRaf.current = requestAnimationFrame(step);
   };
   useEffect(() => {
     const el = box.current;
@@ -333,7 +337,16 @@ export function ResearchFilm() {
     };
     ['pointerdown', 'keydown', 'touchstart'].forEach((t) => addEventListener(t, start, { capture: true, once: true }));
   }
-  useEffect(() => () => { music.current?.pause(); }, []);
+  useEffect(() => {
+    const onVis = () => {
+      const a = music.current;
+      if (!a) return;
+      if (document.hidden) { cancelAnimationFrame(fadeRaf.current); a.pause(); }
+      else if (soundRef.current && inView.current) fade(0.5);
+    };
+    document.addEventListener('visibilitychange', onVis);
+    return () => { document.removeEventListener('visibilitychange', onVis); cancelAnimationFrame(fadeRaf.current); music.current?.pause(); };
+  }, []);
   const toggleSound = () => { const next = !sound; setSound(next); fade(next ? 0.5 : 0); };
   return (
     <div ref={box} className={`rf ${shown ? 'shown' : ''}`}>

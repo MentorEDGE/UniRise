@@ -2130,3 +2130,36 @@ a.rp-title:hover, button.rp-title:hover { text-decoration: underline; }
 .ps-off .ps-toast { animation: ps-toast .4s cubic-bezier(.2, .7, .2, 1) 2.2s forwards; }
 .ps-bars path { animation-delay: .8s; animation-duration: 1.1s; }
 .faq-a-in { max-width: none; padding-right: 54px; }
+
+/* hero card stack: larger */
+@media (min-width: 1100px) {
+  .hs-stage { height: 500px; }
+  .hs-card { width: 430px; height: 430px; margin: -215px 0 0 -215px; border-radius: 26px; }
+  .hs-card.right { transform: translateX(190px) scale(.8); }
+  .hs-card.left { transform: translateX(-190px) scale(.8); }
+  .hc { padding: 32px; gap: 18px; border-radius: 26px; }
+  .hc-kicker { font-size: 14px !important; }
+  .hc-person div, .hc-sdg div { font-size: 21px; }
+  .hc-person span, .hc-sdg span { font-size: 15.5px; }
+  .hc-avatar { width: 72px; height: 80px; border-radius: 12px; }
+  .hc-avatar svg { width: 48px; }
+  .hc-bars { height: 120px; gap: 10px; }
+  .hc-stats, .hc-rows { font-size: 15.5px; gap: 18px; }
+  .hc-stats b, .hc-rows b { font-size: 21px; }
+  .hc-rows { gap: 0; }
+  .hc-rows span { padding: 11px 0; }
+  .hc-tag { font-size: 14px; padding: 5px 12px; }
+  .hc-title { font-size: 25px !important; }
+  .hc-steps { font-size: 16px; gap: 13px; }
+  .hc-steps li::before { width: 26px; height: 26px; font-size: 13px; }
+  .hc-sdg .sdg-tile { width: 80px !important; height: 80px !important; }
+  .hc-sdg .sdg-tile svg { width: 62px; height: 62px; }
+}
+@media (min-width: 1100px) and (max-width: 1280px) {
+  .hs-card { width: 380px; height: 380px; margin: -190px 0 0 -190px; }
+  .hs-card.right { transform: translateX(150px) scale(.8); } .hs-card.left { transform: translateX(-150px) scale(.8); }
+  .hs-stage { height: 450px; }
+}
+@media (min-width: 1100px) { .me .me-hero-inner.has-stack .me-hero-lead { max-width: 600px; } }
+@media (max-width: 1199px) { .hs { display: none; } .me .me-hero-inner.has-stack { grid-template-columns: 1fr; } .me .me-hero-inner.has-stack .me-hero-lead { max-width: 760px; } }
+@media (min-width: 1200px) and (max-width: 1280px) { .hs-card.right { transform: translateX(120px) scale(.8); } .hs-card.left { transform: translateX(-120px) scale(.8); } }
