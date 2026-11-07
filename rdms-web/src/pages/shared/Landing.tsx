@@ -3,6 +3,7 @@ import type { ReactNode } from 'react';
 import { Link, useLocation, useNavigate, useSearchParams } from 'react-router-dom';
 import { Logo } from '../../components/Logo';
 import { ThemeToggle } from '../../components/ThemeToggle';
+import { EcoCard, HeroStack, OrbitPanel, RiseStrip, WordRise, useScrollReveal } from './landingMotion';
 
 /**
  * Public introduction page (route "/" when signed out). Structure, type sizes, spacing and colours follow
@@ -137,6 +138,7 @@ export function IntroLanding() {
   const [params] = useSearchParams();
   const target = params.get('s');
   useEffect(() => { if (target) setTimeout(() => scrollTo(target), 60); }, [target]);
+  useScrollReveal('.me main > .me-section .me-container > *, .me main .me-card, .me main .me-three > *, .me main .orbit-panel, .me-cta-section .me-container > *');
   return (
     <div className="me">
       <PublicHeader />
@@ -150,9 +152,12 @@ export function IntroLanding() {
             <div className="me-blob a" />
             <div className="me-blob b" />
           </div>
-          <div className="me-hero-inner">
-            <h1>A Connected Framework For Institutional Research Growth</h1>
-            <p className="me-hero-lead">UniRise is a comprehensive strategic framework designed to bridge the gap between academic potential and global research impact. We provide the tools, networks and insights necessary for institutions to strengthen research quality, deepen collaborations and elevate institutional standing.</p>
+          <div className="me-hero-inner has-stack">
+            <div className="me-hero-text">
+            <h1><WordRise text="A Connected Framework For Institutional Research Growth" start={150} /></h1>
+            <p className="me-hero-lead hero-in">UniRise is a comprehensive strategic framework designed to bridge the gap between academic potential and global research impact. We provide the tools, networks and insights necessary for institutions to strengthen research quality, deepen collaborations and elevate institutional standing.</p>
+            </div>
+            <HeroStack />
           </div>
         </section>
 
@@ -166,19 +171,7 @@ export function IntroLanding() {
                 <p className="me-p">Inspired by global best practices in academia–industry collaboration, UniRise helps align institutional priorities with concrete programs: themed research clusters, joint industry chairs, co-developed curricula and startup pipelines that grow out of real research, not isolated hackathons.</p>
                 <p className="me-p">Institutions use UniRise to build a recurring partnership engine: clear engagement models for companies, transparent expectations for faculty, and a shared digital space where every collaboration, project and outcome is documented and measurable.</p>
               </div>
-              <div className="me-panel">
-                <div className="me-blob p1" aria-hidden />
-                <div className="me-blob p2" aria-hidden />
-                <div className="me-panel-body">
-                  <div>
-                    <p className="me-panel-eyebrow">WHAT UNIRISE ORBITS AROUND</p>
-                    <p className="me-panel-title">A single view of research, partnerships and outcomes</p>
-                  </div>
-                  <div className="me-orbit">
-                    {ORBIT.map(([t]) => <div key={t}><p className="me-orbit-name">{t}</p></div>)}
-                  </div>
-                </div>
-              </div>
+              <OrbitPanel names={ORBIT.map(([t]) => t)} />
             </div>
           </div>
         </section>
@@ -187,7 +180,7 @@ export function IntroLanding() {
           <div className="me-container">
             <p className="me-eyebrow me-mb">Unirise Ecosystem</p>
             <div className="me-eco">
-              {ECOSYSTEM.map(([t, d]) => <div key={t} className="me-card"><h3>{t}</h3><p>{d}</p></div>)}
+              {ECOSYSTEM.map(([t, d], i) => <EcoCard key={t} i={i} title={t} text={d} />)}
             </div>
           </div>
         </section>
@@ -213,15 +206,7 @@ export function IntroLanding() {
             <p className="me-eyebrow me-mb">The RISE framework</p>
             <h2 className="me-h2 narrow">From research activity to institutional intelligence</h2>
             <p className="me-p narrow">Four disciplines that turn academic records into a coherent research strategy</p>
-            <ol className="me-rise">
-              {RISE.map(([l, t, d], i) => (
-                <li key={l} className="me-card">
-                  <span className="me-rise-letter" aria-hidden>{l}</span>
-                  <h3>{t}</h3><p>{d}</p>
-                  {i < RISE.length - 1 && <span className="me-rise-arrow" aria-hidden>{svg(<path d="M5 12h14M13 6l6 6-6 6" />)}</span>}
-                </li>
-              ))}
-            </ol>
+            <RiseStrip items={RISE} />
           </div>
         </section>
 
