@@ -30,30 +30,30 @@ const ORBIT = [
 ];
 const ECOSYSTEM = [
   ['Customized Research Support', 'Tailored capacity building programs designed to enhance faculty output and institutional research prestige'],
-  ['Industry Partnerships', 'Strategic bridges connecting academic brilliance with real world corporate needs and commercialization'],
-  ['Analytics & Insights', 'Data-driven intelligence to track performance, identify trends, and make informed strategic decisions'],
+  ['Industry Partnerships', 'Strategic bridges connecting existing academic brilliance with real world corporate needs and commercialization'],
+  ['Analytics & Insights', 'Data-driven intelligence to track performance, identify trends, and make key informed decisions'],
   ['Research Management System', 'A seamless, end-to-end digital infrastructure to streamline workflows and maximize institutional efficiency'],
 ];
 type Tone = 'blue' | 'violet' | 'emerald';
 interface Feature { title: string; icon: ReactNode; tone: Tone; points: string[]; who?: string }
 const UNLOCKS: Feature[] = [
-  { title: 'Institution-Wide Research Strategy', icon: BOOK, tone: 'blue', points: ['Map faculty, labs and projects into clear strategic clusters', 'Track funded projects, grants and proposals in one place', 'Spot gaps where new chairs, labs or courses can unlock value', 'Align annual plans with accreditation and ranking requirements'] },
+  { title: 'Institution-Wide Research Strategy', icon: BOOK, tone: 'blue', points: ['Map faculty, labs and projects into strategic clusters', 'Track funded projects, grants and proposals in one place', 'Spot gaps where new chairs, labs or courses can unlock value', 'Align annual plans with accreditation and ranking requirements'] },
   { title: 'Partnerships And Co-Innovation', icon: USERS, tone: 'violet', points: ['Standardised engagement models for corporate partners', 'Co-branded research programs and joint labs with transparent KPIs', 'Capstone projects and live problem statements for students', 'Ecosystem for IP sharing, technology licensing and spin-outs'] },
   { title: 'Impact, Analytics And Governance', icon: TREND, tone: 'emerald', points: ['Dashboards for publications, citations, grants and patents', 'View collaboration networks across departments and partners', 'Monitor pipeline health from ideas to pilots and products', 'Exportable reports that speak the language of accreditation'] },
 ];
 
 // ---- the research portal ----
 const RISE = [
-  ['R', 'Record', 'Publications, grants, FDPs, conferences and other achievements, captured once, at the source.'],
-  ['I', 'Insight', 'Output, funding and participation by department, year and researcher, the moment entries are approved.'],
-  ['S', 'Stewardship', 'Every entry reviewed by the Office of Research before it counts, a full audit trail, and data that never leaves its institution.'],
-  ['E', 'Elevate', 'Verified records become accreditation-ready reports and decisions that raise research standing.'],
+  ['R', 'Record', 'Bring every publication, grant, academic milestone, and faculty achievement together in one living record of institutional research.'],
+  ['I', 'Insight', 'See your institution\'s research landscape unfold—output, funding, and participation across researchers, departments, and years.'],
+  ['S', 'Stewardship', 'Put research governance at the heart of the institution—with seamless approvals, complete traceability, and full ownership of research data.'],
+  ['E', 'Elevate', 'Transform research achievements into institutional intelligence, accreditation excellence, and a reputation that reaches further.'],
 ];
 // Matches what each role can actually do in the application.
 const PERSPECTIVES: Feature[] = [
-  { who: 'Faculty', title: 'A complete, current record of your research.', icon: USERS, tone: 'blue', points: ['Showcase your research profile to peers and collaborators', 'Submit achievements once and follow them through to approval', 'Earn recognition for verified, accreditation-ready work'] },
-  { who: 'Top-Level Management', title: 'Verified insight to guide institutional decisions.', icon: LANDMARK, tone: 'violet', points: ['Identify research strengths by expertise and Sustainable Development Goal', 'Compare departmental performance and emerging trends', 'Report to accreditation bodies with confidence'] },
-  { who: 'Office of Research', title: 'Rigorous governance, without the paperwork.', icon: SHIELD, tone: 'emerald', points: ['Confirm institutional affiliation before access is granted', 'Review and approve every research entry', 'Keep a complete, auditable record of each decision'] },
+  { who: 'Faculty', title: 'Your research. Your achievements. Your identity.', icon: USERS, tone: 'blue', points: ['Build a living research profile that reflects every academic milestone.', 'Showcase verified achievements to peers, institutions, and collaborators.', 'Gain the visibility and recognition your research deserves.'] },
+  { who: 'Institutional Leadership', title: 'See the bigger picture. Shape what comes next.', icon: LANDMARK, tone: 'violet', points: ['Discover institutional strengths across disciplines, expertise, and research priorities.', 'Track research performance, funding, and emerging trends across departments.', 'Turn trusted evidence into strategic decisions and accreditation-ready insights.'] },
+  { who: 'Office of Research', title: 'Every achievement verified. Every decision accounted for.', icon: SHIELD, tone: 'emerald', points: ['Bring faculty affiliation, research submissions, and approvals into one seamless workflow.', 'Uphold institutional research standards through structured verification.', 'Maintain a complete, transparent record of research activity and approvals.'] },
 ];
 
 const scrollTo = (id: string) => document.getElementById(id)?.scrollIntoView({ behavior: 'smooth', block: 'start' });
@@ -151,7 +151,6 @@ export function IntroLanding() {
             <div className="me-blob b" />
           </div>
           <div className="me-hero-inner">
-            <p className="me-eyebrow">UniRise · For Universities &amp; Research Institutions</p>
             <h1>A Connected Framework For Institutional Research Growth</h1>
             <p className="me-hero-lead">UniRise is a comprehensive strategic framework designed to bridge the gap between academic potential and global research impact. We provide the tools, networks and insights necessary for institutions to strengthen research quality, deepen collaborations and elevate institutional standing.</p>
           </div>
@@ -165,7 +164,7 @@ export function IntroLanding() {
                 <h2 className="me-h2">Turning Academic Strength Into Industry-Visible Impact</h2>
                 <p className="me-p">Many universities invest in strong faculty and research labs but still struggle to translate that work into visible outcomes: industry-funded projects, high quality publications, patents and employable talent. UniRise is built as a connective tissue between your internal research ecosystem and the outside world.</p>
                 <p className="me-p">Inspired by global best practices in academia–industry collaboration, UniRise helps align institutional priorities with concrete programs: themed research clusters, joint industry chairs, co-developed curricula and startup pipelines that grow out of real research, not isolated hackathons.</p>
-                <p className="me-p">Instead of chasing one-off MoUs, institutions use UniRise to build a recurring partnership engine: clear engagement models for companies, transparent expectations for faculty and students, and a shared digital space where every collaboration, project and outcome is documented and measurable.</p>
+                <p className="me-p">Institutions use UniRise to build a recurring partnership engine: clear engagement models for companies, transparent expectations for faculty and students, and a shared digital space where every collaboration, project and outcome is documented and measurable.</p>
               </div>
               <div className="me-panel">
                 <div className="me-blob p1" aria-hidden />
@@ -204,7 +203,7 @@ export function IntroLanding() {
         <section className="me-section me-pb-only" id="portal">
           <div className="me-container">
             <p className="me-eyebrow me-mb">The UniRise research portal</p>
-            <h2 className="me-h2 narrow">One Platform. Every Research Achievement. Institutional Intelligence.</h2>
+            <h2 className="me-h2 narrow">One Platform for your Research</h2>
             <p className="me-p narrow">A unified research management platform that brings faculty achievements, publications, grants, research collaborations and institutional performance into one verified and intelligent system.</p>
           </div>
         </section>
@@ -212,8 +211,8 @@ export function IntroLanding() {
         <section className="me-section me-pb-only" id="rise">
           <div className="me-container">
             <p className="me-eyebrow me-mb">The RISE framework</p>
-            <h2 className="me-h2 narrow">From faculty activity to institutional intelligence</h2>
-            <p className="me-p narrow">Four disciplines that turn scattered academic records into a research strategy.</p>
+            <h2 className="me-h2 narrow">From research activity to institutional intelligence</h2>
+            <p className="me-p narrow">Four disciplines that turn academic records into a coherent research strategy</p>
             <ol className="me-rise">
               {RISE.map(([l, t, d], i) => (
                 <li key={l} className="me-card">
@@ -228,8 +227,8 @@ export function IntroLanding() {
 
         <section className="me-section me-pb-only" id="perspectives">
           <div className="me-container">
-            <p className="me-eyebrow me-mb">One platform, three perspectives</p>
-            <h2 className="me-h2 narrow">Built for everyone who shapes research</h2>
+            <p className="me-eyebrow me-mb">One platform. Three perspectives. A stronger research institution.</p>
+            <h2 className="me-h2 narrow">Built for everyone who shapes research.</h2>
             <div className="me-three">{PERSPECTIVES.map((f) => <FeatureCard key={f.who} f={f} />)}</div>
           </div>
         </section>
@@ -241,7 +240,7 @@ export function IntroLanding() {
               <div className="me-blob c2" aria-hidden />
               <div className="me-cta-body">
                 <h2 className="me-h2">Ready to Transform Your Institution with UniRise?</h2>
-                <p>Whether you lead a university, college, or research institution, our team will work with you to craft the ideal partnership. Reach out today for a complimentary, no-obligation consultation.</p>
+                <p>Whether you lead a university, college, or research institution, our team will work with you to craft the ideal partnership. Reach out today for a complementary consultation.</p>
                 <Link className="me-cta-btn" to="/talk-to-our-team">Talk to our team</Link>
               </div>
             </div>
