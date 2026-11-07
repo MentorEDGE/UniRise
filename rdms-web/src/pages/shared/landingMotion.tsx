@@ -52,7 +52,7 @@ export function HeroStack() {
     { key: 'network', body: <NetworkCard /> },
   ];
   const [front, setFront] = useState(0);
-  const [paused, setPaused] = useState(() => prefersReducedMotion());
+  const [paused] = useState(() => prefersReducedMotion());
   const hover = useRef(false);
   useEffect(() => {
     if (paused) return;
@@ -62,9 +62,6 @@ export function HeroStack() {
   const n = cards.length;
   return (
     <div className="hs" onMouseEnter={() => { hover.current = true; }} onMouseLeave={() => { hover.current = false; }}>
-      <button type="button" className="hs-pause" onClick={() => setPaused((p) => !p)} aria-label={paused ? 'Play the animation' : 'Pause the animation'} aria-pressed={paused}>
-        {paused ? <svg viewBox="0 0 16 16" aria-hidden><path d="M5 3.5v9l7.5-4.5Z" /></svg> : <svg viewBox="0 0 16 16" aria-hidden><path d="M5 3.5h2v9H5zM9 3.5h2v9H9z" /></svg>}
-      </button>
       <div className="hs-stage" aria-roledescription="carousel" aria-label="What UniRise brings together">
         {cards.map((c, i) => {
           const slot = (i - front + n) % n; // 0 front, 1 next (right), n-1 previous (left), others waiting behind
@@ -201,9 +198,19 @@ const ECO_ICONS: ReactNode[] = [
 const ECO_PHOTOS = ['/images/eco/support.jpg', '/images/eco/industry.jpg', '/images/eco/analytics.jpg', '/images/eco/rms.jpg'];
 
 /** An ecosystem box: an icon that draws in, an accent line, and on hover a photograph that fades in behind the text. */
-export function EcoCard({ i, title, text }: { i: number; title: string; text: string }) {
+export function EcoGrid({ items }: { items: string[][] }) {
+  const [on, setOn] = useState(0);
+  useEffect(() => {
+    if (prefersReducedMotion()) return;
+    const t = setInterval(() => { if (!document.hidden) setOn((o) => (o + 1) % items.length); }, 2200);
+    return () => clearInterval(t);
+  }, [items.length]);
+  return <div className="me-eco">{items.map(([t, d], i) => <EcoCard key={t} i={i} title={t} text={d} on={i === on} onHover={() => setOn(i)} />)}</div>;
+}
+
+export function EcoCard({ i, title, text, on = false, onHover }: { i: number; title: string; text: string; on?: boolean; onHover?: () => void }) {
   return (
-    <div className="me-card eco-card" tabIndex={0} onPointerMove={(e) => { const r = e.currentTarget.getBoundingClientRect(); e.currentTarget.style.setProperty('--mx', `${e.clientX - r.left}px`); e.currentTarget.style.setProperty('--my', `${e.clientY - r.top}px`); }}>
+    <div className={`me-card eco-card ${on ? 'on' : ''}`} tabIndex={0} onMouseEnter={onHover} onPointerMove={(e) => { const r = e.currentTarget.getBoundingClientRect(); e.currentTarget.style.setProperty('--mx', `${e.clientX - r.left}px`); e.currentTarget.style.setProperty('--my', `${e.clientY - r.top}px`); }}>
       <span className="eco-photo" aria-hidden style={{ backgroundImage: `url("${ECO_PHOTOS[i % ECO_PHOTOS.length]}")` }} />
       <span className="eco-line" aria-hidden />
       <div className="eco-top">
@@ -214,22 +221,31 @@ export function EcoCard({ i, title, text }: { i: number; title: string; text: st
   );
 }
 
-const ORBIT_STEP = 2800;
-
-/** "What UniRise orbits around": the four focus areas, lit one at a time with a line that fills before moving on. */
+/** "What UniRise orbits around": a small orbit drawing, and the names lit one at a time as if in orbit. */
 export function OrbitPanel({ names }: { names: string[] }) {
   const [on, setOn] = useState(0);
-  const [still] = useState(() => prefersReducedMotion());
   const hold = useRef(false);
+  const [still] = useState(() => prefersReducedMotion());
   useEffect(() => {
     if (still) return;
-    const t = setInterval(() => { if (!hold.current && !document.hidden) setOn((o) => (o + 1) % names.length); }, ORBIT_STEP);
+    const t = setInterval(() => { if (!hold.current && !document.hidden) setOn((o) => (o + 1) % names.length); }, 2400);
     return () => clearInterval(t);
   }, [still, names.length]);
   return (
-    <div className="me-panel orbit-panel">
+    <div className="me-panel orbit-panel v1">
       <div className="me-blob p1" aria-hidden />
       <div className="me-blob p2" aria-hidden />
+      <svg className="orbit-art" viewBox="0 0 120 120" aria-hidden>
+        <g transform="rotate(-20 60 60)">
+          <path id="orbit-outer" className="ring" d="M8 60a52 22 0 1 0 104 0a52 22 0 1 0-104 0" />
+          {still ? <circle className="planet a" cx="112" cy="60" r="4.5" /> : <circle className="planet a" r="4.5"><animateMotion dur="14s" repeatCount="indefinite"><mpath href="#orbit-outer" /></animateMotion></circle>}
+        </g>
+        <g transform="rotate(25 60 60)">
+          <path id="orbit-inner" className="ring" d="M26 60a34 14 0 1 0 68 0a34 14 0 1 0-68 0" />
+          {still ? <circle className="planet b" cx="26" cy="60" r="3.5" /> : <circle className="planet b" r="3.5"><animateMotion dur="8s" repeatCount="indefinite" keyPoints="1;0" keyTimes="0;1" calcMode="linear"><mpath href="#orbit-inner" /></animateMotion></circle>}
+        </g>
+        <circle className="sun" cx="60" cy="60" r="8" />
+      </svg>
       <div className="me-panel-body">
         <div>
           <p className="me-panel-eyebrow">WHAT UNIRISE ORBITS AROUND</p>
@@ -240,7 +256,6 @@ export function OrbitPanel({ names }: { names: string[] }) {
             <div key={t} className={`orbit-row ${i === on ? 'on' : ''}`} style={{ ['--i' as string]: i }} onMouseEnter={() => { hold.current = true; setOn(i); }}>
               <span className="orbit-dot" aria-hidden />
               <p className="me-orbit-name">{t}</p>
-              <span className="orbit-fill" aria-hidden><i key={`${on}-${i}`} style={{ animationDuration: `${ORBIT_STEP}ms` }} /></span>
             </div>
           ))}
         </div>
@@ -262,7 +277,6 @@ export function ResearchGallery() {
         {SHOTS.map((s, i) => (
           <figure key={s.src} className={`rg-tile t${i}`} style={{ ['--i' as string]: i }}>
             <img src={s.src} alt={s.alt} loading="lazy" decoding="async" />
-            <figcaption><span className="rg-dot" aria-hidden />{s.label}</figcaption>
           </figure>
         ))}
       </div>
@@ -274,27 +288,53 @@ export function ResearchGallery() {
 /** A short silent film of research at work beside a two-part line that appears as it scrolls into view. */
 export function ResearchFilm() {
   const ref = useRef<HTMLVideoElement>(null);
+  const music = useRef<HTMLAudioElement>(null);
   const box = useRef<HTMLDivElement>(null);
+  const inView = useRef(false);
   const [shown, setShown] = useState(false);
-  const [paused, setPaused] = useState(() => prefersReducedMotion());
+  const [sound, setSound] = useState(true); // on by default; browsers may wait for the first click or key press
+  const [still] = useState(() => prefersReducedMotion());
+  const fade = (to: number) => {
+    const a = music.current;
+    if (!a) return;
+    if (to > 0 && a.paused) { a.volume = 0; a.play().catch(() => armFirstGesture()); }
+    const step = () => {
+      const v = a.volume + (to > a.volume ? 0.04 : -0.04);
+      a.volume = Math.max(0, Math.min(1, to > a.volume ? Math.min(v, to) : Math.max(v, to)));
+      if (Math.abs(a.volume - to) > 0.01) requestAnimationFrame(step); else if (to === 0) a.pause();
+    };
+    requestAnimationFrame(step);
+  };
   useEffect(() => {
     const el = box.current;
     if (!el) return;
     if (!('IntersectionObserver' in window)) { setShown(true); return; }
     const io = new IntersectionObserver(([e]) => {
+      inView.current = e.isIntersecting;
       if (e.isIntersecting) setShown(true);
       const v = ref.current;
-      if (!v) return;
-      if (e.isIntersecting && !paused) v.play().catch(() => {}); else v.pause();
+      if (v) { if (e.isIntersecting && !still) v.play().catch(() => {}); else v.pause(); }
+      if (sound) fade(e.isIntersecting ? 0.5 : 0);
     }, { threshold: 0.25 });
     io.observe(el);
     return () => io.disconnect();
-  }, [paused]);
-  const toggle = () => {
-    const v = ref.current;
-    if (!v) return;
-    if (v.paused) { v.play().catch(() => {}); setPaused(false); } else { v.pause(); setPaused(true); }
-  };
+  }, [still, sound]);
+  // When the browser blocks sound until the visitor interacts, start it on their first click, tap or key press.
+  const armed = useRef(false);
+  const soundRef = useRef(sound);
+  soundRef.current = sound;
+  function armFirstGesture() {
+    if (armed.current) return;
+    armed.current = true;
+    const start = () => {
+      ['pointerdown', 'keydown', 'touchstart'].forEach((t) => removeEventListener(t, start, true));
+      armed.current = false;
+      if (soundRef.current && inView.current) fade(0.5);
+    };
+    ['pointerdown', 'keydown', 'touchstart'].forEach((t) => addEventListener(t, start, { capture: true, once: true }));
+  }
+  useEffect(() => () => { music.current?.pause(); }, []);
+  const toggleSound = () => { const next = !sound; setSound(next); fade(next ? 0.5 : 0); };
   return (
     <div ref={box} className={`rf ${shown ? 'shown' : ''}`}>
       <h2 className="rf-line">
@@ -307,8 +347,11 @@ export function ResearchFilm() {
         <div className="rf-frame">
           <video ref={ref} src="/video/research-reel.mp4" poster="/video/research-reel.jpg" muted loop playsInline preload="metadata"
             aria-label="Researchers at a microscope, sowing a seed, discussing at a whiteboard, working in a lab, over crop fields and studying a brain model on screen" />
-          <button type="button" className="rf-pause" onClick={toggle} aria-label={paused ? 'Play the video' : 'Pause the video'} aria-pressed={paused}>
-            {paused ? <svg viewBox="0 0 16 16" aria-hidden><path d="M5 3.5v9l7.5-4.5Z" /></svg> : <svg viewBox="0 0 16 16" aria-hidden><path d="M5 3.5h2v9H5zM9 3.5h2v9H9z" /></svg>}
+          <audio ref={music} src="/audio/research-music.mp3" loop preload="none" />
+          <button type="button" className={`rf-sound ${sound ? 'on' : ''}`} onClick={toggleSound} aria-pressed={sound} aria-label={sound ? 'Turn the music off' : 'Turn the music on'}>
+            <svg viewBox="0 0 24 24" aria-hidden><path d="M4 9.5h3.5L12 5.5v13l-4.5-4H4z" />{sound ? <><path className="w" d="M15.5 9a4.5 4.5 0 0 1 0 6" /><path className="w" d="M18 6.5a8 8 0 0 1 0 11" /></> : <path className="w" d="m16 9.5 5 5m0-5-5 5" />}</svg>
+            <span>{sound ? 'Music off' : 'Play music'}</span>
+            {sound && <i className="rf-eq" aria-hidden><b /><b /><b /></i>}
           </button>
         </div>
       </div>
@@ -347,15 +390,14 @@ const TOUR = [
   { id: 'office', who: 'Office of Research', title: 'Verify with confidence', text: 'Review each submission with its evidence, then approve, return with comments or reject.' },
   { id: 'leadership', who: 'Institutional Leadership', title: 'See the whole picture', text: 'Approved research rolls up into live dashboards across departments, years and goals.' },
 ] as const;
-const TOUR_MS = 7000;
+const TOUR_MS = 3500;
 
 /** Three roles, each with a small moving picture of the real screen; it advances by itself and on click. */
 export function ProductTour() {
   const [on, setOn] = useState(0);
-  const [paused, setPaused] = useState(() => prefersReducedMotion());
+  const [paused] = useState(() => prefersReducedMotion());
   const [seen, setSeen] = useState(false);
   const box = useRef<HTMLDivElement>(null);
-  const hold = useRef(false);
   useEffect(() => {
     const el = box.current;
     if (!el || !('IntersectionObserver' in window)) { setSeen(true); return; }
@@ -365,12 +407,12 @@ export function ProductTour() {
   }, []);
   useEffect(() => {
     if (paused || !seen) return;
-    const t = setTimeout(() => { if (!hold.current) setOn((o) => (o + 1) % TOUR.length); }, TOUR_MS);
+    const t = setTimeout(() => setOn((o) => (o + 1) % TOUR.length), TOUR_MS);
     return () => clearTimeout(t);
   }, [on, paused, seen]);
   const run = seen && !paused;
   return (
-    <div ref={box} className={`pt ${run ? 'run' : ''}`} onMouseEnter={() => { hold.current = true; }} onMouseLeave={() => { hold.current = false; }}>
+    <div ref={box} className={`pt ${run ? 'run' : ''}`}>
       <div className="pt-tabs" role="tablist" aria-label="See UniRise by role">
         {TOUR.map((t, i) => (
           <button key={t.id} type="button" role="tab" aria-selected={i === on} className={`pt-tab ${i === on ? 'on' : ''}`} onClick={() => setOn(i)}>
@@ -380,7 +422,6 @@ export function ProductTour() {
             <span className="pt-bar" aria-hidden><i key={`${on}-${run}`} style={{ animationDuration: `${TOUR_MS}ms` }} /></span>
           </button>
         ))}
-        <button type="button" className="pt-pause" onClick={() => setPaused((p) => !p)} aria-pressed={paused}>{paused ? 'Play the tour' : 'Pause the tour'}</button>
       </div>
       <div className="pt-window" aria-hidden>
         <div className="pt-chrome"><i /><i /><i /><span>unirise · {TOUR[on].who}</span></div>
@@ -388,7 +429,6 @@ export function ProductTour() {
           {on === 0 && <FacultyScreen />}
           {on === 1 && <OfficeScreen />}
           {on === 2 && <LeaderScreen />}
-          <span className={`pt-cursor c${on}`} />
         </div>
       </div>
     </div>
