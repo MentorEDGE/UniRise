@@ -2288,3 +2288,89 @@ p, li { text-wrap: pretty; }
 @media (forced-colors: active) { :focus-visible { outline: 2px solid Highlight; box-shadow: none; } }
 /* Respect "reduce transparency": solid surfaces instead of blur. */
 @media (prefers-reduced-transparency: reduce) { * { backdrop-filter: none !important; } .hdr { background: var(--background); } }
+
+/* ================= Apple design layer (web adaptation) =================
+   Semantic tokens only: system font, neutral grouped surfaces, larger continuous radii, translucent chrome.
+   The UniRise violet stays the accent. Placement and structure are untouched. Chrome materials fall back to solid
+   surfaces when backdrop-filter or transparency is unavailable or reduced. */
+:root {
+  --font-ui: -apple-system, BlinkMacSystemFont, 'SF Pro Text', 'SF Pro Display', system-ui, 'Segoe UI', Roboto, 'Figtree Variable', Figtree, sans-serif;
+  --bg-hsl: 240 20% 97.5%;
+  --background: hsl(240 20% 97.5%);
+  --foreground: hsl(240 3% 12%);
+  --fg-soft: hsl(240 3% 12% / 0.78);
+  --muted-fg: hsl(240 2% 42%);
+  --border: hsl(240 6% 90%);
+  --slate-200: hsl(240 6% 88% / 0.9);
+  --slate-300: hsl(240 5% 79%);
+  --slate-600: hsl(240 3% 36%);
+  --slate-700: hsl(240 3% 24%);
+  --radius: 14px;
+  --radius-lg: 18px;
+  --glass: 0.72;
+  --glass-blur: saturate(180%) blur(20px);
+  --hairline: 0 0 0 0.5px rgb(60 60 67 / 0.16);
+}
+:root[data-theme='dark'] {
+  --bg-hsl: 240 5% 6%;
+  --background: hsl(240 5% 6%);
+  --foreground: hsl(240 5% 96%);
+  --fg-soft: hsl(240 5% 96% / 0.8);
+  --card: hsl(240 4% 12%);
+  --input-bg: hsl(240 4% 9%);
+  --muted-fg: hsl(240 3% 65%);
+  --border: hsl(240 3% 22%);
+  --slate-200: hsl(240 3% 22%);
+  --slate-300: hsl(240 3% 32%);
+  --slate-600: hsl(240 3% 76%);
+  --slate-700: hsl(240 4% 88%);
+  --hover-neutral: hsl(240 4% 20%);
+  --glass: 0.66;
+  --hairline: 0 0 0 0.5px rgb(235 235 245 / 0.18);
+}
+body { font-family: var(--font-ui); line-height: 1.47; letter-spacing: -0.011em; }
+h1, h2, h3, .panel-title { letter-spacing: -0.022em; }
+.panel, .menu, .modal { border-radius: var(--radius-lg); }
+.panel { border-color: transparent; box-shadow: var(--hairline), var(--shadow-card); }
+/* Translucent chrome: the menu bar and dropdowns pick up the content behind them, as toolbars and sheets do. */
+.nav { background: color-mix(in srgb, var(--card) calc(var(--glass) * 100%), transparent); -webkit-backdrop-filter: var(--glass-blur); backdrop-filter: var(--glass-blur); border-bottom-color: transparent; box-shadow: 0 0.5px 0 rgb(60 60 67 / 0.2); }
+.menu { background: color-mix(in srgb, var(--card) 86%, transparent); -webkit-backdrop-filter: saturate(180%) blur(30px); backdrop-filter: saturate(180%) blur(30px); border-color: transparent; box-shadow: var(--hairline), var(--shadow-card-hover); }
+@supports not ((backdrop-filter: blur(1px)) or (-webkit-backdrop-filter: blur(1px))) { .nav, .menu { background: var(--card); } }
+@media (prefers-reduced-transparency: reduce) { .nav, .menu { background: var(--card); box-shadow: var(--hairline); } }
+@media (prefers-contrast: more) { :root { --border: hsl(240 5% 60%); --muted-fg: hsl(240 3% 30%); } :root[data-theme='dark'] { --border: hsl(240 3% 55%); --muted-fg: hsl(240 3% 80%); } }
+/* Touch targets: Apple's default control size is 44pt, so give coarse-pointer devices that much room. */
+@media (pointer: coarse) {
+  .btn, .nav-btn, .menu a, .menu button, input:not([type='checkbox']):not([type='radio']), select { min-height: 44px; }
+  .facet-opt { min-height: 44px; align-items: center; }
+}
+
+/* ---- Menu bar as a floating glass capsule (toolbar / segmented-control idiom) ---- */
+.nav {
+  top: 10px; width: fit-content; max-width: calc(100% - 24px); margin: 10px auto;
+  border-radius: 999px; border: 0; justify-content: center;
+  box-shadow: var(--hairline), 0 6px 24px rgb(0 0 0 / 0.07);
+}
+.nav-btn { border-radius: 999px; font-weight: 500; letter-spacing: -0.006em; color: var(--fg-soft); }
+.nav-btn:hover, .nav-btn[aria-expanded='true'] { background: rgb(120 120 128 / 0.12); color: var(--foreground); }
+/* the active destination is a raised segment, not a tinted pill */
+.nav-btn.active { background: var(--card); color: var(--foreground); font-weight: 600; box-shadow: 0 0.5px 1px rgb(0 0 0 / 0.14), 0 2px 6px rgb(0 0 0 / 0.08), var(--hairline); }
+.nav-btn.active .nav-ic { color: var(--primary-text); opacity: 1; }
+:root[data-theme='dark'] .nav-btn.active { background: hsl(240 4% 26%); }
+:root[data-theme='dark'] .nav-btn:hover, :root[data-theme='dark'] .nav-btn[aria-expanded='true'] { background: rgb(235 235 245 / 0.12); }
+.nav-btn .caret { font-size: 8px; opacity: .5; }
+.nav-theme { margin-left: 4px; padding-left: 6px; border-left: 0.5px solid var(--slate-300); }
+.nav-theme .theme-toggle { width: 30px; height: 30px; border: 0; background: transparent; }
+.nav-theme .theme-toggle:hover { background: rgb(120 120 128 / 0.14); }
+.nav-theme .theme-toggle svg { width: 16px; height: 16px; }
+@media (max-width: 1180px) { .nav { border-radius: 24px; } }
+@media (prefers-reduced-transparency: reduce) { .nav { box-shadow: var(--hairline); } }
+
+/* ---- Find Profiles: the violet glow starts at the top of the page and fades out, instead of a hard-edged band ---- */
+.app:has(.dir-hero) {
+  background:
+    radial-gradient(1100px 460px at 50% -40px, hsl(var(--tint) / 0.95), transparent 72%),
+    linear-gradient(180deg, hsl(var(--tint) / 0.5), transparent 640px);
+  background-repeat: no-repeat;
+}
+.app:has(.dir-hero) .hdr { background: transparent; -webkit-backdrop-filter: none; backdrop-filter: none; border-bottom-color: transparent; }
+.dir-hero { background: none; border-bottom: 0; }
