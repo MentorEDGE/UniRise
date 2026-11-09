@@ -255,3 +255,14 @@ export function trend(db: DB, department: string, ays: string[], facultyId?: str
   });
 }
 const round1 = (n: number) => Math.round(n * 10) / 10;
+
+/**
+ * Phone numbers are shown masked (first five digits, then asterisks) while the system holds sample data.
+ * Set SHOW_FULL_PHONE_NUMBERS to true once real numbers are loaded. Edit forms always show the full number.
+ */
+export const SHOW_FULL_PHONE_NUMBERS = false;
+export const displayPhone = (p: string) => {
+  if (SHOW_FULL_PHONE_NUMBERS || !p) return p;
+  const digits = p.replace(/\D/g, '');
+  return digits.length <= 5 ? p : `${digits.slice(0, 5)}${'*'.repeat(digits.length - 5)}`;
+};

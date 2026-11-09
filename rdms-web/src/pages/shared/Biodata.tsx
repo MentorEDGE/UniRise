@@ -1,13 +1,15 @@
-import { useState } from 'react';
-import { Link, useNavigate, useParams } from 'react-router-dom';
+import { useEffect, useState } from 'react';
+import type { ReactNode } from 'react';
+import { Link, useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import { Alert, Attainment, Field, Input, NumberInput, PageTitle, Panel, Select, TextArea, useToast } from '../../components/ui';
-import { biodataCompleteness, fmtDate, inr, isSanctioned } from '../../lib/analytics';
+import { biodataCompleteness, displayPhone, fmtDate, inr, isSanctioned } from '../../lib/analytics';
 import { creditedFaculty, proposeProfileChange, useStore } from '../../lib/store';
 import { StatusBadge } from '../../components/ui';
 import { STATUS_LABEL } from '../../lib/types';
 import { blankBiodata, normalizeBiodata } from '../../lib/domain';
-import type { Biodata, Experience, Faculty, Membership, Qualification } from '../../lib/types';
-import { SDGS, ipTypeLabel } from '../../lib/types';
+import type { Biodata, Course, Engagement, Experience, Faculty, MediaItem, Membership, Qualification, Supervisee } from '../../lib/types';
+import { COURSE_LEVELS, ENGAGEMENT_TYPES, MAX_HIGHLIGHTS, SDGS, SUPERVISION_DEGREES, SUPERVISION_STATUS, ipTypeLabel } from '../../lib/types';
+import { highlightOptions } from '../../components/research';
 import { Avatar, SdgIcon } from '../../components/research';
 
 function useTarget() {
@@ -22,6 +24,9 @@ function useTarget() {
 
 export function BiodataView() {
   const { db, f, b, canEdit, facultyId, user } = useTarget();
+  const [params] = useSearchParams();
+  // "Download CV (PDF)" opens this page with ?print=1: the browser's print dialog offers "Save as PDF".
+  useEffect(() => { if (params.get('print') === '1' && f) { const t = setTimeout(() => window.print(), 600); return () => clearTimeout(t); } }, [params, f]);
   if (user?.role === 'faculty' && facultyId !== user.facultyId) return <Panel><Alert kind="error">Profile details are private. You can only see your own.</Alert></Panel>;
   if (!f) return <Panel><Alert kind="error">Faculty member not found.</Alert></Panel>;
   const approved = <T extends { status: string }>(xs: T[]) => xs.filter((x) => x.status === 'Approved');
@@ -46,7 +51,7 @@ export function BiodataView() {
         <h1>{f.title} {f.name}</h1>
         <div>{f.designation}, {f.department}<br />{db.settings.institutionName}</div>
         <div className="muted" style={{ marginTop: 4 }}>
-          Employee Code: {f.id} · {f.email} · {f.phone}{f.orcid && ` · ORCID ${f.orcid}`}{f.scopusId && ` · Scopus ID ${f.scopusId}`}
+          Employee Code: {f.id} · {f.email} · {displayPhone(f.phone)}{f.orcid && ` · ORCID ${f.orcid}`}{f.scopusId && ` · Scopus ID ${f.scopusId}`}
         </div>
         {b?.summary && <><h2>Summary</h2><p style={{ margin: 0 }}>{b.summary}</p></>}
         {b?.researchInterests && <p><b>Research interests:</b> {b.researchInterests}</p>}
@@ -80,6 +85,10 @@ export function BiodataView() {
         ) : <p className="muted">No approved honours or awards.</p>}
         <h2>Intellectual Property ({ipr.length})</h2>
         {ipr.length ? <ol>{ipr.map((x) => <li key={x.id}>{ipTypeLabel(x)}: <b>{x.title}</b>, {x.office}, application / registration no. {x.applicationNumber}, filed {fmtDate(x.filingDate)} — {x.stage}{x.grantDate && ` (${fmtDate(x.grantDate)})`}{x.coOwners && `; with ${x.coOwners}`}</li>)}</ol> : <p className="muted">No approved intellectual property.</p>}
+        {!!b?.teaching.length && <><h2>Teaching</h2><ol>{b.teaching.map((c, i) => <li key={i}>{c.code && `${c.code} `}{c.title}{c.level && ` (${c.level})`}</li>)}</ol></>}
+        {!!b?.supervision.length && <><h2>Research Supervision ({b.supervision.length})</h2><ol>{b.supervision.map((x, i) => <li key={i}>{x.name}, {x.degree} ({x.status}{x.year && `, ${x.year}`}){x.topic && ` — ${x.topic}`}</li>)}</ol></>}
+        {!!b?.engagement.length && <><h2>Engagement</h2><ol>{b.engagement.map((x, i) => <li key={i}>{x.type}: {x.role}{x.organisation && `, ${x.organisation}`} ({x.from}{x.to ? `–${x.to}` : ''})</li>)}</ol></>}
+        {!!b?.media.length && <><h2>Selected Media Coverage</h2><ol>{b.media.map((m, i) => <li key={i}>“{m.headline}”, {m.outlet}{m.date && `, ${fmtDate(m.date)}`}</li>)}</ol></>}
         <h2>Professional Memberships</h2>
         {b?.memberships.length ? <ol>{b.memberships.map((m, i) => <li key={i}>{m.type}, {m.body} (since {m.since})</li>)}</ol> : <p className="muted">Not entered.</p>}
         <p className="muted" style={{ marginTop: 18, fontSize: 11 }}>Generated {fmtDate(new Date().toISOString())}. Publications, grants, FDPs, conferences, honours and intellectual property list approved entries only. Profile last updated {fmtDate(b?.updatedAt ?? '')}.</p>
@@ -88,8 +97,8 @@ export function BiodataView() {
   );
 }
 
-function Repeat<T extends object>({ title, rows, onChange, blank, cols }: {
-  title: string; rows: T[]; onChange: (r: T[]) => void; blank: T; cols: { key: keyof T; label: string; placeholder?: string }[];
+function Repeat<T extends object>({ title, rows, onChange, blank, cols, note }: {
+  title: string; rows: T[]; onChange: (r: T[]) => void; blank: T; cols: { key: keyof T; label: string; placeholder?: string; options?: string[]; type?: 'date' | 'url' }[]; note?: ReactNode;
 }) {
   return (
     <Panel title={title} size="wide" actions={<button type="button" className="btn sm" onClick={() => onChange([...rows, { ...blank }])}>+ Add</button>}>
@@ -99,7 +108,13 @@ function Repeat<T extends object>({ title, rows, onChange, blank, cols }: {
           <tbody>
             {rows.map((r, i) => (
               <tr key={i}>
-                {cols.map((c) => <td key={String(c.key)}><input type="text" aria-label={`${c.label} ${i + 1}`} placeholder={c.placeholder} value={String(r[c.key] ?? '')} onChange={(e) => onChange(rows.map((x, j) => (j === i ? { ...x, [c.key]: e.target.value } : x)))} /></td>)}
+                {cols.map((c) => {
+                  const set = (v: string) => onChange(rows.map((x, j) => (j === i ? { ...x, [c.key]: v } : x)));
+                  const label = `${c.label} ${i + 1}`;
+                  return <td key={String(c.key)}>{c.options
+                    ? <select aria-label={label} value={String(r[c.key] ?? '')} onChange={(e) => set(e.target.value)}>{c.options.map((o) => <option key={o}>{o}</option>)}</select>
+                    : <input type={c.type ?? 'text'} aria-label={label} placeholder={c.placeholder} value={String(r[c.key] ?? '')} onChange={(e) => set(e.target.value)} />}</td>;
+                })}
                 <td><button type="button" className="link-btn" onClick={() => onChange(rows.filter((_, j) => j !== i))}>Remove</button></td>
               </tr>
             ))}
@@ -107,6 +122,7 @@ function Repeat<T extends object>({ title, rows, onChange, blank, cols }: {
         </table>
         {!rows.length && <div className="empty">None added.</div>}
       </div>
+      {note && <p className="note">{note}</p>}
     </Panel>
   );
 }
@@ -130,8 +146,10 @@ export function BiodataEdit() {
     if (fac.orcid && !/^\d{4}-\d{4}-\d{4}-\d{3}[\dX]$/.test(fac.orcid)) { setError('ORCID must look like 0000-0002-1825-0097.'); return; }
     if (fac.email && !/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(fac.email)) { setError('Enter a valid email address.'); return; }
     if (bio.dob && bio.dob > new Date().toISOString().slice(0, 10)) { setError('Date of birth cannot be in the future.'); return; }
+    if (Object.values(bio.links).some((v) => v && !/^https:\/\//.test(v))) { setError('Profile links must start with https://.'); return; }
+    if (bio.media.some((m) => m.url && !/^https?:\/\//.test(m.url))) { setError('Media links must start with http:// or https://.'); return; }
     try {
-      await proposeProfileChange({ ...bio, qualifications: bio.qualifications.filter((q) => q.degree.trim()), experience: bio.experience.filter((x) => x.organisation.trim()), memberships: bio.memberships.filter((m) => m.body.trim()) },
+      await proposeProfileChange({ ...bio, qualifications: bio.qualifications.filter((q) => q.degree.trim()), experience: bio.experience.filter((x) => x.organisation.trim()), memberships: bio.memberships.filter((m) => m.body.trim()), teaching: bio.teaching.filter((c) => c.title.trim()), supervision: bio.supervision.filter((x) => x.name.trim()), engagement: bio.engagement.filter((x) => x.organisation.trim() || x.role.trim()), media: bio.media.filter((x) => x.headline.trim()) },
         { email: fac.email, phone: fac.phone, orcid: fac.orcid, scopusId: fac.scopusId }, submit);
       toast(submit ? 'Profile update submitted. It appears on your profile once the Office of Research approves it.' : 'Draft saved. Submit it when you are ready.');
       nav('/my-profile');
@@ -195,6 +213,16 @@ export function BiodataEdit() {
         <div className="grid">
           <Field label="Areas of expertise" className="span2" hint="Separate with semicolons"><TextArea value={bio.expertise} onChange={(v) => u({ expertise: v })} rows={2} /></Field>
           <Field label="Research keywords" className="span2" hint="Separate with commas"><TextArea value={bio.keywords} onChange={(v) => u({ keywords: v })} rows={2} /></Field>
+          <Field label="Primary interest" className="span2" hint="One area, shown first on your profile"><Input value={bio.primaryInterest} onChange={(v) => u({ primaryInterest: v })} /></Field>
+          <Field label="Office location" className="span2" hint="e.g. Block A · Room 214"><Input value={bio.office} onChange={(v) => u({ office: v })} /></Field>
+          <Field label="LinkedIn" hint="https://www.linkedin.com/in/…"><Input value={bio.links.linkedin} onChange={(v) => u({ links: { ...bio.links, linkedin: v } })} /></Field>
+          <Field label="SSRN" hint="https://papers.ssrn.com/…"><Input value={bio.links.ssrn} onChange={(v) => u({ links: { ...bio.links, ssrn: v } })} /></Field>
+          <Field label="ResearchGate" hint="https://www.researchgate.net/profile/…"><Input value={bio.links.researchgate} onChange={(v) => u({ links: { ...bio.links, researchgate: v } })} /></Field>
+          <Field label="Personal website" hint="https://…"><Input value={bio.links.website} onChange={(v) => u({ links: { ...bio.links, website: v } })} /></Field>
+        </div>
+        <div className="avail-checks">
+          <label className="check"><input type="checkbox" checked={bio.availableToSupervise} onChange={(e) => u({ availableToSupervise: e.target.checked })} /> <span><b>Available to supervise</b> research students</span></label>
+          <label className="check"><input type="checkbox" checked={bio.availableForMedia} onChange={(e) => u({ availableForMedia: e.target.checked })} /> <span><b>Available for media comment</b> in my areas of expertise</span></label>
         </div>
         <fieldset className="sdg-pick">
           <legend>Sustainable Development Goals your work contributes to</legend>
@@ -223,6 +251,17 @@ export function BiodataEdit() {
       <Repeat<Experience> title="Experience" rows={bio.experience} onChange={(r) => u({ experience: r })} blank={{ organisation: '', designation: '', from: '', to: '' }}
         cols={[{ key: 'organisation', label: 'Organisation' }, { key: 'designation', label: 'Designation' }, { key: 'from', label: 'From (year)' }, { key: 'to', label: 'To (year / Present)' }]} />
       <div className="panel wide no-print"><p className="note" style={{ margin: 0 }}>Honours and awards are recorded under <b>Honours &amp; Awards</b>, with a certificate, and appear here once approved.{canEdit && <> <Link to="/awards/entry">Add an honour or award</Link></>}</p></div>
+      <HighlightsPicker bio={bio} onChange={(h) => u({ highlights: h })} />
+      <Repeat<Course> title="Teaching" rows={bio.teaching} onChange={(r) => u({ teaching: r })} blank={{ code: '', title: '', level: 'Undergraduate' }}
+        cols={[{ key: 'code', label: 'Course code', placeholder: 'CSE3101' }, { key: 'title', label: 'Course title' }, { key: 'level', label: 'Level', options: COURSE_LEVELS }]} />
+      <Repeat<Supervisee> title="Research Supervision" rows={bio.supervision} onChange={(r) => u({ supervision: r })} blank={{ name: '', degree: 'PhD', status: 'Current', year: '', topic: '' }}
+        cols={[{ key: 'name', label: 'Student name' }, { key: 'degree', label: 'Degree', options: SUPERVISION_DEGREES }, { key: 'status', label: 'Status', options: SUPERVISION_STATUS }, { key: 'year', label: 'Year (started / completed)' }, { key: 'topic', label: 'Thesis topic' }]}
+        note="Tick “Available to supervise” under Researcher Profile to appear in searches for supervisors." />
+      <Repeat<Engagement> title="Engagement" rows={bio.engagement} onChange={(r) => u({ engagement: r })} blank={{ type: 'Editorial board', role: '', organisation: '', from: '', to: '' }}
+        cols={[{ key: 'type', label: 'Type', options: ENGAGEMENT_TYPES }, { key: 'role', label: 'Role', placeholder: 'Associate Editor' }, { key: 'organisation', label: 'Journal / body / organisation' }, { key: 'from', label: 'From (year)' }, { key: 'to', label: 'To (year / Present)' }]}
+        note="Editorial boards, professional societies, industry or advisory roles, and contributions to policy consultations." />
+      <Repeat<MediaItem> title="Media Coverage" rows={bio.media} onChange={(r) => u({ media: r })} blank={{ headline: '', outlet: '', date: '', url: '' }}
+        cols={[{ key: 'headline', label: 'Headline' }, { key: 'outlet', label: 'Outlet' }, { key: 'date', label: 'Date', type: 'date' }, { key: 'url', label: 'Link (optional)', type: 'url', placeholder: 'https://…' }]} />
       <Repeat<Membership> title="Professional Memberships" rows={bio.memberships} onChange={(r) => u({ memberships: r })} blank={{ body: '', type: '', since: '' }}
         cols={[{ key: 'body', label: 'Professional body' }, { key: 'type', label: 'Membership type' }, { key: 'since', label: 'Since (year)' }]} />
       <div className="btn-row">
@@ -255,4 +294,27 @@ function shrinkPhoto(file: File): Promise<string> {
     img.onerror = () => { URL.revokeObjectURL(url); reject(new Error('bad image')); };
     img.src = url;
   });
+}
+
+/** Faculty choose up to six of their own approved outputs to show first on their profile. */
+function HighlightsPicker({ bio, onChange }: { bio: Biodata; onChange: (h: string[]) => void }) {
+  const { db } = useStore();
+  const opts = highlightOptions(db, bio.facultyId);
+  const on = new Set(bio.highlights);
+  return (
+    <Panel title="Highlights" size="wide">
+      <p className="note" style={{ marginTop: 0 }}>Choose up to {MAX_HIGHLIGHTS} of your approved publications, grants, patents or honours to show first on your profile ({on.size} of {MAX_HIGHLIGHTS} chosen).</p>
+      {opts.length ? (
+        <div className="hl-pick">
+          {opts.map((o) => (
+            <label key={o.key} className={`check ${on.has(o.key) ? 'on' : ''}`}>
+              <input type="checkbox" checked={on.has(o.key)} disabled={!on.has(o.key) && on.size >= MAX_HIGHLIGHTS}
+                onChange={(e) => onChange(e.target.checked ? [...bio.highlights, o.key] : bio.highlights.filter((k) => k !== o.key))} />
+              <span><span className="tag">{o.kindLabel}</span> {o.title} <span className="muted">· {o.year}</span></span>
+            </label>
+          ))}
+        </div>
+      ) : <p className="muted">You have no approved records yet. They appear here once the Office of Research approves them.</p>}
+    </Panel>
+  );
 }

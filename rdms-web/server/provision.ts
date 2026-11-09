@@ -11,10 +11,13 @@
  *   npm run provision -- activate <institution-id>
  *   npm run provision -- list
  *   npm run provision -- enquiries                   institutional enquiries from the website (and whether they were emailed)
+ *   npm run provision -- sample-profiles <institution-id>
+ *       DEMO ONLY: fills sample expert-finder data (teaching, supervision, engagement, media, availability) into
+ *       profiles that have none yet. Never use on a real institution.
  */
 import crypto from 'node:crypto';
 import path from 'node:path';
-import { emptyInstitution } from '../src/lib/seed';
+import { emptyInstitution, fillSampleExpertProfiles } from '../src/lib/seed';
 import { hashPassword, randomPassword } from './auth';
 import { Storage } from './storage';
 
@@ -24,7 +27,17 @@ const fail = (m: string): never => { console.error(m); store.close(); process.ex
 const EMAIL = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 const now = () => new Date().toISOString();
 
-if (cmd === 'institution') {
+if (cmd === 'sample-profiles') {
+  const inst = store.institution(a ?? '');
+  if (!inst) fail('Usage: npm run provision -- sample-profiles <institution-id>  (institution not found)');
+  const filled = store.mutateTenant(inst!.id, (db) => {
+    const before = JSON.stringify(db.biodata);
+    fillSampleExpertProfiles(db, Math.random, true);
+    return db.biodata.filter((b, i) => JSON.stringify(b) !== JSON.stringify(JSON.parse(before)[i])).length;
+  });
+  store.audit({ actorName: 'UniRise provisioning', action: 'Sample expert-finder data added (demo)', target: inst!.name, institutionId: inst!.id, detail: `${filled} profiles` });
+  console.log(`Sample expert-finder data added to ${filled} profiles in ${inst!.name}. Restart the server to see it.`);
+} else if (cmd === 'institution') {
   if (!a || !/^[a-z0-9-]{2,40}$/.test(a) || !b || !c || !d) fail('Usage: npm run provision -- institution <id> "<Institution name>" <email-domain> "<Dept 1; Dept 2>"');
   if (store.institution(a)) fail(`Institution ${a} already exists.`);
   const departments = d.split(';').map((x) => x.trim()).filter(Boolean);

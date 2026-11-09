@@ -38,9 +38,9 @@ const ECOSYSTEM = [
 type Tone = 'blue' | 'violet' | 'emerald';
 interface Feature { title: string; icon: ReactNode; tone: Tone; points: string[]; who?: string; photo?: string; photoAlt?: string }
 const UNLOCKS: Feature[] = [
-  { title: 'Institution-Wide Research Strategy', icon: BOOK, tone: 'blue', points: ['Map faculty, labs and projects into strategic clusters', 'Track funded projects, grants and proposals in one place', 'Spot gaps where new chairs, labs or courses can unlock value', 'Align annual plans with accreditation and ranking requirements'] },
-  { title: 'Partnerships And Co-Innovation', icon: USERS, tone: 'violet', points: ['Standardised engagement models for corporate partners', 'Co-branded research programs and joint labs with transparent KPIs', 'Capstone projects and live problem statements', 'Ecosystem for IP sharing, technology licensing and spin-outs'] },
-  { title: 'Impact, Analytics And Governance', icon: TREND, tone: 'emerald', points: ['Dashboards for publications, citations, grants and patents', 'View collaboration networks across departments and partners', 'Monitor pipeline health from ideas to pilots and products', 'Exportable reports that speak the language of accreditation'] },
+  { title: 'Institution-Wide Research Strategy', photo: '/images/unlocks/strategy.jpg', photoAlt: 'A team planning around a table while a colleague maps strategy on a whiteboard', icon: BOOK, tone: 'blue', points: ['Map faculty, labs and projects into strategic clusters', 'Track funded projects, grants and proposals in one place', 'Spot gaps where new chairs, labs or courses can unlock value', 'Align annual plans with accreditation and ranking requirements'] },
+  { title: 'Partnerships And Co-Innovation', photo: '/images/unlocks/partnerships.jpg', photoAlt: 'Two professionals shaking hands across a meeting table', icon: USERS, tone: 'violet', points: ['Standardised engagement models for corporate partners', 'Co-branded research programs and joint labs with transparent KPIs', 'Capstone projects and live problem statements', 'Ecosystem for IP sharing, technology licensing and spin-outs'] },
+  { title: 'Impact, Analytics And Governance', photo: '/images/unlocks/impact.jpg', photoAlt: 'A laptop showing an analytics dashboard', icon: TREND, tone: 'emerald', points: ['Dashboards for publications, citations, grants and patents', 'View collaboration networks across departments and partners', 'Monitor pipeline health from ideas to pilots and products', 'Exportable reports that speak the language of accreditation'] },
 ];
 
 // ---- the research portal ----
@@ -210,7 +210,7 @@ export function IntroLanding() {
           <div className="me-container">
             <p className="me-eyebrow me-mb">Inside the research</p>
             <h2 className="me-h2 narrow">Where great research happens</h2>
-            <p className="me-p wide-line">In labs and libraries, out in the field and in front of an audience. UniRise brings all of it into one place.</p>
+            <p className="me-p wide-line">In labs and libraries, out in the field and in front of an audience. Research happens in every corner of your institution, yet the record of it is often scattered across files, spreadsheets and inboxes. UniRise brings all of it into one place, so every experiment, publication and partnership is captured, verified and seen.</p>
             <ResearchGallery />
           </div>
         </section>

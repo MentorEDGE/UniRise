@@ -12,6 +12,7 @@ import { DepartmentAnalytics, FacultyPerformance, InstitutionAnalytics, Particip
 import { Faculty360 } from './pages/mgmt/Management';
 import { FacultySearch } from './pages/mgmt/Directory';
 import { MyResearchProfile, ResearcherProfileRoute } from './pages/shared/ResearcherProfile';
+import { ShortProfile } from './pages/shared/ShortProfile';
 import { BiodataEdit, BiodataView } from './pages/shared/Biodata';
 import { Account, Login } from './pages/shared/Misc';
 import { IntroLanding } from './pages/shared/Landing';
@@ -43,11 +44,13 @@ class ErrorBoundary extends Component<{ children: ReactNode }, { error: Error | 
  * Section links on the introduction page (?s=…) then scroll to their section themselves.
  */
 function ScrollToTop() {
-  const { pathname, search } = useLocation();
+  // A new page opens at the top. Changing only the search or filters on the same page keeps the position,
+  // so a page can scroll to its own results.
+  const { pathname } = useLocation();
   useLayoutEffect(() => {
     if ('scrollRestoration' in window.history) window.history.scrollRestoration = 'manual';
     window.scrollTo({ top: 0, left: 0, behavior: 'instant' as ScrollBehavior });
-  }, [pathname, search]);
+  }, [pathname]);
   return null;
 }
 
@@ -136,6 +139,7 @@ export default function App() {
             <Route path="biodata/edit" element={<Only role="faculty"><BiodataEdit /></Only>} />
             <Route path="performance" element={<Only role="faculty"><SelfPerformance /></Only>} />
             <Route path="my-profile" element={<Only role="faculty"><MyResearchProfile /></Only>} />
+            <Route path="my-profile/short" element={<Only role="faculty"><ShortProfile /></Only>} />
             <Route path="collaborations" element={<Only role="faculty"><MyCollaborations /></Only>} />
             <Route path="submissions" element={<Only role="faculty"><MySubmissions /></Only>} />
 
@@ -148,6 +152,7 @@ export default function App() {
             <Route path="faculty/:id" element={<Only role={VIEWERS}><ResearcherProfileRoute /></Only>} />
             <Route path="faculty/:id/performance" element={<Only role={VIEWERS}><PerformanceRoute /></Only>} />
             <Route path="faculty/:id/biodata" element={<Only role={VIEWERS}><BiodataView /></Only>} />
+            <Route path="faculty/:id/short" element={<Only role={VIEWERS}><ShortProfile /></Only>} />
             <Route path="networks" element={<Only role={VIEWERS}><InstitutionNetworks /></Only>} />
 
             {/* Office of Research only (the API enforces the same) */}

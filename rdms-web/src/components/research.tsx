@@ -95,3 +95,32 @@ export const nameParts = (name: string) => {
   const parts = name.trim().split(/\s+/);
   return { first: parts[0] ?? '', last: parts.length > 1 ? parts[parts.length - 1] : parts[0] ?? '' };
 };
+
+/* ---------- highlights (selected works) ---------- */
+
+const HIGHLIGHT_KINDS: EntityKind[] = ['publications', 'grants', 'seedMoney', 'conferences', 'awards', 'ipr'];
+const KIND_LABEL: Record<string, string> = { publications: 'Publication', grants: 'Grant', seedMoney: 'Seed money', conferences: 'Conference', awards: 'Honour', ipr: 'IP' };
+export interface HighlightItem { key: string; kind: EntityKind; id: string; kindLabel: string; title: string; year: string; record: AnyRecord }
+
+const titleOf = (kind: EntityKind, r: AnyRecord) => {
+  const x = r as unknown as Record<string, string>;
+  return kind === 'conferences' ? x.paperTitle || x.conferenceName : x.title;
+};
+
+/** The faculty member's approved records they can pin as highlights, newest first. */
+export function highlightOptions(db: DB, facultyId: string): HighlightItem[] {
+  const out: HighlightItem[] = [];
+  for (const kind of HIGHLIGHT_KINDS) {
+    for (const r of (db[kind] ?? []) as AnyRecord[]) {
+      if (r.status !== 'Approved' || !creditedFaculty(kind, r).includes(facultyId)) continue;
+      out.push({ key: `${kind}:${r.id}`, kind, id: r.id, kindLabel: KIND_LABEL[kind], title: titleOf(kind, r), year: dateOf(kind, r).slice(0, 4), record: r });
+    }
+  }
+  return out.sort((a, b) => b.year.localeCompare(a.year));
+}
+
+/** Saved highlight keys turned back into items, in the order chosen; anything no longer approved is dropped. */
+export function resolveHighlights(db: DB, facultyId: string, keys: string[]): HighlightItem[] {
+  const all = new Map(highlightOptions(db, facultyId).map((h) => [h.key, h]));
+  return keys.map((k) => all.get(k)).filter((h): h is HighlightItem => !!h);
+}

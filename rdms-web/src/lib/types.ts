@@ -56,6 +56,18 @@ export interface Qualification { degree: string; specialization: string; institu
 export interface Experience { organisation: string; designation: string; from: string; to: string }
 export interface Award { title: string; by: string; year: string }
 export interface Membership { body: string; type: string; since: string }
+export interface Course { code: string; title: string; level: string }
+export interface Supervisee { name: string; degree: string; status: string; year: string; topic: string }
+export interface Engagement { type: string; role: string; organisation: string; from: string; to: string }
+export interface MediaItem { headline: string; outlet: string; date: string; url: string }
+export interface ProfileLinks { linkedin: string; ssrn: string; researchgate: string; website: string }
+export const ENGAGEMENT_TYPES = ['Editorial board', 'Professional society', 'Industry / advisory', 'Policy contribution', 'Other'];
+export const SUPERVISION_DEGREES = ['PhD', 'MPhil', 'Masters'];
+export const SUPERVISION_STATUS = ['Current', 'Completed'];
+export const COURSE_LEVELS = ['Undergraduate', 'Postgraduate', 'Doctoral'];
+export const EMPTY_LINKS: ProfileLinks = { linkedin: '', ssrn: '', researchgate: '', website: '' };
+/** Highlights point at the owner's own approved records as "kind:id", at most this many. */
+export const MAX_HIGHLIGHTS = 6;
 
 export interface Biodata {
   facultyId: string;
@@ -77,6 +89,17 @@ export interface Biodata {
   sdgs: number[]; // UN Sustainable Development Goals (1-17) the faculty member's work contributes to, as declared in the profile
   photo: string; // small JPEG data URL, '' if none
   scholar: ScholarMetrics;
+  /** Expert-finder fields. */
+  primaryInterest: string;
+  highlights: string[]; // "kind:id" of the owner's approved records, shown first on the profile
+  teaching: Course[];
+  supervision: Supervisee[];
+  availableToSupervise: boolean;
+  availableForMedia: boolean;
+  engagement: Engagement[];
+  media: MediaItem[];
+  office: string;
+  links: ProfileLinks;
   updatedAt: string;
 }
 
@@ -355,7 +378,7 @@ export interface Notice {
 }
 
 /** Faculty-editable profile fields. Changes to them wait for the Office of Research before replacing the live profile. */
-export const PROFILE_FIELDS = ['dob', 'gender', 'address', 'summary', 'researchInterests', 'googleScholar', 'phdGuided', 'phdOngoing', 'qualifications', 'experience', 'memberships', 'expertise', 'keywords', 'sdgs', 'photo', 'scholar'] as const;
+export const PROFILE_FIELDS = ['dob', 'gender', 'address', 'summary', 'researchInterests', 'googleScholar', 'phdGuided', 'phdOngoing', 'qualifications', 'experience', 'memberships', 'expertise', 'keywords', 'sdgs', 'photo', 'scholar', 'primaryInterest', 'highlights', 'teaching', 'supervision', 'availableToSupervise', 'availableForMedia', 'engagement', 'media', 'office', 'links'] as const;
 export const CONTACT_FIELDS = ['email', 'phone', 'orcid', 'scopusId'] as const;
 
 /** A faculty member's proposed profile update: one open request per person, reviewed like any other entry. */
@@ -390,3 +413,4 @@ export interface DB {
 }
 
 export type AnyRecord = Publication | Grant | SeedMoney | Fdp | Conference | Honour | IntellectualProperty;
+

@@ -186,6 +186,7 @@ export function createSeed(opts: SeedOptions = DEFAULT_SEED): DB {
         // Researcher-profile fields. No photograph and no Google Scholar metrics: those are never invented.
         expertise: complete > 0.3 ? `${T[0]}; ${T[1]}` : '', keywords: '', sdgs: [], photo: '',
         scholar: { citations: null, hIndex: null, i10Index: null, updatedAt: '', updatedBy: '' },
+        primaryInterest: '', highlights: [], teaching: [], supervision: [], availableToSupervise: false, availableForMedia: false, engagement: [], media: [], office: '', links: { linkedin: '', ssrn: '', researchgate: '', website: '' },
         updatedAt: '2026-06-01T10:00:00.000Z',
       });
       const b = biodata[biodata.length - 1];
@@ -402,6 +403,9 @@ export function createSeed(opts: SeedOptions = DEFAULT_SEED): DB {
   }
   ipr.sort((a, z) => a.filingDate.localeCompare(z.filingDate));
 
+  // Expert-finder profile fields, filled last so every record above keeps its values. No links are invented.
+  fillSampleExpertProfiles({ faculty, biodata, publications, grants, ipr }, rnd);
+
   return {
     version: 1,
     settings: {
@@ -434,4 +438,58 @@ export function emptyInstitution(name: string, tagline: string, departments: str
     },
     faculty: [], biodata: [], publications: [], grants: [], seedMoney: [], fdps: [], conferences: [], awards: [], ipr: [], profileChanges: [], notices: [], seq: 1000,
   };
+}
+
+/** True when a profile already has any expert-finder information (so sample data never overwrites it). */
+const hasExpertFields = (b: Biodata) => !!(b.primaryInterest || b.office || b.teaching?.length || b.supervision?.length || b.engagement?.length || b.media?.length || b.highlights?.length);
+
+/**
+ * Sample expert-finder profile data: primary interest, teaching, supervision, availability, engagement, media coverage,
+ * office and highlights. Used by the demo seed, and by the provisioning tool to fill sample values into an existing
+ * demo institution (`onlyEmpty` leaves any profile that already has such information untouched).
+ */
+export function fillSampleExpertProfiles(parts: Pick<DB, 'faculty' | 'biodata' | 'publications' | 'grants'> & { ipr?: DB['ipr'] }, rnd: () => number, onlyEmpty = false) {
+  const pick = <T,>(arr: readonly T[]): T => arr[Math.floor(rnd() * arr.length)];
+  const int = (a: number, b: number) => a + Math.floor(rnd() * (b - a + 1));
+  const pad = (n: number) => String(n).padStart(2, '0');
+  const dateIn = (year: number, monthFrom = 1, monthTo = 12) => {
+    let m = int(monthFrom, monthTo);
+    if (year === 2026 && m > 10) m = int(1, 10);
+    return `${year}-${pad(m)}-${pad(int(1, 28))}`;
+  };
+  const COURSE_WORDS = ['Foundations of', 'Advanced', 'Applied', 'Research Methods in', 'Topics in'];
+  const OUTLETS = ['City Daily', 'National Business News', 'Science Weekly', 'Campus Radio', 'Regional Television'];
+  const SOCIETIES = ['IEEE', 'ISTE', 'IEI', 'ACM', 'BRSI', 'Indian Science Congress Association'];
+  parts.biodata.forEach((b, bi) => {
+    if (onlyEmpty && hasExpertFields(b)) return;
+    const f = parts.faculty.find((x) => x.id === b.facultyId);
+    if (!f) return;
+    const T = topicsOf(f.department);
+    const senior = f.designation !== 'Assistant Professor';
+    b.primaryInterest = T[bi % T.length];
+    if (!b.keywords) b.keywords = [T[(bi + 1) % T.length], T[(bi + 2) % T.length]].join(', ');
+    const code = f.department.split(/\s|&/).filter(Boolean).map((w) => w[0]).join('').toUpperCase().slice(0, 3);
+    b.teaching = Array.from({ length: int(1, 3) }, (_, i) => ({ code: `${code}${int(2, 6)}${pad(int(1, 40))}`, title: `${pick(COURSE_WORDS)} ${T[(bi + i) % T.length]}`, level: i === 0 ? 'Undergraduate' : pick(['Undergraduate', 'Postgraduate', 'Doctoral']) }));
+    const scholars = (k: number, status: string) => Array.from({ length: Math.min(k, 4) }, (_, i) => ({
+      name: `Scholar ${f.name.replace('Faculty ', '')}${status === 'Current' ? '' : 'C'}${i + 1}`, degree: pick(['PhD', 'PhD', 'MPhil']), status,
+      year: status === 'Current' ? String(int(2022, 2026)) : String(int(2016, 2025)), topic: `${pick(PREFIX)} ${T[(bi + i + 1) % T.length].toLowerCase()}`,
+    }));
+    b.supervision = [...scholars(b.phdOngoing, 'Current'), ...scholars(b.phdGuided, 'Completed')];
+    b.availableToSupervise = senior || rnd() < 0.4;
+    b.availableForMedia = rnd() < 0.3;
+    b.engagement = [
+      ...(f.designation === 'Professor' ? [{ type: 'Editorial board', role: pick(['Associate Editor', 'Editorial Board Member', 'Guest Editor']), organisation: JOURNALS[bi % JOURNALS.length][0] as string, from: String(int(2016, 2024)), to: 'Present' }] : []),
+      ...(rnd() < 0.5 ? [{ type: 'Professional society', role: pick(['Section Chair', 'Committee Member', 'Treasurer']), organisation: `${pick(SOCIETIES)} ${pick(['Bangalore Section', 'Karnataka Chapter', 'Student Branch'])}`, from: String(int(2018, 2025)), to: rnd() < 0.5 ? 'Present' : String(int(2024, 2026)) }] : []),
+      ...(senior && rnd() < 0.4 ? [{ type: 'Industry / advisory', role: pick(['Technical Advisor', 'Advisory Board Member']), organisation: pick(['A regional start-up incubator', 'An industry consortium', 'A state technology mission']), from: String(int(2019, 2025)), to: 'Present' }] : []),
+      ...(f.designation === 'Professor' && rnd() < 0.35 ? [{ type: 'Policy contribution', role: 'Written submission', organisation: pick(['State higher-education council consultation', 'Draft research policy consultation']), from: String(int(2021, 2025)), to: '' }] : []),
+    ];
+    b.media = rnd() < 0.35 ? Array.from({ length: int(1, 3) }, () => ({ headline: `${pick(['How', 'Why', 'What'])} ${T[int(0, T.length - 1)].toLowerCase()} ${pick(['could change everyday life', 'matters for India', 'is moving from lab to market'])}`, outlet: pick(OUTLETS), date: dateIn(pick([2023, 2024, 2025, 2026])), url: '' })) : [];
+    b.office = `Block ${'ABCDE'[bi % 5]} · Room ${int(101, 420)}`;
+    const mine = <T extends { id: string; status: string }>(xs: T[], ok: (x: T) => boolean) => xs.filter((x) => x.status === 'Approved' && ok(x));
+    b.highlights = [
+      ...mine(parts.publications, (p) => p.authors.some((a) => a.code === f.id) && (p.quartile === 'Q1' || p.quartile === 'Q2')).slice(-3).map((p) => `publications:${p.id}`),
+      ...mine(parts.ipr ?? [], (x) => x.facultyId === f.id).slice(-1).map((x) => `ipr:${x.id}`),
+      ...mine(parts.grants, (g) => g.investigators.some((i) => i.code === f.id) && (g.outcome === 'Sanctioned' || g.outcome === 'Completed')).slice(-1).map((g) => `grants:${g.id}`),
+    ].slice(0, 4);
+  });
 }

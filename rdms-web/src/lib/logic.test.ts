@@ -225,6 +225,33 @@ describe('what faculty receive', () => {
   });
 });
 
+describe('expert-finder profile fields and the public directory', () => {
+  const contactOf = (id: string) => { const f = db.faculty.find((x) => x.id === id)!; return { email: f.email, phone: f.phone, orcid: f.orcid, scopusId: f.scopusId }; };
+  it('are checked, go through approval, and only then appear', () => {
+    const b = rules.normalizeBiodata(structuredClone(db.biodata.find((x) => x.facultyId === 'EMP1001')!));
+    const save = (x: Partial<typeof b>) => rules.proposeProfileChange(db, fac('EMP1001'), { biodata: { ...b, ...x }, contact: contactOf('EMP1001') }, true);
+    expect(() => save({ links: { ...b.links, linkedin: 'http://linkedin.com/in/x' } })).toThrow(/https/);
+    expect(() => save({ media: [{ headline: 'H', outlet: 'O', date: '2026-01-01', url: 'javascript:alert(1)' }] })).toThrow(/Media links/);
+    const id = save({
+      primaryInterest: 'Edge computing', availableForMedia: !b.availableForMedia, office: 'Block A · Room 1',
+      teaching: [{ code: 'CSE1', title: 'Distributed systems', level: 'Postgraduate' }, { code: '', title: '', level: '' }],
+      supervision: [{ name: 'Scholar Z1', degree: 'Made-up', status: 'Current', year: '2025', topic: 'T' }],
+      engagement: [{ type: 'Editorial board', role: 'Associate Editor', organisation: 'A journal', from: '2024', to: 'Present' }],
+      highlights: ['publications:PUB1', 'not a key', 'ipr:IPR2', 'grants:G1', 'awards:AWD3', 'publications:PUB4', 'publications:PUB5', 'publications:PUB6'],
+    });
+    const pending = db.profileChanges.find((c) => c.id === id)!;
+    expect(pending.changed).toEqual(expect.arrayContaining(['Primary interest', 'Available for media comment', 'Teaching', 'Supervision', 'Engagement', 'Office location', 'Highlights']));
+    expect(pending.biodata.teaching).toHaveLength(1);
+    expect(pending.biodata.supervision[0].degree).toBe('PhD');
+    expect(pending.biodata.highlights.length).toBeLessThanOrEqual(6);
+    expect(pending.biodata.highlights).not.toContain('not a key');
+    expect(db.biodata.find((x) => x.facultyId === 'EMP1001')!.primaryInterest ?? '').not.toBe('Edge computing');
+    rules.reviewProfileChange(db, office, id, 'Approved', '');
+    expect(db.biodata.find((x) => x.facultyId === 'EMP1001')!.primaryInterest).toBe('Edge computing');
+  });
+
+});
+
 describe('analytics', () => {
   it('academic year boundaries follow the configured start month', () => {
     expect(academicYearOf('2026-05-31', 6)).toBe('2025-26');

@@ -2,18 +2,18 @@ import { lazy, Suspense, useMemo, useState } from 'react';
 import type { ReactNode } from 'react';
 import { Link, useParams } from 'react-router-dom';
 import { Alert, Field, Input, Modal, Panel, Select, useToast } from '../../components/ui';
-import { activityByYear, ActivitySpark, Avatar, SdgIcon, splitList } from '../../components/research';
-import { fmtDate, inr, isSanctioned } from '../../lib/analytics';
+import { activityByYear, ActivitySpark, Avatar, SdgIcon, resolveHighlights, splitList } from '../../components/research';
+import { SHOW_FULL_PHONE_NUMBERS, displayPhone, fmtDate, inr, isSanctioned } from '../../lib/analytics';
 import { creditedFaculty } from '../../lib/domain';
 import { saveFaculty, useStore } from '../../lib/store';
 import type { EntityKind, Faculty, Grant, Honour, IntellectualProperty, Publication, SeedMoney } from '../../lib/types';
-import { EMPTY_SCHOLAR, SDGS, ipTypeLabel } from '../../lib/types';
+import { EMPTY_SCHOLAR, ENGAGEMENT_TYPES, SDGS, ipTypeLabel } from '../../lib/types';
 import { RecordDetail } from './RecordDetail';
 import { NetworkGraph, outputsOf } from '../../components/network';
 
 const CollabMap = lazy(() => import('../../components/CollabMap'));
 
-type Tab = 'overview' | 'network' | 'projects' | 'publications' | 'grants' | 'fdps' | 'conferences' | 'awards' | 'ipr';
+type Tab = 'overview' | 'network' | 'projects' | 'publications' | 'grants' | 'fdps' | 'conferences' | 'awards' | 'ipr' | 'teaching' | 'engagement';
 type NetTab = 'graph' | 'map' | 'profiles' | 'units';
 
 const PUB_GROUPS: { label: string; types: Publication['entryType'][] }[] = [
@@ -44,6 +44,7 @@ export function ResearcherProfile({ facultyId }: { facultyId: string }) {
   const [open, setOpen] = useState<{ kind: EntityKind; id: string } | null>(null);
   const [netTab, setNetTab] = useState<NetTab>('graph');
   const [editing, setEditing] = useState(false);
+  const [pubGroup, setPubGroup] = useState('all');
   const f = db.faculty.find((x) => x.id === facultyId);
   const b = db.biodata.find((x) => x.facultyId === facultyId);
   const isMgmt = user?.role === 'management' || user?.role === 'office'; // institution-wide viewers
@@ -70,6 +71,10 @@ export function ResearcherProfile({ facultyId }: { facultyId: string }) {
   if (!isMgmt && user?.facultyId !== facultyId) return <Panel><Alert kind="error">You can only view your own profile.</Alert></Panel>;
 
   const scholar = b?.scholar ?? EMPTY_SCHOLAR;
+  const quals = (b?.qualifications ?? []).filter((q) => q.degree).map((q) => `${q.degree}${q.specialization ? ` (${q.specialization})` : ''}${q.institution ? `, ${q.institution}` : ''}`);
+  const tags = [...new Set([...splitList(b?.expertise), ...splitList(b?.keywords)])];
+  const tagLink = (t: string) => (isMgmt ? <Link to={`/faculty?q=${encodeURIComponent(t)}`}>{t}</Link> : <span>{t}</span>);
+  const highlights = resolveHighlights(db, facultyId, b?.highlights ?? []);
   const hasMetrics = scholar.citations != null || scholar.hIndex != null || scholar.i10Index != null;
   const tabs: { id: Tab; label: string; n?: number; icon: ReactNode }[] = [
     { id: 'overview', label: 'Overview', icon: I.person },
@@ -81,6 +86,8 @@ export function ResearcherProfile({ facultyId }: { facultyId: string }) {
     { id: 'conferences', label: 'Conferences', n: data.confs.length, icon: I.screen },
     { id: 'awards', label: 'Honours & Awards', n: data.awards.length, icon: I.trophy },
     { id: 'ipr', label: 'Intellectual Property', n: data.ipr.length, icon: I.bulb },
+    { id: 'teaching', label: 'Teaching & Supervision', n: (b?.teaching.length ?? 0) + (b?.supervision.length ?? 0), icon: I.cap },
+    { id: 'engagement', label: 'Engagement & Media', n: (b?.engagement.length ?? 0) + (b?.media.length ?? 0), icon: I.mic },
   ];
   const profileLink = (id: string, label: ReactNode) => (isMgmt ? <Link to={`/faculty/${id}`}>{label}</Link> : <>{label}</>);
 
@@ -93,16 +100,44 @@ export function ResearcherProfile({ facultyId }: { facultyId: string }) {
             <h1 className="rp-name">{f.title} {f.name}</h1>
             <p className="rp-role">{f.designation}, {isMgmt ? <Link to={`/faculty?dept=${encodeURIComponent(f.department)}`}>{f.department}</Link> : f.department}</p>
             <p className="rp-inst">{db.settings.institutionName}</p>
+            {!!quals.length && <p className="rp-quals">{quals.join(' · ')}</p>}
+            <p className="rp-counts">
+              <span><b>{data.pubs.length}</b> publications</span><span><b>{data.projects.length}</b> funded projects</span>
+              <span><b>{data.ipr.length}</b> intellectual property</span><span><b>{data.awards.length}</b> honours</span>
+            </p>
+            {(b?.primaryInterest || tags.length > 0) && (
+              <div className="rp-expertise">
+                {b?.primaryInterest && <span className="rp-primary">Primary interest: {tagLink(b.primaryInterest)}</span>}
+                <ul className="rp-tagcloud">{tags.slice(0, 10).map((t) => <li key={t}>{tagLink(t)}</li>)}</ul>
+              </div>
+            )}
+            {(b?.availableToSupervise || b?.availableForMedia) && (
+              <p className="rp-avail">
+                {b?.availableToSupervise && <span className="avail sup">Available to supervise</span>}
+                {b?.availableForMedia && <span className="avail media">Available for media comment</span>}
+              </p>
+            )}
             <dl className="rp-ids">
               <div><dt>Email</dt><dd><a href={`mailto:${f.email}`}>{f.email}</a></dd></div>
               <div><dt>ORCID</dt><dd>{f.orcid ? <a href={`https://orcid.org/${f.orcid}`} target="_blank" rel="noreferrer"><span className="orcid-dot" aria-hidden>iD</span>https://orcid.org/{f.orcid}</a> : <span className="muted">Not available</span>}</dd></div>
               {f.scopusId && <div><dt>Scopus</dt><dd><a href={`https://www.scopus.com/authid/detail.uri?authorId=${encodeURIComponent(f.scopusId)}`} target="_blank" rel="noreferrer">Author ID {f.scopusId}</a></dd></div>}
               <div><dt>Google Scholar</dt><dd>{b?.googleScholar ? <a href={b.googleScholar} target="_blank" rel="noreferrer">View Google Scholar profile ↗</a> : <span className="muted">Not available</span>}</dd></div>
+              {isMgmt && f.phone && <div><dt>Phone</dt><dd>{SHOW_FULL_PHONE_NUMBERS ? <a href={`tel:${f.phone}`}>{f.phone}</a> : displayPhone(f.phone)}</dd></div>}
+              {b?.office && <div><dt>Office</dt><dd>{b.office}</dd></div>}
             </dl>
+            {b && Object.values(b.links).some(Boolean) && (
+              <p className="rp-links">
+                {b.links.linkedin && <a href={b.links.linkedin} target="_blank" rel="noreferrer">LinkedIn ↗</a>}
+                {b.links.ssrn && <a href={b.links.ssrn} target="_blank" rel="noreferrer">SSRN ↗</a>}
+                {b.links.researchgate && <a href={b.links.researchgate} target="_blank" rel="noreferrer">ResearchGate ↗</a>}
+                {b.links.website && <a href={b.links.website} target="_blank" rel="noreferrer">Website ↗</a>}
+              </p>
+            )}
             <div className="rp-actions no-print">
               {!isMgmt && <Link className="btn sm" to="/biodata/edit">Update profile</Link>}
               <Link className="btn sm secondary" to={isMgmt ? `/faculty/${f.id}/performance` : '/performance'}>Performance</Link>
-              <Link className="btn sm secondary" to={isMgmt ? `/faculty/${f.id}/biodata` : '/biodata'}>CV / Print</Link>
+              <Link className="btn sm secondary" to={`${isMgmt ? `/faculty/${f.id}/biodata` : '/biodata'}?print=1`}>Download CV (PDF)</Link>
+              <Link className="btn sm secondary" to={isMgmt ? `/faculty/${f.id}/short` : '/my-profile/short'}>Short profile</Link>
               {user?.role === 'office' && <button type="button" className="btn sm" onClick={() => setEditing(true)}>Edit official details</button>}
             </div>
           </div>
@@ -139,6 +174,17 @@ export function ResearcherProfile({ facultyId }: { facultyId: string }) {
       <div className="rp-body" role="tabpanel">
         {tab === 'overview' && (
           <>
+            {highlights.length > 0 && (
+              <Section icon={I.star} title="Highlights" sub="Selected by the researcher from their approved work">
+                <ol className="rp-highlights">{highlights.map((h) => (
+                  <li key={h.key}>
+                    <span className="tag">{h.kindLabel}</span>
+                    <button type="button" className="rp-title link-btn" onClick={() => setOpen({ kind: h.kind, id: h.id })}>{h.title}</button>
+                    <span className="muted"> · {h.year}</span>
+                  </li>
+                ))}</ol>
+              </Section>
+            )}
             <Section icon={I.person} title="Personal profile">
               {b?.summary ? <p className="rp-bio">{b.summary}</p> : <p className="muted">No biography has been added yet.</p>}
               <div className="rp-facts">
@@ -146,6 +192,7 @@ export function ResearcherProfile({ facultyId }: { facultyId: string }) {
                 <Fact label="Areas of expertise">{chips(b?.expertise)}</Fact>
                 <Fact label="Research keywords">{chips(b?.keywords)}</Fact>
                 <Fact label="Affiliation"><p>{f.designation}, {f.department}<br />{db.settings.institutionName}{f.joiningDate && <span className="muted"> · since {f.joiningDate.slice(0, 4)}</span>}</p></Fact>
+                {!!b?.experience.length && <Fact label="Appointments"><ol className="rp-timeline">{b.experience.map((x, i) => <li key={i}><b>{x.designation}</b>, {x.organisation}<span className="muted"> · {x.from}{x.to ? `–${x.to}` : ''}</span></li>)}</ol></Fact>}
                 {!!b?.qualifications.length && <Fact label="Education"><ul className="rp-plain">{b.qualifications.map((q, i) => <li key={i}>{q.degree}{q.specialization && `, ${q.specialization}`} <span className="muted">· {q.institution} {q.year}</span></li>)}</ul></Fact>}
               </div>
             </Section>
@@ -233,14 +280,25 @@ export function ResearcherProfile({ facultyId }: { facultyId: string }) {
         )}
 
         {tab === 'publications' && (
-          data.pubs.length ? PUB_GROUPS.map((grp) => {
-            const list = data.pubs.filter((p) => grp.types.includes(p.entryType));
-            return list.length ? (
-              <Section key={grp.label} icon={I.book} title={`${grp.label} (${list.length})`}>
-                <ol className="rp-list">{list.map((p) => <PubItem key={p.id} p={p} onOpen={() => setOpen({ kind: 'publications', id: p.id })} />)}</ol>
+          data.pubs.length ? (() => {
+            const groups = PUB_GROUPS.map((g) => ({ ...g, list: data.pubs.filter((p) => g.types.includes(p.entryType)) })).filter((g) => g.list.length);
+            const shown = pubGroup === 'all' ? data.pubs : groups.find((g) => g.label === pubGroup)?.list ?? data.pubs;
+            const years = [...new Set(shown.map((p) => p.year))].sort((a, z) => z - a);
+            return (
+              <Section icon={I.book} title={`Publications (${data.pubs.length})`}>
+                <div className="rp-subtabs" role="tablist" aria-label="Publication type">
+                  <button type="button" role="tab" aria-selected={pubGroup === 'all'} className={pubGroup === 'all' ? 'on' : ''} onClick={() => setPubGroup('all')}>All ({data.pubs.length})</button>
+                  {groups.map((g) => <button key={g.label} type="button" role="tab" aria-selected={pubGroup === g.label} className={pubGroup === g.label ? 'on' : ''} onClick={() => setPubGroup(g.label)}>{g.label} ({g.list.length})</button>)}
+                </div>
+                {years.map((y) => (
+                  <div key={y} className="rp-year">
+                    <h3>{y}</h3>
+                    <ol className="rp-list">{shown.filter((p) => p.year === y).map((p) => <PubItem key={p.id} p={p} onOpen={() => setOpen({ kind: 'publications', id: p.id })} />)}</ol>
+                  </div>
+                ))}
               </Section>
-            ) : null;
-          }) : <Section icon={I.book} title="Publications"><p className="muted">No approved publications yet.</p></Section>
+            );
+          })() : <Section icon={I.book} title="Publications"><p className="muted">No approved publications yet.</p></Section>
         )}
 
         {tab === 'grants' && (
@@ -314,6 +372,48 @@ export function ResearcherProfile({ facultyId }: { facultyId: string }) {
               ))}</ol>
             ) : <p className="muted">No approved intellectual property yet.</p>}
           </Section>
+        )}
+
+        {tab === 'teaching' && (
+          <>
+            <Section icon={I.cap} title="Teaching">
+              {b?.teaching.length ? <ul className="rp-courses">{b.teaching.map((c, i) => <li key={i}>{c.code && <span className="rp-code">{c.code}</span>}<span>{c.title}</span>{c.level && <span className="tag">{c.level}</span>}</li>)}</ul> : <p className="muted">No courses added yet.</p>}
+            </Section>
+            <Section icon={I.person} title="Research supervision" sub={b?.availableToSupervise ? 'Available to supervise new research students.' : undefined}>
+              {(['Current', 'Completed'] as const).map((st) => {
+                const rows = (b?.supervision ?? []).filter((x) => x.status === st);
+                return rows.length ? (
+                  <div key={st} className="rp-year">
+                    <h3>{st === 'Current' ? 'Current students' : 'Completed'} ({rows.length})</h3>
+                    <ul className="rp-plain rp-sup">{rows.map((x, i) => <li key={i}><b>{x.name}</b> <span className="tag">{x.degree}</span>{x.topic && <span className="muted"> · {x.topic}</span>}{x.year && <span className="muted"> · {x.year}</span>}</li>)}</ul>
+                  </div>
+                ) : null;
+              })}
+              {!b?.supervision.length && <p className="muted">No supervision has been added yet{b ? ` (Ph.D. guided: ${b.phdGuided}, ongoing: ${b.phdOngoing})` : ''}.</p>}
+            </Section>
+          </>
+        )}
+
+        {tab === 'engagement' && (
+          <>
+            <Section icon={I.mic} title="Engagement" sub="Editorial boards, professional societies, industry and advisory roles, and contributions to policy">
+              {b?.engagement.length ? ENGAGEMENT_TYPES.map((t) => {
+                const rows = b.engagement.filter((x) => x.type === t);
+                return rows.length ? (
+                  <div key={t} className="rp-year">
+                    <h3>{t}</h3>
+                    <ul className="rp-plain">{rows.map((x, i) => <li key={i}><b>{x.role}</b>{x.organisation && `, ${x.organisation}`}<span className="muted"> · {x.from}{x.to ? `–${x.to}` : ''}</span></li>)}</ul>
+                  </div>
+                ) : null;
+              }) : <p className="muted">No engagement has been added yet.</p>}
+              {!!b?.memberships.length && (
+                <div className="rp-year"><h3>Memberships</h3><ul className="rp-plain">{b.memberships.map((m, i) => <li key={i}>{m.type}, {m.body}<span className="muted"> · since {m.since}</span></li>)}</ul></div>
+              )}
+            </Section>
+            <Section icon={I.mic} title="Selected media coverage" sub={b?.availableForMedia ? 'Available for media comment in the areas of expertise above.' : undefined}>
+              {b?.media.length ? <ul className="rp-plain rp-media">{[...b.media].sort((x, y) => y.date.localeCompare(x.date)).map((m, i) => <li key={i}>{m.url ? <a href={m.url} target="_blank" rel="noreferrer">{m.headline} ↗</a> : <b>{m.headline}</b>}<span className="muted"> · {m.outlet}{m.date && `, ${fmtDate(m.date)}`}</span></li>)}</ul> : <p className="muted">No media coverage has been added yet.</p>}
+            </Section>
+          </>
         )}
       </div>
       {open && <RecordDetail kind={open.kind} id={open.id} onClose={() => setOpen(null)} />}
@@ -413,6 +513,8 @@ function networkOf(db: ReturnType<typeof useStore>['db'], me: string, pubs: Publ
 
 const ic = (d: ReactNode) => <svg className="rp-ic" viewBox="0 0 24 24" aria-hidden>{d}</svg>;
 const I = {
+  star: ic(<path d="m12 3.5 2.6 5.3 5.9.9-4.3 4.1 1 5.8L12 16.9l-5.2 2.7 1-5.8-4.3-4.1 5.9-.9Z" />),
+  mic: ic(<><rect x="9" y="3" width="6" height="11" rx="3" /><path d="M5.5 11a6.5 6.5 0 0 0 13 0M12 17.5V21M8.5 21h7" /></>),
   person: ic(<><circle cx="12" cy="8" r="3.6" /><path d="M5 20.5c.8-3.6 3.6-5.5 7-5.5s6.2 1.9 7 5.5" /></>),
   network: ic(<><circle cx="12" cy="5.5" r="2.3" /><circle cx="5" cy="18" r="2.3" /><circle cx="19" cy="18" r="2.3" /><path d="m10.9 7.5-4.8 8.4M13.1 7.5l4.8 8.4M7.3 18h9.4" /></>),
   box: ic(<><path d="m12 3 8 4.5v9L12 21l-8-4.5v-9Z" /><path d="m4 7.5 8 4.5 8-4.5M12 12v9" /></>),

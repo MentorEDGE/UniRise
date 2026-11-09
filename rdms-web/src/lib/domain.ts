@@ -4,9 +4,9 @@
  * actor's own institution database, so nothing here can reach another institution.
  */
 import type {
-  AnyRecord, Author, Biodata, DB, EntityKind, Faculty, Grant, Investigator, Notice, ProfileChange, Publication, Settings, Status,
+  AnyRecord, Author, Biodata, Course, Engagement, MediaItem, ProfileLinks, Supervisee, DB, EntityKind, Faculty, Grant, Investigator, Notice, ProfileChange, Publication, Settings, Status,
 } from './types';
-import { AUTHOR_KINDS, AWARD_CATEGORIES, EMPTY_SCHOLAR, IP_DESCRIPTION_WORDS, IP_OWNERS, IP_STATUSES, IP_TYPES, LEVELS, PUB_TYPES, wordCount } from './types';
+import { AUTHOR_KINDS, AWARD_CATEGORIES, EMPTY_LINKS, EMPTY_SCHOLAR, ENGAGEMENT_TYPES, MAX_HIGHLIGHTS, SUPERVISION_DEGREES, SUPERVISION_STATUS, IP_DESCRIPTION_WORDS, IP_OWNERS, IP_STATUSES, IP_TYPES, LEVELS, PUB_TYPES, wordCount } from './types';
 import type { IntellectualProperty } from './types';
 
 /** 'office' is the Office of Research acting on one institution's database (record approvals only). */
@@ -286,6 +286,20 @@ function cleanBiodata(b: Biodata, prev: Biodata | undefined, by: string): Biodat
     awards: prev?.awards ?? [],
     memberships: rows(b.memberships, ['body', 'type', 'since']),
     expertise: str(b.expertise, 1000), keywords: str(b.keywords, 500), sdgs, photo, scholar,
+    primaryInterest: str(b.primaryInterest, 120).trim(),
+    highlights: [...new Set(list(b.highlights, MAX_HIGHLIGHTS, (x) => x as unknown).map((x) => str(x, 40)).filter((x) => /^(publications|grants|seedMoney|conferences|awards|ipr):[A-Z]+\d+$/.test(x)))],
+    teaching: rows<Course>(b.teaching, ['code', 'title', 'level']).filter((c) => c.title.trim()),
+    supervision: rows<Supervisee>(b.supervision, ['name', 'degree', 'status', 'year', 'topic']).filter((x) => x.name.trim()).map((x) => ({ ...x, degree: SUPERVISION_DEGREES.includes(x.degree) ? x.degree : 'PhD', status: SUPERVISION_STATUS.includes(x.status) ? x.status : 'Current' })),
+    availableToSupervise: b.availableToSupervise === true, availableForMedia: b.availableForMedia === true,
+    engagement: rows<Engagement>(b.engagement, ['type', 'role', 'organisation', 'from', 'to']).filter((x) => x.organisation.trim() || x.role.trim()).map((x) => ({ ...x, type: ENGAGEMENT_TYPES.includes(x.type) ? x.type : 'Other' })),
+    media: rows<MediaItem>(b.media, ['headline', 'outlet', 'date', 'url']).filter((x) => x.headline.trim()).map((x) => { if (x.url && !/^https?:\/\//.test(x.url)) throw invalid('Media links must start with http:// or https://.'); return x; }),
+    office: str(b.office, 200),
+    links: (() => {
+      const l = (b.links ?? {}) as Partial<ProfileLinks>;
+      const out = { linkedin: str(l.linkedin, 300).trim(), ssrn: str(l.ssrn, 300).trim(), researchgate: str(l.researchgate, 300).trim(), website: str(l.website, 300).trim() };
+      for (const v of Object.values(out)) if (v && !/^https:\/\//.test(v)) throw invalid('Profile links must start with https://.');
+      return out;
+    })(),
     updatedAt: prev?.updatedAt ?? now(),
   };
 }
@@ -294,6 +308,8 @@ const FIELD_LABEL: Record<string, string> = {
   dob: 'Date of birth', gender: 'Gender', address: 'Address', summary: 'Biography', researchInterests: 'Research interests', googleScholar: 'Google Scholar link',
   phdGuided: 'Ph.D. guided', phdOngoing: 'Ph.D. ongoing', qualifications: 'Qualifications', experience: 'Experience', memberships: 'Memberships',
   expertise: 'Areas of expertise', keywords: 'Keywords', sdgs: 'SDGs', photo: 'Photograph', scholar: 'Google Scholar metrics',
+  primaryInterest: 'Primary interest', highlights: 'Highlights', teaching: 'Teaching', supervision: 'Supervision', availableToSupervise: 'Available to supervise',
+  availableForMedia: 'Available for media comment', engagement: 'Engagement', media: 'Media coverage', office: 'Office location', links: 'Profile links',
   email: 'Email', phone: 'Phone', orcid: 'ORCID', scopusId: 'Scopus ID',
 };
 const same = (a: unknown, b: unknown) => JSON.stringify(a) === JSON.stringify(b);
@@ -331,7 +347,7 @@ export function proposeProfileChange(db: DB, actor: Actor, input: { biodata: Bio
   db.profileChanges = [next, ...db.profileChanges.filter((x) => x.id !== id)];
   return id;
 }
-const PROFILE_KEYS = ['dob', 'gender', 'address', 'summary', 'researchInterests', 'googleScholar', 'phdGuided', 'phdOngoing', 'qualifications', 'experience', 'memberships', 'expertise', 'keywords', 'sdgs', 'photo', 'scholar'] as const;
+const PROFILE_KEYS = ['dob', 'gender', 'address', 'summary', 'researchInterests', 'googleScholar', 'phdGuided', 'phdOngoing', 'qualifications', 'experience', 'memberships', 'expertise', 'keywords', 'sdgs', 'photo', 'scholar', 'primaryInterest', 'highlights', 'teaching', 'supervision', 'availableToSupervise', 'availableForMedia', 'engagement', 'media', 'office', 'links'] as const;
 
 /** Office of Research decision on a proposed profile update. Only an approval touches the live profile. */
 export function reviewProfileChange(db: DB, actor: Actor, id: string, decision: Decision, remark: string) {
@@ -355,11 +371,13 @@ export function reviewProfileChange(db: DB, actor: Actor, id: string, decision: 
 
 export const blankBiodata = (facultyId: string, at = now()): Biodata => ({
   facultyId, dob: '', gender: '', address: '', summary: '', researchInterests: '', googleScholar: '', phdGuided: 0, phdOngoing: 0, qualifications: [], experience: [], awards: [], memberships: [],
-  expertise: '', keywords: '', sdgs: [], photo: '', scholar: { ...EMPTY_SCHOLAR }, updatedAt: at,
+  expertise: '', keywords: '', sdgs: [], photo: '', scholar: { ...EMPTY_SCHOLAR },
+  primaryInterest: '', highlights: [], teaching: [], supervision: [], availableToSupervise: false, availableForMedia: false, engagement: [], media: [], office: '', links: { ...EMPTY_LINKS },
+  updatedAt: at,
 });
 
 /** Fills in profile fields added after a biodata row was stored. */
-export const normalizeBiodata = (b: Biodata): Biodata => ({ ...blankBiodata(b.facultyId, b.updatedAt), ...b, scholar: { ...EMPTY_SCHOLAR, ...(b.scholar ?? {}) }, sdgs: Array.isArray(b.sdgs) ? b.sdgs : [] });
+export const normalizeBiodata = (b: Biodata): Biodata => ({ ...blankBiodata(b.facultyId, b.updatedAt), ...b, scholar: { ...EMPTY_SCHOLAR, ...(b.scholar ?? {}) }, sdgs: Array.isArray(b.sdgs) ? b.sdgs : [], links: { ...EMPTY_LINKS, ...(b.links ?? {}) } });
 
 /**
  * Official faculty details (name, designation, department, status). Office of Research only: faculty propose their
@@ -434,3 +452,4 @@ export function normalizeIp(x: Partial<IntellectualProperty> & Pick<Intellectual
     office: x.office && country && !x.office.includes(country) ? `${x.office}, ${country}` : x.office || country,
   } as IntellectualProperty;
 }
+
