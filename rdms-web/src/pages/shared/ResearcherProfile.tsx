@@ -1,6 +1,6 @@
 import { lazy, Suspense, useMemo, useState } from 'react';
 import type { ReactNode } from 'react';
-import { Link, useParams } from 'react-router-dom';
+import { Link, useParams, useSearchParams } from 'react-router-dom';
 import { Alert, Field, Input, Modal, Panel, Select, useToast } from '../../components/ui';
 import { activityByYear, ActivitySpark, Avatar, SdgIcon, resolveHighlights, splitList } from '../../components/research';
 import { SHOW_FULL_PHONE_NUMBERS, displayPhone, fmtDate, inr, isSanctioned } from '../../lib/analytics';
@@ -40,7 +40,7 @@ export function MyResearchProfile() {
  */
 export function ResearcherProfile({ facultyId }: { facultyId: string }) {
   const { db, user } = useStore();
-  const [tab, setTab] = useState<Tab>('overview');
+  const [tab, setTab] = useState<Tab>(useSearchParams()[0].get('tab') === 'engagement' ? 'engagement' : 'overview');
   const [open, setOpen] = useState<{ kind: EntityKind; id: string } | null>(null);
   const [netTab, setNetTab] = useState<NetTab>('graph');
   const [editing, setEditing] = useState(false);

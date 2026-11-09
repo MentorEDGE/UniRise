@@ -45,7 +45,7 @@ export function menusFor(role: Role, pending: number): MenuDef[] {
   if (role === 'faculty') {
     // Faculty work only with their own profile and records.
     return [
-      { label: 'My Profile', icon: 'profile', items: [{ label: 'My Research Profile', to: '/my-profile' }, { label: 'My Workspace', to: '/' }, { label: 'Update Profile', to: '/biodata/edit' }, { label: 'My Performance', to: '/performance' }, 'sep', { label: 'Print / Download CV', to: '/biodata' }] },
+      { label: 'My Profile', icon: 'profile', items: [{ label: 'My Research Profile', to: '/my-profile' }, { label: 'My Workspace', to: '/' }, { label: 'My Performance', to: '/performance' }, 'sep', { label: 'Print / Download CV', to: '/biodata' }] },
       { label: 'My Publications', icon: 'publications', items: [{ label: 'My Publications', to: '/publications' }, { label: 'Add Publication', to: '/publications/entry' }] },
       { label: 'My Grants and Fellowships', icon: 'grants', items: [{ label: 'My Grants', to: '/grants' }, { label: 'Add Grant / Fellowship', to: '/grants/entry' }, 'sep', { label: 'Apply for Seed Money', to: '/seed-money/entry' }, { label: 'My Seed Money Projects', to: '/seed-money' }] },
       { label: 'My Faculty Development Programmes', icon: 'fdp', items: [{ label: 'My FDPs', to: '/fdp' }, { label: 'Add FDP', to: '/fdp/entry' }] },

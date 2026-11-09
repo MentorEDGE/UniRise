@@ -49,7 +49,7 @@ export function Faculty360({ facultyId: given }: { facultyId?: string }) {
           </div>
           <div className="row-actions" style={{ alignItems: 'start' }}>
             <Link className="btn sm" to={isMgmt ? `/faculty/${f.id}` : '/my-profile'}>Research profile</Link>
-            <Link className="btn sm secondary" to={isMgmt ? `/faculty/${f.id}/biodata` : '/biodata'}>CV</Link>
+            {isMgmt && <Link className="btn sm secondary" to={`/faculty/${f.id}/biodata`}>CV</Link>}
           </div>
         </div>
         <div style={{ marginTop: 10 }}>{bar}</div>

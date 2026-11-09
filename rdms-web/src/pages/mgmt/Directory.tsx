@@ -20,12 +20,15 @@ type SortId = (typeof SORTS)[number]['id'];
 interface Entry { f: Faculty; b?: Biodata; text: string; pubCount: number; industry: boolean }
 
 /** Who a search is for (Melbourne-style entry points); each maps to a filter on the profiles. */
-const AVAIL: Record<string, { label: string; test: (e: Entry) => boolean }> = {
-  supervise: { label: 'Available to supervise', test: (e) => !!e.b?.availableToSupervise },
-  media: { label: 'Available for media comment', test: (e) => !!e.b?.availableForMedia },
-  industry: { label: 'Industry engagement', test: (e) => e.industry },
-  press: { label: 'Has media coverage', test: (e) => (e.b?.media?.length ?? 0) > 0 },
+const AVAIL: Record<string, { label: string; hint: string; test: (e: Entry) => boolean }> = {
+  industry: { label: 'Industry partners', hint: 'Industry, advisory or licensing experience', test: (e) => e.industry },
+  supervise: { label: 'Research supervision', hint: 'Open to taking on research students', test: (e) => !!e.b?.availableToSupervise },
+  media: { label: 'Media comment', hint: 'Open to journalists\' requests', test: (e) => !!e.b?.availableForMedia },
+  press: { label: 'Press coverage', hint: 'Already featured in news or media', test: (e) => (e.b?.media?.length ?? 0) > 0 },
 };
+
+/** Heading above the results, named like the tile or card that was clicked. */
+const SHOWING: Record<string, string> = { supervise: 'Research supervisors', press: 'Press / media', industry: 'Industry partners', media: 'Media experts' };
 
 /** Faculty Search: read-only researcher discovery for Top-Level Management, with SDG, department and designation filters. */
 export function FacultySearch() {
@@ -84,9 +87,9 @@ export function FacultySearch() {
   const bySdg = (e: Entry) => !sdgs.length || sdgs.some((n) => e.b?.sdgs.includes(n));
   const byDept = (e: Entry) => !depts.length || depts.includes(e.f.department);
   const byDesig = (e: Entry) => !desigs.length || desigs.includes(e.f.designation);
+  const availCount = (a: string) => base.filter((e) => bySdg(e) && byDept(e) && byDesig(e) && AVAIL[a].test(e)).length;
   const byAvail = (e: Entry) => avail.every((a) => AVAIL[a].test(e));
   const results = base.filter((e) => bySdg(e) && byDept(e) && byDesig(e) && byAvail(e));
-  const availCount = (a: string) => base.filter((e) => bySdg(e) && byDept(e) && byDesig(e) && AVAIL[a].test(e)).length;
   // Each facet counts the faculty that would match if that option were ticked, given the other filters.
   const sdgCount = (n: number) => base.filter((e) => byDept(e) && byDesig(e) && byAvail(e) && e.b?.sdgs.includes(n)).length;
   const deptCount = (d: string) => base.filter((e) => bySdg(e) && byDesig(e) && byAvail(e) && e.f.department === d).length;
@@ -131,9 +134,8 @@ export function FacultySearch() {
       </section>
 
       <PortalCounts />
-      <ExpertEntryPoints entries={entries} onPick={(k) => { setDraft(''); update((p) => { p.delete('avail'); p.delete('q'); if (k) p.append('avail', k); }); toResults(); }} />
-      <TopicBrowser entries={entries} onPick={(t) => { setDraft(t); update((p) => { p.set('q', t); p.delete('avail'); }); toResults(); }} />
 
+      <h2 className="dir-showing" id="dir-showing">{avail.length ? avail.map((k) => SHOWING[k]).join(' + ') : 'All profiles'}{avail.length > 0 && <button type="button" className="link-btn dir-showing-clear" onClick={() => update((p) => p.delete('avail'))}>Show all profiles</button>}</h2>
       <div className="dir-body">
         <aside className="dir-filters" aria-label="Filters">
           <div className="dir-filters-head">
@@ -142,11 +144,13 @@ export function FacultySearch() {
           </div>
 
           <fieldset className="facet">
-            <legend>Availability</legend>
+            <legend>Find an expert for</legend>
             {Object.entries(AVAIL).map(([k, a]) => (
-              <label key={k} className="facet-opt"><input type="checkbox" checked={avail.includes(k)} onChange={() => toggle('avail', k)} /><span>{a.label} <span className="facet-n">({availCount(k)})</span></span></label>
+              <label key={k} className="facet-opt"><input type="checkbox" checked={avail.includes(k)} onChange={() => toggle('avail', k)} /><span>{a.label} <span className="facet-n">({availCount(k)})</span><span className="facet-hint">{a.hint}</span></span></label>
             ))}
           </fieldset>
+
+          <TopicBrowser entries={entries} onPick={(t) => { setDraft(t); update((p) => { p.set('q', t); p.delete('avail'); }); toResults(); }} />
 
           <fieldset className="facet">
             <legend>Sustainable Development Goals</legend>
@@ -189,7 +193,7 @@ export function FacultySearch() {
 
           {shown.length ? (
             <ul className="person-grid">
-              {shown.map((e) => <PersonCard key={e.f.id} e={e} />)}
+              {shown.map((e) => <PersonCard key={e.f.id} e={e} tab={avail.some((k) => k === 'press' || k === 'media') ? 'engagement' : ''} />)}
             </ul>
           ) : (
             <div className="dir-empty">
@@ -213,15 +217,16 @@ export function FacultySearch() {
   );
 }
 
-function PersonCard({ e }: { e: Entry }) {
+function PersonCard({ e, tab }: { e: Entry; tab: string }) {
+  const href = `/faculty/${e.f.id}${tab ? `?tab=${tab}` : ''}`;
   const { db } = useStore();
   const activity = useMemo(() => activityByYear(db, e.f.id), [db, e.f.id]);
   const expertise = splitList(e.b?.expertise || e.b?.researchInterests).slice(0, 2);
   return (
     <li className="person-card">
-      <Link to={`/faculty/${e.f.id}`} tabIndex={-1} aria-hidden><Avatar name={e.f.name} photo={e.b?.photo} size={70} /></Link>
+      <Link to={href} tabIndex={-1} aria-hidden><Avatar name={e.f.name} photo={e.b?.photo} size={70} /></Link>
       <div className="person-info">
-        <Link className="person-name" to={`/faculty/${e.f.id}`}>{e.f.title} {e.f.name}</Link>
+        <Link className="person-name" to={href}>{e.f.title} {e.f.name}</Link>
         {!e.f.active && <span className="badge Draft" style={{ alignSelf: 'flex-start' }}>Deactivated</span>}
         <a className="person-email" href={`mailto:${e.f.email}`}>{e.f.email}</a>
         <div className="person-role"><span className="person-dept">{e.f.department}</span> – {e.f.designation}</div>
@@ -250,8 +255,6 @@ function PortalCounts() {
     { label: 'Prizes', n: ok(db.awards), to: '/awards', d: 'M9 3h14v8a7 7 0 0 1-14 0Zm0 2H3a6 6 0 0 0 6 7Zm14 0h6a6 6 0 0 1-6 7Zm-9 13h4v5h-4Zm-4 6h12v5H10Z' },
     { label: 'Activities', n: ok(db.fdps) + ok(db.conferences), to: '/conferences', d: 'M11 4h10v4h8v20H3V8h8Zm2 2v2h6V6ZM3 15h26v2H3Z' },
     { label: 'Research supervisors', n: db.biodata.filter((b) => b.availableToSupervise && db.faculty.find((f) => f.id === b.facultyId)?.active).length, to: '/faculty?avail=supervise', d: 'M16 4 2 11l14 7 11-5.5V20h2v-9Zm-8 12.2V22c2.3 1.9 5.1 3 8 3s5.7-1.1 8-3v-5.8L16 20Z' },
-    { label: 'Active projects', n: db.grants.filter((g) => g.status === 'Approved' && g.outcome === 'Sanctioned').length + ok(db.seedMoney), to: '/grants', d: 'M4 6h24v4H4Zm0 7h16v4H4Zm0 7h20v4H4Z' },
-    { label: 'Open access', n: db.publications.filter((p) => p.status === 'Approved' && p.openAccess).length, to: '/publications', d: 'M10 14V9a6 6 0 0 1 11.6-2.2l-2.8 1.1A3 3 0 0 0 13 9v5h11v14H8V14Zm6 4a2.5 2.5 0 0 0-1 4.8V25h2v-2.2A2.5 2.5 0 0 0 16 18Z' },
     { label: 'Press / media', n: db.biodata.reduce((a, b) => a + (b.media?.length ?? 0), 0), to: '/faculty?avail=press', d: 'M4 6h20v20H6a2 2 0 0 1-2-2Zm20 6h4v12a2 2 0 0 1-4 0ZM8 10v6h6v-6Zm9 0v2h4v-2Zm0 4v2h4v-2Zm-9 4v2h13v-2Zm0 4v2h13v-2Z' },
   ];
   return (
@@ -263,34 +266,6 @@ function PortalCounts() {
         </Link>
       ))}
     </nav>
-  );
-}
-
-/** "I am looking for…": four ways in, each opening the profiles with the matching filter. */
-function ExpertEntryPoints({ entries, onPick }: { entries: Entry[]; onPick: (avail: string | null) => void }) {
-  const active = entries.filter((e) => e.f.active);
-  const n = (k: string) => active.filter((e) => AVAIL[k].test(e)).length;
-  const plural = (k: string, one: string, many: string) => { const c = n(k); return c ? `${c} ${c === 1 ? one : many}` : 'None yet'; };
-  const cards: { key: string | null; title: string; text: string; count: string; scroll?: string; empty?: boolean }[] = [
-    { key: 'industry', title: 'Industry partners', text: 'Researchers with industry, advisory or licensing experience.', count: plural('industry', 'researcher', 'researchers'), empty: !n('industry') },
-    { key: null, title: 'Research collaboration', text: 'Browse every area of expertise and find a collaborator.', count: 'Browse topics', scroll: 'dir-topics' },
-    { key: 'supervise', title: 'Research supervision', text: 'Faculty available to supervise research students.', count: plural('supervise', 'supervisor', 'supervisors'), empty: !n('supervise') },
-    { key: 'media', title: 'Media', text: 'Experts available to comment to journalists in their fields.', count: plural('media', 'expert', 'experts'), empty: !n('media') },
-  ];
-  return (
-    <section className="dir-entry" aria-label="Find an expert for">
-      <h2>Find an expert for</h2>
-      <div className="dir-entry-grid">
-        {cards.map((c) => (
-          <button key={c.title} type="button" className={`dir-entry-card ${c.empty ? 'empty' : ''}`} disabled={c.empty} title={c.empty ? 'No faculty have added this to their profile yet' : undefined} onClick={() => {
-            if (c.scroll) { document.getElementById(c.scroll)?.scrollIntoView({ behavior: 'smooth', block: 'start' }); return; }
-            onPick(c.key);
-          }}>
-            <b>{c.title}</b><span>{c.text}</span><i>{c.count}{c.empty ? '' : ' ›'}</i>
-          </button>
-        ))}
-      </div>
-    </section>
   );
 }
 
@@ -307,12 +282,12 @@ function TopicBrowser({ entries, onPick }: { entries: Entry[]; onPick: (t: strin
     return [...m.values()].sort((a, b) => b.n - a.n || a.label.localeCompare(b.label));
   }, [entries]);
   if (!topics.length) return null;
-  const shown = all ? topics : topics.slice(0, 24);
+  const shown = all ? topics : topics.slice(0, 10);
   return (
     <section className="dir-topics" id="dir-topics" aria-label="Browse by topic">
       <div className="dir-topics-head"><h2>Browse by topic</h2><span className="muted">{topics.length} topics</span></div>
-      <ul>{shown.map((t) => <li key={t.label}><button type="button" onClick={() => onPick(t.label)}>{t.label} <span>{t.n}</span></button></li>)}</ul>
-      {topics.length > 24 && <button type="button" className="link-btn" onClick={() => setAll(!all)}>{all ? 'Show fewer topics ‹' : `Show all ${topics.length} topics ›`}</button>}
+      <ul>{shown.map((t) => <li key={t.label}><button type="button" onClick={() => onPick(t.label)}>{t.label.charAt(0).toUpperCase() + t.label.slice(1)} <span>{t.n}</span></button></li>)}</ul>
+      {topics.length > 10 && <button type="button" className="link-btn" onClick={() => setAll(!all)}>{all ? 'Show fewer topics ‹' : `Show all ${topics.length} topics ›`}</button>}
     </section>
   );
 }
@@ -320,7 +295,7 @@ function TopicBrowser({ entries, onPick }: { entries: Entry[]; onPick: (t: strin
 /** Scrolls to the faculty list once the filtered results have rendered (below the sticky menu). */
 function scrollToResults() {
   requestAnimationFrame(() => requestAnimationFrame(() => {
-    const el = document.querySelector('.dir-results');
+    const el = document.querySelector('#dir-showing');
     if (!el) return;
     const menu = document.querySelector('.nav') as HTMLElement | null;
     window.scrollTo({ top: el.getBoundingClientRect().top + window.scrollY - (menu?.offsetHeight ?? 0) - 16, behavior: 'smooth' });

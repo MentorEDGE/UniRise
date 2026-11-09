@@ -75,7 +75,7 @@ export function ActivitySpark({ data, height = 34, label = true }: { data: YearA
         <line x1="0" x2={w} y1={height - 0.5} y2={height - 0.5} className="spark-base" />
         {data.map((d, i) => {
           const h = d.total ? Math.max(2, (d.total / max) * (height - 2)) : 0;
-          return <rect key={d.year} x={i * (bw + gap)} y={height - 1 - h} width={bw} height={h} rx={1} className={i === data.length - 1 ? 'spark-bar now' : 'spark-bar'} />;
+          return <rect key={d.year} x={i * (bw + gap)} y={height - 1 - h} width={bw} height={h} rx={1} className={i === (hover ?? data.length - 1) ? 'spark-bar now' : 'spark-bar'} />;
         })}
         {data.map((d, i) => (
           <rect key={`hit-${d.year}`} x={i * (bw + gap) - gap / 2} y={0} width={bw + gap} height={height} className="spark-hit" onMouseEnter={() => setHover(i)} />
