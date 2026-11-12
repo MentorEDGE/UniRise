@@ -35,12 +35,12 @@ interface ApprovalQueue { records: Record<EntityKind, AnyRecord[]>; profiles: Pr
 const decisionOf = (h: HistoryItem[]) => [...h].reverse().find((x) => DECISION_ACTIONS.includes(x.action));
 /** The stages of the review workflow, one tab each. */
 type View = 'awaiting' | 'review' | 'returned' | 'approved' | 'rejected';
-const VIEWS: { id: View; label: string; hint: string }[] = [
-  { id: 'awaiting', label: 'New and resubmitted', hint: 'Oldest first. Open a submission to start its review: the faculty member then sees it as Under Review.' },
-  { id: 'review', label: 'Under review', hint: 'Opened and not yet decided. Approve it, request changes or reject it.' },
-  { id: 'returned', label: 'Changes requested', hint: 'Returned to the faculty member with your comment; they come back here as Resubmitted.' },
-  { id: 'approved', label: 'Approved', hint: 'Newest first. Only approved records reach Top-Level Management. Open an approved grant to record its funding outcome.' },
-  { id: 'rejected', label: 'Rejected', hint: 'Newest first, with the reason given to the faculty member.' },
+const VIEWS: { id: View; label: string }[] = [
+  { id: 'awaiting', label: 'New and resubmitted' },
+  { id: 'review', label: 'Under review' },
+  { id: 'returned', label: 'Changes requested' },
+  { id: 'approved', label: 'Approved' },
+  { id: 'rejected', label: 'Rejected' },
 ];
 
 /**
@@ -98,13 +98,12 @@ export function AdminApprovals() {
   const label = (x: QueueKind) => (x === 'profiles' ? 'Profile updates' : ENTITY_LABEL[x]);
   return (
     <>
-      <PageTitle sub="Review faculty submissions: approve them, request changes or reject them. Only approved records reach Top-Level Management.">Approvals</PageTitle>
+      <PageTitle>Approvals</PageTitle>
       <Panel size="wide">
         {queue.error && <Alert kind="error">{queue.error}</Alert>}
         <Tabs value={view} onChange={(v) => { setView(v); setKind(''); }} tabs={VIEWS.map((v) => ({ id: v.id, label: count(v.id) != null ? `${v.label} (${count(v.id)})` : v.label }))} />
         <div className="filters" style={{ marginBottom: 10 }}>
           <Field label="Department"><Select value={dept} onChange={setDept} options={full.settings.departments} placeholder="All departments" /></Field>
-          <span className="muted" style={{ paddingBottom: 6 }}>{VIEWS.find((v) => v.id === view)!.hint}</span>
         </div>
         {counts && <Tabs value={k} onChange={setKind} tabs={([...KINDS, 'profiles'] as QueueKind[]).map((x) => ({ id: x, label: `${label(x)} (${counts[x]})` }))} />}
         {k === 'profiles'
@@ -416,7 +415,6 @@ export function AdminAudit() {
           { key: 'inst', label: 'Institution', value: (r) => r.institution_id ?? '' },
           { key: 'detail', label: 'Detail', value: (r) => r.detail },
         ]} />
-        <p className="note">Sign-ins by the Office of Research, failed admin sign-ins, access decisions, account and institution changes. Times are UTC.</p>
       </Panel>
     </>
   );

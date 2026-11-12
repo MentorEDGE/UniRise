@@ -106,7 +106,7 @@ export function RecordView({ kind }: { kind: EntityKind }) {
       <Panel size="wide">
         <DataTable rows={tableRows} columns={listColumns(db, kind, { showOwner: !isFaculty || scope === 'all' }).filter((c) => !(isMgmt && c.key === 'status'))} rowKey={(r) => r.id}
           onRowClick={(r) => setOpenId(r.id)} exportName={cfg.plural} empty={`No ${cfg.plural.toLowerCase()} match the search.`} />
-        <p className="note">{isFaculty ? 'Click a row to see the full details and the Office of Research’s comments, edit a draft or submit it for approval.' : user?.role === 'office' ? 'All entries, in every status. Review submissions under Approval.' : 'Approved entries only (verified by the Office of Research). Click a row to see the full details.'}</p>
+        {user?.role !== 'office' && <p className="note">{isFaculty ? 'Click a row to see the full details and the Office of Research’s comments, edit a draft or submit it for approval.' : 'Approved entries only (verified by the Office of Research). Click a row to see the full details.'}</p>}
       </Panel>
       {openId && <RecordDetail kind={kind} id={openId} onClose={() => setOpenId(null)} />}
     </>
