@@ -2,7 +2,7 @@ import { useMemo, useState } from 'react';
 import { Link, useParams } from 'react-router-dom';
 import { BarCard } from '../../components/charts';
 import { Alert, DataTable, PageTitle, Panel, StatusBadge, Tabs } from '../../components/ui';
-import { dateOf, facultyStats, fmtDate, lakh, trend } from '../../lib/analytics';
+import { dateOf, facultyStats, fmtDate, lakh, trend, plural } from '../../lib/analytics';
 import { listColumns } from '../../lib/entities';
 import { creditedFaculty, useStore } from '../../lib/store';
 import type { AnyRecord, EntityKind } from '../../lib/types';
@@ -39,7 +39,7 @@ export function Faculty360({ facultyId: given }: { facultyId?: string }) {
   const t = db.settings.targets;
   return (
     <>
-      <PageTitle>{isMgmt ? 'Faculty Performance' : 'My Performance'}</PageTitle>
+      <PageTitle sub={isMgmt ? `${f.title} ${f.name} · approved records only` : 'Your approved records, score and targets, year by year.'}>{isMgmt ? 'Faculty Performance' : 'My Performance'}</PageTitle>
       <Panel size="wide">
         <div style={{ display: 'flex', justifyContent: 'space-between', gap: 10, flexWrap: 'wrap' }}>
           <div>
@@ -59,12 +59,12 @@ export function Faculty360({ facultyId: given }: { facultyId?: string }) {
           <div className="tiles">
             <Tile label="Score" value={s.score} sub={isMgmt ? `Dept. avg ${avg('score').toFixed(1)}` : 'Weighted score'} />
             <Tile label="Publications" value={s.publications} sub={`Target ${t.publicationsPerFaculty}${dept(avg('publications').toFixed(1))}`} />
-            <Tile label="Q1 + Q2" value={s.q1q2} sub={`${s.scopusWos} Scopus/WoS indexed`} />
+            <Tile label="Q1 + Q2" value={s.q1q2} sub={`${s.scopusWos} Scopus / WoS indexed`} />
             <Tile label="Grants" value={`${s.grantsApplied} / ${s.grantsSanctioned}`} sub={`applied / sanctioned · ${lakh(s.sanctionedAmount)} share`} />
             <Tile label="FDP hours" value={s.fdpHours} sub={`Target ${t.fdpHoursPerFaculty}${dept(avg('fdpHours').toFixed(0))}`} />
             <Tile label="Conferences" value={s.conferences} sub={`${s.confPresented} presented`} />
             <Tile label="Honours & Awards" value={s.awards} sub="approved" />
-            <Tile label="Intellectual Property" value={s.ipr} sub={`${s.patents} patents · approved`} />
+            <Tile label="Intellectual Property" value={s.ipr} sub={`${plural(s.patents, 'patent')} · approved`} />
             <Tile label="Profile" value={`${s.biodata}%`} sub="complete" />
           </div>
         </div>
@@ -76,7 +76,7 @@ export function Faculty360({ facultyId: given }: { facultyId?: string }) {
       </div>
       <Panel size="wide" title={`Records${ay === 'all' ? '' : ` in AY ${ay}`}`}>
         <Tabs value={tab} onChange={setTab} tabs={kinds.map((k) => ({ id: k, label: ENTITY_LABEL[k] }))} />
-        <DataTable rows={records} columns={listColumns(db, tab, { showOwner: false }).map((c) => (c.key === 'status' ? { ...c, render: (r: AnyRecord) => <StatusBadge status={r.status} /> } : c))}
+        <DataTable rows={records} columns={listColumns(db, tab, { showOwner: false }).filter((c) => !(user?.role === 'management' && c.key === 'status')).map((c) => (c.key === 'status' ? { ...c, render: (r: AnyRecord) => <StatusBadge status={r.status} history={r.history} /> } : c))}
           rowKey={(r) => r.id} onRowClick={(r) => setOpenId(r.id)} exportName={`${f.id}_${tab}`} empty={isMgmt ? 'No records in this period.' : 'No approved records in this period.'} />
       </Panel>
       {openId && <RecordDetail kind={tab} id={openId} onClose={() => setOpenId(null)} />}

@@ -1,7 +1,7 @@
 import { useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { Attainment, PageTitle, Panel, StatusBadge } from '../../components/ui';
-import { academicYearOf, academicYearRange, biodataCompleteness, facultyStats, fmtDate } from '../../lib/analytics';
+import { academicYearOf, academicYearRange, biodataCompleteness, facultyStats, fmtDate, plural } from '../../lib/analytics';
 import { ENTITIES } from '../../lib/entities';
 import { creditedFaculty, useStore } from '../../lib/store';
 import type { AnyRecord, EntityKind } from '../../lib/types';
@@ -27,7 +27,7 @@ export function FacultyHome() {
 
   return (
     <>
-      <PageTitle>Home</PageTitle>
+      <PageTitle sub="Your approved activity this academic year, what needs your attention, and notices from the Office of Research.">My Workspace</PageTitle>
       <Panel size="wide">
         <div style={{ display: 'flex', justifyContent: 'space-between', flexWrap: 'wrap', gap: 10 }}>
           <div><b>Welcome, {me.title} {me.name}</b><div className="muted">{me.designation}, {me.department} · {me.id}</div></div>
@@ -45,12 +45,12 @@ export function FacultyHome() {
       {s && (
         <div style={{ maxWidth: 1180, margin: '0 auto 14px' }}>
           <div className="tiles">
-            <Tile label={`Publications AY ${ay}`} value={s.publications} sub={<Attainment value={s.publications} target={t.publicationsPerFaculty} />} to="/publications" />
+            <Tile label="Publications" value={s.publications} sub={<Attainment value={s.publications} target={t.publicationsPerFaculty} />} to="/publications" />
             <Tile label="FDP hours" value={s.fdpHours} sub={<Attainment value={s.fdpHours} target={t.fdpHoursPerFaculty} />} to="/fdp" />
             <Tile label="Conferences" value={s.conferences} sub={<Attainment value={s.conferences} target={t.conferencesPerFaculty} />} to="/conferences" />
             <Tile label="Grant proposals" value={s.grantsApplied} sub={`${s.grantsSanctioned} sanctioned`} to="/grants" />
             <Tile label="Honours & Awards" value={s.awards} sub="Approved this year" to="/awards" />
-            <Tile label="Intellectual Property" value={s.ipr} sub={`${s.patents} patent${s.patents === 1 ? '' : 's'} · approved this year`} to="/ipr" />
+            <Tile label="Intellectual Property" value={s.ipr} sub={`${plural(s.patents, 'patent')} · approved this year`} to="/ipr" />
             <Tile label="Score" value={s.score} sub="See My Performance" to="/performance" />
             <Tile label="Profile" value={`${bio}%`} sub={<Attainment value={bio} target={100} />} to="/biodata/edit" />
           </div>
@@ -59,12 +59,12 @@ export function FacultyHome() {
       )}
       <div className="cards">
         <section className="card">
-          <h3>Needs your action ({action.length})</h3><p className="sub">Drafts to submit and entries sent back for rework</p>
+          <h3>Needs your action ({action.length})</h3><p className="sub">Drafts to submit and entries the Office of Research asked you to change</p>
           {action.length ? (
             <table className="tbl"><tbody>{action.map(({ k, r }) => (
               <tr key={r.id} style={{ cursor: 'pointer' }} onClick={() => setOpen({ k, id: r.id })}>
-                <td><StatusBadge status={r.status} /></td><td>{ENTITY_LABEL[k]}</td><td className="title-cell">{ENTITIES[k].title(r)}
-                  {r.status === 'Rework' && <div className="muted">“{[...r.history].reverse().find((h) => h.remark)?.remark}”</div>}</td>
+                <td><StatusBadge status={r.status} history={r.history} /></td><td>{ENTITY_LABEL[k]}</td><td className="title-cell">{ENTITIES[k].title(r)}
+                  {r.status === 'Rework' && <div className="muted">“{[...r.history].reverse().find((h) => h.remark && h.action === 'Returned for correction')?.remark}”</div>}</td>
               </tr>
             ))}</tbody></table>
           ) : <p className="muted">Nothing needs your action.</p>}
@@ -80,7 +80,7 @@ export function FacultyHome() {
           <table className="tbl">
             <thead><tr><th>Type</th><th>ID</th><th>Title</th><th>Status</th><th>Updated</th></tr></thead>
             <tbody>{recent.map(({ k, r }) => (
-              <tr key={r.id} style={{ cursor: 'pointer' }} onClick={() => setOpen({ k, id: r.id })}><td>{ENTITY_LABEL[k]}</td><td>{r.id}</td><td className="title-cell">{ENTITIES[k].title(r)}</td><td><StatusBadge status={r.status} /></td><td>{fmtDate(r.updatedAt)}</td></tr>
+              <tr key={r.id} style={{ cursor: 'pointer' }} onClick={() => setOpen({ k, id: r.id })}><td>{ENTITY_LABEL[k]}</td><td>{r.id}</td><td className="title-cell">{ENTITIES[k].title(r)}</td><td><StatusBadge status={r.status} history={r.history} /></td><td>{fmtDate(r.updatedAt)}</td></tr>
             ))}</tbody>
           </table>
         </section>

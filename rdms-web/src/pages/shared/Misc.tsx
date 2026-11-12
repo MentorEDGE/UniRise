@@ -19,7 +19,7 @@ export function Account() {
   };
   return (
     <>
-      <PageTitle>Account</PageTitle>
+      <PageTitle sub="Your account details and password. Changing your password signs you out on every other device.">Account & Password</PageTitle>
       <Panel title="Your account">
         <dl className="kv">
           <dt>Name</dt><dd>{user?.name}</dd>
@@ -27,7 +27,7 @@ export function Account() {
           <dt>Role</dt><dd>{user?.role === 'management' ? 'Top-Level Management' : user?.role === 'faculty' ? 'Faculty' : 'Office of Research'}</dd>
           {institution && <><dt>Institution</dt><dd>{institution.name}</dd></>}
         </dl>
-        <p className="note">Your role and institution are assigned by the UniRise platform administrator. Ask them if either is wrong.</p>
+        <p className="note">Your role and institution are set by your institution’s Office of Research. Ask them if either is wrong.</p>
       </Panel>
       <Panel title="Change password">
         {error && <Alert kind="error">{error}</Alert>}

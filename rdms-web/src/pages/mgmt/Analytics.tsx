@@ -4,7 +4,7 @@ import { BarCard, LineCard, RankList, useQuartileColors } from '../../components
 import { Attainment, DataTable, Field, Input, PageTitle, Panel } from '../../components/ui';
 import type { Column } from '../../components/ui';
 import {
-  dateOf, facultyStats, fmtDate, lakh, pct, trend, uniqueCounts,
+  dateOf, facultyStats, fmtDate, lakh, pct, plural, trend, uniqueCounts,
 } from '../../lib/analytics';
 import type { FacultyStats } from '../../lib/analytics';
 import { useStore } from '../../lib/store';
@@ -58,21 +58,21 @@ export function InstitutionAnalytics() {
 
   return (
     <>
-      <PageTitle>Institution Analytics</PageTitle>
+      <PageTitle sub="Approved research activity across the institution, for the year and department you choose.">Institution Overview</PageTitle>
       <Panel size="wide">{bar}</Panel>
       <div style={{ maxWidth: 1180, margin: '0 auto 14px' }}>
         <div className="tiles">
           <Tile label="Faculty" value={stats.length} sub={filter.department || 'All departments'} to="/faculty" />
           <Tile label="Publications" value={u.pubs.length} sub={`${nf(u.pubs.length / n)} per faculty`} to="/reports/publications" />
-          <Tile label="Q1 + Q2 journals" value={`${pct(q12, journals.length)}%`} sub={`${q12} of ${journals.length} journal articles`} />
+          <Tile label="Q1 + Q2 journals" value={`${pct(q12, journals.length)}%`} sub={`${q12} of ${plural(journals.length, 'journal article')}`} />
           <Tile label="Grant proposals" value={u.grants.length} sub={`${u.sanctioned.length} sanctioned · ${pct(u.sanctioned.length, u.grants.length)}% success`} to="/grants" />
           <Tile label="Sanctioned funding" value={lakh(u.sanctionedAmount)} sub={`${lakh(u.receivedAmount)} received`} />
-          <Tile label="Seed money" value={lakh(u.seedAmount)} sub={`${u.seed.length} proposals approved`} />
-          <Tile label="FDP hours" value={nf(u.fdpHours)} sub={`${u.fdps.length} programmes · ${nf(u.fdpHours / n)} h per faculty`} to="/fdp" />
+          <Tile label="Seed money" value={lakh(u.seedAmount)} sub={`${plural(u.seed.length, 'proposal')} approved`} />
+          <Tile label="FDP hours" value={nf(u.fdpHours)} sub={`${plural(u.fdps.length, 'programme')} · ${nf(u.fdpHours / n)} h per faculty`} to="/fdp" />
           <Tile label="Conferences" value={u.confs.length} sub={`${u.confs.filter((c) => c.level === 'International').length} international`} to="/conferences" />
           <Tile label="Honours & Awards" value={u.awards.length} sub={`${u.awards.filter((a) => a.level === 'International').length} international · ${u.awards.filter((a) => a.level === 'National').length} national`} to="/reports/awards?r=awd-level" />
-          <Tile label="Intellectual Property" value={u.ipr.length} sub={`${u.ipr.filter((x) => x.ipType === 'Patent').length} patents · ${u.ipr.filter((x) => x.ipType !== 'Patent').length} copyrights / trademarks`} to="/ipr" />
-          <Tile label="Collaboration" value={`${pct(intl, u.pubs.length)}%`} sub={`external co-authors · ${pct(student, u.pubs.length)}% with students`} />
+          <Tile label="Intellectual Property" value={u.ipr.length} sub={`${plural(u.ipr.filter((x) => x.ipType === 'Patent').length, 'patent')} · ${plural(u.ipr.filter((x) => x.ipType !== 'Patent').length, 'other right')}`} to="/ipr" />
+          <Tile label="Collaboration" value={`${pct(intl, u.pubs.length)}%`} sub={`with external co-authors · ${pct(student, u.pubs.length)}% with students`} />
         </div>
       </div>
       <div className="cards">
@@ -159,7 +159,7 @@ export function DepartmentAnalytics() {
   ];
   return (
     <>
-      <PageTitle>Department Comparison</PageTitle>
+      <PageTitle sub="Departments side by side, per faculty member, from approved records.">Department Comparison</PageTitle>
       <Panel size="wide">{bar}</Panel>
       <Panel size="wide" title="Department summary">
         <DataTable rows={rows} columns={cols} rowKey={(r) => r.dept} exportName="department_comparison" pageSize={20} />
@@ -189,21 +189,22 @@ export function DepartmentAnalytics() {
 
 // ---------------- Faculty performance ----------------
 
-export function facultyColumns(targets: { publicationsPerFaculty: number; fdpHoursPerFaculty: number }): Column<FacultyStats>[] {
+export function facultyColumns(targets: { publicationsPerFaculty: number; fdpHoursPerFaculty: number }, departments: string[] = []): Column<FacultyStats>[] {
+  const short = shortNames(departments);
   return [
-    { key: 'rank', label: '#', value: (r) => r.score, render: () => null },
-    { key: 'name', label: 'Faculty', value: (r) => r.faculty.name, render: (r) => <Link to={`/faculty/${r.faculty.id}`}>{r.faculty.title} {r.faculty.name}</Link> },
-    { key: 'id', label: 'Emp. Code', value: (r) => r.faculty.id },
-    { key: 'dept', label: 'Department', value: (r) => r.faculty.department },
-    { key: 'desig', label: 'Designation', value: (r) => r.faculty.designation },
-    { key: 'pubs', label: 'Pubs', value: (r) => r.publications, num: true, render: (r) => <span style={{ color: r.publications >= targets.publicationsPerFaculty ? 'var(--ok)' : undefined }}>{r.publications}</span> },
+    { key: 'rank', label: '#', value: (r) => r.score, render: () => null, className: 'rank-cell' },
+    // Name on one line, with employee code and designation underneath: the table fits without wrapping names.
+    { key: 'name', label: 'Faculty', value: (r) => `${r.faculty.title} ${r.faculty.name} (${r.faculty.id}, ${r.faculty.designation})`, className: 'person-cell',
+      render: (r) => <><Link to={`/faculty/${r.faculty.id}`}>{r.faculty.title} {r.faculty.name}</Link><small>{r.faculty.id} · {r.faculty.designation}</small></> },
+    { key: 'dept', label: 'Dept.', value: (r) => r.faculty.department, render: (r) => <span title={r.faculty.department}>{r.faculty.department.length <= 14 ? r.faculty.department : short[r.faculty.department] ?? r.faculty.department}</span>, className: 'nowrap' },
+    { key: 'pubs', label: 'Pubs', value: (r) => r.publications, num: true, render: (r) => <span className={r.publications >= targets.publicationsPerFaculty ? 'meets' : undefined}>{r.publications}</span> },
     { key: 'q12', label: 'Q1+Q2', value: (r) => r.q1q2, num: true },
-    { key: 'grants', label: 'Grants (sanct.)', value: (r) => r.grantsApplied, render: (r) => `${r.grantsApplied} (${r.grantsSanctioned})`, num: true },
-    { key: 'amount', label: 'Funding share', value: (r) => Math.round(r.sanctionedAmount), render: (r) => (r.sanctionedAmount ? lakh(r.sanctionedAmount) : '—'), num: true },
-    { key: 'fdp', label: 'FDP h', value: (r) => r.fdpHours, num: true, render: (r) => <span style={{ color: r.fdpHours >= targets.fdpHoursPerFaculty ? 'var(--ok)' : undefined }}>{r.fdpHours}</span> },
+    { key: 'grants', label: 'Grants', value: (r) => r.grantsApplied, render: (r) => <span title={`${r.grantsApplied} applied, ${r.grantsSanctioned} sanctioned`}>{r.grantsApplied}{r.grantsSanctioned ? <small> ({r.grantsSanctioned})</small> : null}</span>, num: true },
+    { key: 'amount', label: 'Funding', value: (r) => Math.round(r.sanctionedAmount), render: (r) => (r.sanctionedAmount ? lakh(r.sanctionedAmount) : '—'), num: true, className: 'nowrap' },
+    { key: 'fdp', label: 'FDP h', value: (r) => r.fdpHours, num: true, render: (r) => <span className={r.fdpHours >= targets.fdpHoursPerFaculty ? 'meets' : undefined}>{r.fdpHours}</span> },
     { key: 'conf', label: 'Conf.', value: (r) => r.conferences, num: true },
     { key: 'awards', label: 'Awards', value: (r) => r.awards, num: true },
-    { key: 'ipr', label: 'IP', value: (r) => r.ipr, num: true, render: (r) => (r.ipr ? `${r.ipr}${r.patents ? ` (${r.patents} pat.)` : ''}` : 0) },
+    { key: 'ipr', label: 'IP', value: (r) => r.ipr, num: true, render: (r) => <span title={r.patents ? `${plural(r.patents, 'patent')}` : undefined}>{r.ipr}</span> },
     { key: 'score', label: 'Score', value: (r) => r.score, num: true, render: (r) => <b>{nf(r.score)}</b> },
   ];
 }
@@ -220,7 +221,7 @@ export function FacultyPerformance() {
     if (!t) return all;
     return all.filter((s) => `${s.faculty.name} ${s.faculty.id} ${s.faculty.designation} ${db.biodata.find((b) => b.facultyId === s.faculty.id)?.expertise ?? ''}`.toLowerCase().includes(t));
   }, [all, q, db]);
-  const cols = facultyColumns(db.settings.targets);
+  const cols = facultyColumns(db.settings.targets, db.settings.departments);
   cols[0].render = (r) => stats.indexOf(r) + 1;
   const avg = (xs: FacultyStats[], k: 'score' | 'publications' | 'fdpHours' | 'conferences') => Math.round((xs.reduce((a, x) => a + x[k], 0) / (xs.length || 1)) * 10) / 10;
   const buckets = [0, 10, 20, 30, 40, 60].map((lo, i, a) => ({ range: i === a.length - 1 ? `${lo}+` : `${lo}–${a[i + 1] - 1}`, faculty: stats.filter((s) => s.score >= lo && (i === a.length - 1 || s.score < a[i + 1])).length }));
@@ -236,7 +237,7 @@ export function FacultyPerformance() {
   const tabs: [typeof view, string][] = [['dept', 'Department comparison'], ['top', 'Top faculty'], ['year', 'Output by year'], ['dist', 'Score distribution'], ['desig', 'By designation'], ['sdg', 'SDG contribution']];
   return (
     <>
-      <PageTitle>Faculty Performance</PageTitle>
+      <PageTitle sub="Each faculty member's approved activity and weighted score, with department comparisons.">Faculty Performance</PageTitle>
       <Panel size="wide" title="Search">
         <div style={{ display: 'flex', gap: 16, flexWrap: 'wrap', alignItems: 'end' }}>
           {bar}
@@ -263,7 +264,7 @@ export function FacultyPerformance() {
       </section>
       <Panel size="wide" title="Faculty ranking by weighted score">
         <DataTable rows={stats} columns={cols} rowKey={(r) => r.faculty.id} exportName="faculty_performance" pageSize={20} />
-        <p className="note">Green values meet the per-faculty target. Co-authored publications and shared grants credit each internal author; funding is split by investigator share. Click a name for the full profile.</p>
+        <p className="note">Green values meet the per-faculty target. Grants show proposals, with sanctioned ones in brackets; funding is each person's investigator share. Co-authored work credits every internal author. Click a name for the full profile.</p>
       </Panel>
     </>
   );
@@ -314,7 +315,7 @@ export function ParticipationAnalytics() {
 
   return (
     <>
-      <PageTitle>Participation & Compliance</PageTitle>
+      <PageTitle sub="How many faculty meet each annual target, and whose profiles are incomplete.">Participation & Compliance</PageTitle>
       <Panel size="wide">{bar}</Panel>
       <div className="cards">
         <section className="card span-all">

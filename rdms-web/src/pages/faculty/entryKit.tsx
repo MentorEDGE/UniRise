@@ -1,6 +1,6 @@
 import { useMemo, useState } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
-import { Alert, NumberInput, Select, useToast } from '../../components/ui';
+import { Alert, NumberInput, Select, TextArea, useToast } from '../../components/ui';
 import { ENTITIES } from '../../lib/entities';
 import { emptyBase, getDB, isEditable, saveRecord, useStore } from '../../lib/store';
 import type { AnyRecord, Author, AuthorKind, EntityKind, Investigator } from '../../lib/types';
@@ -27,6 +27,7 @@ export function useEntry<T extends AnyRecord>(kind: EntityKind, blank: (facultyI
   const [rec, setRec] = useState<T>(initial);
   const [errors, setErrors] = useState<Errors>({});
   const [failure, setFailure] = useState('');
+  const [note, setNote] = useState(''); // reply to the Office of Research, sent with a resubmission
 
   const existing = id ? (db[kind] as AnyRecord[]).find((r) => r.id === id) : undefined;
   let blocked = '';
@@ -43,27 +44,32 @@ export function useEntry<T extends AnyRecord>(kind: EntityKind, blank: (facultyI
     if (Object.keys(errs).length) { setFailure('Please correct the highlighted fields.'); window.scrollTo({ top: 0, behavior: 'smooth' }); return; }
     setBusy(true);
     try {
-      const savedId = await saveRecord(kind, rec, submit);
-      toast(submit ? `${ENTITIES[kind].label} ${savedId} submitted for approval.` : `Draft ${savedId} saved.`);
+      const savedId = await saveRecord(kind, rec, submit, submit ? note : '');
+      toast(submit ? `${ENTITIES[kind].label} ${savedId} ${existing?.status === 'Rework' ? 'resubmitted' : 'submitted for approval'}.` : `Draft ${savedId} saved.`);
       nav(ENTITIES[kind].viewPath);
     } catch (e) { setFailure((e as Error).message); window.scrollTo({ top: 0, behavior: 'smooth' }); } finally { setBusy(false); }
   };
   const banner = (
     <>
       {failure && <Alert kind="error">{failure}</Alert>}
-      {existing?.status === 'Rework' && <Alert kind="info">Sent back for rework: <b>{[...existing.history].reverse().find((h) => h.remark)?.remark}</b></Alert>}
+      {existing?.status === 'Rework' && (
+        <Alert kind="info">
+          Changes requested by the Office of Research: <b>{[...existing.history].reverse().find((h) => h.remark && (h.action === 'Returned for correction' || h.action === 'Sent for rework'))?.remark}</b>
+          <label style={{ display: 'block', marginTop: 8 }}>Your reply (optional, sent when you resubmit)<TextArea value={note} onChange={setNote} /></label>
+        </Alert>
+      )}
     </>
   );
-  return { rec, update, setRec, errors, save, blocked, banner, isNew: !existing };
+  return { rec, update, setRec, errors, save, blocked, banner, isNew: !existing, resubmit: existing?.status === 'Rework' };
 }
 
-export function SaveBar({ onSave, isNew }: { onSave: (submit: boolean) => void; isNew: boolean }) {
+export function SaveBar({ onSave, isNew, resubmit }: { onSave: (submit: boolean) => void; isNew: boolean; resubmit?: boolean }) {
   const nav = useNavigate();
   return (
     <div className="btn-row">
       <button className="btn secondary" type="button" onClick={() => nav(-1)}>Cancel</button>
       <button className="btn" type="button" onClick={() => onSave(false)}>{isNew ? 'Save Draft' : 'Save'}</button>
-      <button className="btn ok" type="button" onClick={() => onSave(true)}>Submit for Approval</button>
+      <button className="btn ok" type="button" onClick={() => onSave(true)}>{resubmit ? 'Resubmit for Approval' : 'Submit for Approval'}</button>
     </div>
   );
 }

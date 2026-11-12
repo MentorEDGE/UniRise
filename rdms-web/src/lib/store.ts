@@ -94,7 +94,8 @@ const mutate = async <T = null>(method: string, path: string, body?: unknown) =>
   return r.result;
 };
 
-export const saveRecord = (kind: EntityKind, record: AnyRecord, submit: boolean) => mutate<string>('POST', `/records/${kind}`, { record, submit });
+/** `note` is the faculty member's reply to the Office of Research, sent with a (re)submission. */
+export const saveRecord = (kind: EntityKind, record: AnyRecord, submit: boolean, note = '') => mutate<string>('POST', `/records/${kind}`, { record: { ...record, note }, submit });
 export const deleteRecord = (kind: EntityKind, id: string) => mutate('DELETE', `/records/${kind}/${encodeURIComponent(id)}`);
 /** Office of Research: official details or deactivation of a faculty profile. */
 export const saveFaculty = (f: Faculty) => mutate('PUT', `/faculty/${encodeURIComponent(f.id)}`, f);

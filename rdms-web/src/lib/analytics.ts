@@ -142,7 +142,7 @@ export function facultyStats(db: DB, f: Filter): FacultyStats[] {
       for (const id of ids) {
         const s = map.get(id);
         if (!s) continue;
-        if (r.status === 'Submitted' && r.facultyId === id) s.pending++;
+        if ((r.status === 'Submitted' || r.status === 'UnderReview') && r.facultyId === id) s.pending++;
         if (r.status !== 'Approved') continue;
         if (d > s.lastActivity) s.lastActivity = d;
         if (!inRange(d, f)) continue;
@@ -215,6 +215,8 @@ export const fmtDate = (iso: string) => {
   return `${d}/${m}/${y}`;
 };
 export const pct = (a: number, b: number) => (b ? Math.round((a / b) * 100) : 0);
+/** "1 patent", "2 patents": a count with its noun in the right number. */
+export const plural = (n: number, one: string, many = `${one}s`) => `${n.toLocaleString('en-IN')} ${n === 1 ? one : many}`;
 
 // ---------- trends ----------
 

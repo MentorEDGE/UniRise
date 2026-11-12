@@ -145,6 +145,7 @@ const FAQS: [string, ReactNode][] = [
   ['What can institutional leadership see?', 'Leadership sees approved records across the institution: faculty profiles, research output, funding, collaboration networks, SDG alignment and department comparisons. It is a read-only view, so the record of research stays exactly as verified.'],
   ['Is our data kept separate from other institutions?', 'Yes. Each institution has its own database. Accounts belong to one institution, and nothing from one institution is visible to another.'],
   ['Does UniRise help with accreditation and rankings?', 'UniRise keeps a complete, verified record of research activity and produces annual activity reports, department and faculty-wise reports, and exports that institutions draw on when preparing accreditation and ranking submissions.'],
+  ['Can UniRise be tailored to our institution’s needs?', 'Yes. UniRise covers the research activities most institutions track, but every institution works a little differently. If you need something that isn’t available yet, such as a new type of record, a report or an extra step in your approval process, talk to our team. We’ll review your requirements and look into adding it.'],
   ['How to get started?', <>Talk to our team. We set up your institution and its Office of Research, who then create accounts for faculty and leadership. There is no public sign-up. <Link to="/talk-to-our-team">Start the conversation</Link>.</>],
 ];
 

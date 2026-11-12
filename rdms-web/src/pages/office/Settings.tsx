@@ -22,7 +22,7 @@ export function InstitutionSettings() {
   const inUse = (d: string) => db.faculty.some((f) => f.department === d);
   return (
     <>
-      <PageTitle>Institution & Departments</PageTitle>
+      <PageTitle sub="The institution's name and its departments, as shown across UniRise.">Institution & Departments</PageTitle>
       <Panel title="Institution" size="wide">
         {error && <Alert kind="error">{error}</Alert>}
         <div className="grid">
@@ -50,13 +50,14 @@ export function InstitutionSettings() {
   );
 }
 
-const WEIGHT_LABELS: [keyof Weights, string][] = [
-  ['q1', 'Journal – Q1'], ['q2', 'Journal – Q2'], ['q3', 'Journal – Q3'], ['q4', 'Journal – Q4'], ['otherJournal', 'Journal – unranked'], ['book', 'Book'], ['chapter', 'Book chapter'],
-  ['confPaper', 'Conference paper'], ['techReport', 'Technical report'], ['grantSanctioned', 'Grant sanctioned (base)'], ['grantPerLakh', 'Grant – per ₹1 lakh (max +20)'], ['seedMoney', 'Seed money approved'],
-  ['fdpAttended', 'FDP attended'], ['fdpOrganised', 'FDP organised'], ['fdpResource', 'FDP resource person'], ['confPresented', 'Conference – presented'], ['confInvited', 'Conference – invited talk'],
-  ['confChair', 'Conference – session chair'], ['confAttended', 'Conference – attended'], ['confOrganised', 'Conference – organised'],
-  ['awardInternational', 'Honour / award – international'], ['awardNational', 'Honour / award – national'], ['awardOther', 'Honour / award – state / institutional'],
-  ['patentGranted', 'Patent – granted'], ['patentFiled', 'Patent – filed / published'], ['design', 'Design – registered'], ['copyright', 'Copyright – registered'], ['trademark', 'Trademark – registered'], ['ipOther', 'Other IP – granted / registered'],
+/** Score weights, grouped the way the activities appear across UniRise. */
+const WEIGHT_GROUPS: { title: string; items: [keyof Weights, string][] }[] = [
+  { title: 'Publications', items: [['q1', 'Journal – Q1'], ['q2', 'Journal – Q2'], ['q3', 'Journal – Q3'], ['q4', 'Journal – Q4'], ['otherJournal', 'Journal – unranked'], ['book', 'Book'], ['chapter', 'Book chapter'], ['confPaper', 'Conference paper'], ['techReport', 'Technical report']] },
+  { title: 'Grants & seed money', items: [['grantSanctioned', 'Grant sanctioned (base)'], ['grantPerLakh', 'Per ₹1 lakh sanctioned (max +20)'], ['seedMoney', 'Seed money approved']] },
+  { title: 'Faculty development programmes', items: [['fdpAttended', 'Attended'], ['fdpOrganised', 'Organised'], ['fdpResource', 'Resource person']] },
+  { title: 'Conferences', items: [['confPresented', 'Paper / poster presented'], ['confInvited', 'Invited talk / keynote'], ['confChair', 'Session chair'], ['confAttended', 'Attended'], ['confOrganised', 'Organised']] },
+  { title: 'Honours & awards', items: [['awardInternational', 'International'], ['awardNational', 'National'], ['awardOther', 'State / institutional']] },
+  { title: 'Intellectual property', items: [['patentGranted', 'Patent – granted'], ['patentFiled', 'Patent – filed / published'], ['design', 'Design – registered'], ['copyright', 'Copyright – registered'], ['trademark', 'Trademark – registered'], ['ipOther', 'Other IP – granted / registered']] },
 ];
 const TARGET_LABELS: [keyof Targets, string][] = [['publicationsPerFaculty', 'Publications per faculty'], ['fdpHoursPerFaculty', 'FDP hours per faculty'], ['conferencesPerFaculty', 'Conferences per faculty'], ['grantAppliedPerFaculty', 'Grant proposals per faculty']];
 
@@ -64,14 +65,19 @@ export function TargetSettings() {
   const { s, setS, save, error } = useSettingsDraft();
   return (
     <>
-      <PageTitle>Targets & Scoring</PageTitle>
+      <PageTitle sub="Annual targets per faculty member, and the points each kind of approved activity earns.">Targets & Scoring</PageTitle>
       <Panel title="Annual targets (per faculty, per academic year)" size="wide">
         {error && <Alert kind="error">{error}</Alert>}
         <div className="grid">{TARGET_LABELS.map(([k, l]) => <Field key={k} label={l}><NumberInput value={s.targets[k]} min={0} step="0.5" onChange={(v) => setS({ ...s, targets: { ...s.targets, [k]: v } })} /></Field>)}</div>
       </Panel>
       <Panel title="Performance score weights" size="wide">
         <p className="note">Points for each approved entry. Co-authors each get the full points; sanctioned grant points are not split. Faculty can see their own score and their department average, not other people's scores.</p>
-        <div className="grid">{WEIGHT_LABELS.map(([k, l]) => <Field key={k} label={l}><NumberInput value={s.weights[k]} min={0} step="0.5" onChange={(v) => setS({ ...s, weights: { ...s.weights, [k]: v } })} /></Field>)}</div>
+        {WEIGHT_GROUPS.map((g) => (
+          <fieldset key={g.title} className="weight-group">
+            <legend>{g.title}</legend>
+            <div className="grid">{g.items.map(([k, l]) => <Field key={k} label={l}><NumberInput value={s.weights[k]} min={0} step="0.5" onChange={(v) => setS({ ...s, weights: { ...s.weights, [k]: v } })} /></Field>)}</div>
+          </fieldset>
+        ))}
         <div className="btn-row left"><button className="btn secondary sm" onClick={() => setS({ ...s, weights: { ...DEFAULT_WEIGHTS } })}>Restore default weights</button></div>
       </Panel>
       <div className="btn-row"><button className="btn ok" onClick={save}>Save targets & weights</button></div>
@@ -87,7 +93,7 @@ export function NoticeSettings() {
   const [error, setError] = useState('');
   return (
     <>
-      <PageTitle>Notices</PageTitle>
+      <PageTitle sub="Announcements shown to every faculty member on their workspace.">Notices</PageTitle>
       <Panel title="Post a notice to all faculty">
         {error && <Alert kind="error">{error}</Alert>}
         <Field label="Title" required><Input value={title} onChange={setTitle} /></Field>

@@ -5,8 +5,9 @@ import type { Column } from '../../components/ui';
 import { downloadCsv } from '../../lib/csv';
 import { academicYearRange, dateOf, facultyStats, fmtDate, inr, lakh, uniqueCounts } from '../../lib/analytics';
 import { REPORTS, runReport } from '../../lib/reports';
+import type { ReportDef } from '../../lib/reports';
 import { creditedFaculty, useStore } from '../../lib/store';
-import type { AnyRecord } from '../../lib/types';
+import type { AnyRecord, EntityKind } from '../../lib/types';
 import { STATUS_LABEL, STATUSES, ipTypeLabel } from '../../lib/types';
 import { useAnalyticsFilter } from '../mgmt/filters';
 import { listColumns } from '../../lib/entities';
@@ -14,14 +15,22 @@ import { RecordDetail } from './RecordDetail';
 import { focusMatcher, RecordInsights } from '../../components/insights';
 import type { Focus } from '../../components/insights';
 
-const GROUP_TITLE: Record<string, string> = { publications: 'Publication Reports', grants: 'Project Reports', fdps: 'FDP Reports', conferences: 'Conference Reports', awards: 'Honours & Awards Reports', ipr: 'Intellectual Property Reports' };
+const GROUP_TITLE: Record<string, string> = { publications: 'Publication Reports', grants: 'Grant Reports', fdps: 'FDP Reports', conferences: 'Conference Reports', awards: 'Honours & Awards Reports', ipr: 'Intellectual Property Reports' };
+
+const NOUN: Partial<Record<EntityKind, string>> = { publications: 'publication', grants: 'grant proposal', fdps: 'programme', conferences: 'conference', awards: 'honour or award', ipr: 'IP record', seedMoney: 'application' };
+/** One line under each report's name saying what it shows. */
+function describe(d: ReportDef) {
+  if (d.mode === 'group') return `By ${(d.groupLabel ?? '').toLowerCase()}: ${(d.measures ?? []).slice(0, 3).map((m) => (m.label === 'Count' ? 'count' : m.label)).join(', ')}`;
+  return `One row per ${NOUN[d.kind] ?? 'record'}${d.where ? ', matching records only' : ''}`;
+}
 
 export function ReportsPage() {
   const { group = 'publications' } = useParams();
   const { db, user } = useStore();
   const [params, setParams] = useSearchParams();
   const defs = REPORTS.filter((r) => r.group === group);
-  const def = defs.find((d) => d.id === params.get('r'));
+  // The first report opens straight away; choosing another keeps it in the URL.
+  const def = defs.find((d) => d.id === params.get('r')) ?? defs.find((d) => d.mode === 'group') ?? defs[0];
   const isFaculty = user?.role === 'faculty';
   const [form, setForm] = useState({ from: '', to: '', dept: '', emp: '', status: 'Approved' });
   const [applied, setApplied] = useState(form);
@@ -49,14 +58,27 @@ export function ReportsPage() {
   const cols: Column<(string | number)[]>[] = result ? result.header.map((h, i) => ({ key: String(i), label: h, num: result.numeric[i], value: (r) => r[i], render: (r) => fmtCell(r[i], i) })) : [];
   return (
     <>
-      <PageTitle>{GROUP_TITLE[group]}</PageTitle>
-      <Panel size="wide" title={isFaculty ? `${GROUP_TITLE[group]} – my entries` : GROUP_TITLE[group]}>
-        <div className="report-links">
-          {defs.map((d) => <button key={d.id} className={d.id === def?.id ? 'on' : ''} onClick={() => { setParams({ r: d.id }); }}>{d.title}</button>)}
-        </div>
-      </Panel>
+      <PageTitle sub="Ready-made tables from approved records. Choose a report, narrow it down, and export it.">{GROUP_TITLE[group]}</PageTitle>
+      <div className="rep-layout">
+        <nav className="rep-nav" aria-label="Reports">
+          {([['group', 'Summaries', 'Counts and totals'], ['list', 'Record lists', 'One row per record']] as const).map(([mode, title, hint]) => (
+            <section key={mode}>
+              <h2>{title}<span>{hint}</span></h2>
+              <ul>
+                {defs.filter((d) => d.mode === mode).map((d) => (
+                  <li key={d.id}>
+                    <button type="button" className={d.id === def?.id ? 'on' : ''} aria-current={d.id === def?.id ? 'page' : undefined} onClick={() => setParams({ r: d.id }, { replace: true })}>
+                      {d.title}<small>{describe(d)}</small>
+                    </button>
+                  </li>
+                ))}
+              </ul>
+            </section>
+          ))}
+        </nav>
+        <div className="rep-main">
       {def && result && (
-        <Panel size="wide" title={def.title}>
+        <Panel size="wide" title={<>{def.title}{isFaculty && <span className="muted" style={{ fontWeight: 400 }}> · my entries</span>}</>}>
           <form className="grid" onSubmit={(e) => { e.preventDefault(); setApplied(form); }}>
             <Field label="From Date"><input type="date" value={form.from} onChange={(e) => setForm({ ...form, from: e.target.value })} /></Field>
             <Field label="To Date"><input type="date" value={form.to} onChange={(e) => setForm({ ...form, to: e.target.value })} /></Field>
@@ -64,7 +86,7 @@ export function ReportsPage() {
             {!isFaculty ? <Field label="Department"><Select value={form.dept} onChange={(v) => setForm({ ...form, dept: v })} options={db.settings.departments} placeholder="ALL" /></Field> : <span />}
             {!isFaculty && <Field label="Employee Code"><Input value={form.emp} onChange={(v) => setForm({ ...form, emp: v })} list="emp-codes" /></Field>}
             <datalist id="emp-codes">{db.faculty.map((f) => <option key={f.id} value={f.id}>{f.name}</option>)}</datalist>
-            <div className="span4 btn-row" style={{ marginTop: 0 }}>
+            <div className="span4 btn-row search-actions">
               <button className="btn" type="submit">View</button>
               <button className="btn secondary" type="button" onClick={() => downloadCsv(def.title, result.header, result.total ? [...result.rows, result.total] : result.rows)} disabled={!result.rows.length}>Export CSV</button>
               <button className="btn secondary" type="button" onClick={() => window.print()}>Print</button>
@@ -75,7 +97,8 @@ export function ReportsPage() {
             footer={result.total ? <tr>{result.total.map((v, i) => <td key={i} className={result.numeric[i] ? 'num' : ''}>{fmtCell(v, i)}</td>)}</tr> : undefined} />
         </Panel>
       )}
-      {!def && <Panel size="wide"><p className="note">Select a report above.</p></Panel>}
+        </div>
+      </div>
     </>
   );
 }
@@ -96,7 +119,7 @@ export function SeedMoneyReport() {
   const tableRows = focus ? rows.filter((r) => match(r, focus)) : rows;
   return (
     <>
-      <PageTitle>Seed Money Projects</PageTitle>
+      <PageTitle sub="Seed money applications and the amounts sanctioned.">Seed Money Projects</PageTitle>
       <Panel size="wide">
         <form className="grid" onSubmit={(e) => { e.preventDefault(); setApplied(form); setFocus(null); }}>
           <Field label="From Date"><input type="date" value={form.from} onChange={(e) => setForm({ ...form, from: e.target.value })} /></Field>
@@ -127,7 +150,7 @@ export function AnnualReport() {
   const all = uniqueCounts(db, filter);
   return (
     <>
-      <PageTitle>Annual Activity Report</PageTitle>
+      <PageTitle sub="A printable summary of the academic year, by department, from approved records.">Annual Activity Report</PageTitle>
       <div className="panel wide no-print" style={{ display: 'flex', justifyContent: 'space-between', flexWrap: 'wrap', gap: 10, alignItems: 'end' }}>
         {bar}
         <button className="btn" onClick={() => window.print()}>Print / Save as PDF</button>

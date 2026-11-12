@@ -1,4 +1,5 @@
 import { useMemo, useState } from 'react';
+import type { ReactNode } from 'react';
 import { Link, useSearchParams } from 'react-router-dom';
 import { activityByYear, ActivitySpark, Avatar, nameParts, SdgIcon, splitList } from '../../components/research';
 import { creditedFaculty } from '../../lib/domain';
@@ -28,7 +29,7 @@ const AVAIL: Record<string, { label: string; hint: string; test: (e: Entry) => b
 };
 
 /** Heading above the results, named like the tile or card that was clicked. */
-const SHOWING: Record<string, string> = { supervise: 'Research supervisors', press: 'Press / media', industry: 'Industry partners', media: 'Media experts' };
+const SHOWING: Record<string, string> = { supervise: 'Research supervisors', press: 'In the press', industry: 'Industry partners', media: 'Media experts' };
 
 /** Faculty Search: read-only researcher discovery for Top-Level Management, with SDG, department and designation filters. */
 export function FacultySearch() {
@@ -113,6 +114,7 @@ export function FacultySearch() {
   const cur = Math.min(page, pages);
   const shown = sorted.slice((cur - 1) * PAGE, cur * PAGE);
   const filtered = sdgs.length + depts.length + desigs.length + avail.length > 0 || inactive;
+  const activeCount = sdgs.length + depts.length + desigs.length + avail.length + (inactive ? 1 : 0);
   const sdgList = SDGS.map((g) => ({ ...g, count: sdgCount(g.n) })).sort((a, b) => b.count - a.count || a.n - b.n);
   const sdgShown = moreSdg ? sdgList : sdgList.filter((g, i) => i < 6 || sdgs.includes(g.n));
 
@@ -139,47 +141,55 @@ export function FacultySearch() {
       <div className="dir-body">
         <aside className="dir-filters" aria-label="Filters">
           <div className="dir-filters-head">
-            <h2>Filters for profiles</h2>
-            {filtered && <button type="button" className="link-btn" onClick={() => update((p) => { ['sdg', 'dept', 'desig', 'inactive', 'avail'].forEach((k) => p.delete(k)); })}>Clear filters</button>}
+            <h2>Filters{activeCount > 0 && <span className="facet-badge" aria-label={`${activeCount} selected`}>{activeCount}</span>}</h2>
+            {filtered && <button type="button" className="link-btn" onClick={() => update((p) => { ['sdg', 'dept', 'desig', 'inactive', 'avail'].forEach((k) => p.delete(k)); })}>Clear all</button>}
           </div>
 
-          <fieldset className="facet">
-            <legend>Find an expert for</legend>
+          {activeCount > 0 && (
+            <ul className="facet-chips" aria-label="Selected filters">
+              {avail.map((k) => <Chip key={`a${k}`} label={AVAIL[k].label} onRemove={() => toggle('avail', k)} />)}
+              {sdgs.map((n) => <Chip key={`s${n}`} label={`SDG ${n}`} onRemove={() => toggleSdg(n)} />)}
+              {depts.map((d) => <Chip key={`d${d}`} label={d} onRemove={() => toggle('dept', d)} />)}
+              {desigs.map((d) => <Chip key={`g${d}`} label={d} onRemove={() => toggle('desig', d)} />)}
+              {inactive && <Chip label="Including deactivated" onRemove={() => update((p) => p.delete('inactive'))} />}
+            </ul>
+          )}
+
+          <FacetGroup title="Find an expert for" selected={avail.length} defaultOpen>
             {Object.entries(AVAIL).map(([k, a]) => (
-              <label key={k} className="facet-opt"><input type="checkbox" checked={avail.includes(k)} onChange={() => toggle('avail', k)} /><span>{a.label} <span className="facet-n">({availCount(k)})</span><span className="facet-hint">{a.hint}</span></span></label>
+              <FacetOption key={k} checked={avail.includes(k)} onChange={() => toggle('avail', k)} count={availCount(k)} hint={a.hint}>{a.label}</FacetOption>
             ))}
-          </fieldset>
+          </FacetGroup>
+
+          <FacetGroup title="Department" selected={depts.length} defaultOpen>
+            {db.settings.departments.map((d) => (
+              <FacetOption key={d} checked={depts.includes(d)} onChange={() => toggle('dept', d)} count={deptCount(d)}>{d}</FacetOption>
+            ))}
+          </FacetGroup>
+
+          <FacetGroup title="Designation" selected={desigs.length} defaultOpen>
+            {designations.map((d) => (
+              <FacetOption key={d} checked={desigs.includes(d)} onChange={() => toggle('desig', d)} count={desigCount(d)}>{d}</FacetOption>
+            ))}
+          </FacetGroup>
+
+          <FacetGroup title="Sustainable Development Goals" selected={sdgs.length} defaultOpen={sdgs.length > 0}>
+            {sdgShown.map((g) => (
+              <FacetOption key={g.n} checked={sdgs.includes(g.n)} onChange={() => toggleSdg(g.n)} count={g.count} icon={<SdgIcon n={g.n} size={20} />}>
+                <span className="facet-sdg-n">SDG {g.n}</span> {g.title}
+              </FacetOption>
+            ))}
+            <button type="button" className="link-btn facet-more" onClick={() => setMoreSdg(!moreSdg)} aria-expanded={moreSdg}>{moreSdg ? 'Show fewer goals' : 'Show all 17 goals'}</button>
+            {sdgs.length > 1 && <p className="hint">Showing faculty linked to any of the selected goals.</p>}
+          </FacetGroup>
 
           <TopicBrowser entries={entries} onPick={(t) => { setDraft(t); update((p) => { p.set('q', t); p.delete('avail'); }); toResults(); }} />
 
-          <fieldset className="facet">
-            <legend>Sustainable Development Goals</legend>
-            {sdgShown.map((g) => (
-              <label key={g.n} className={`facet-opt ${g.count === 0 && !sdgs.includes(g.n) ? 'zero' : ''}`}>
-                <input type="checkbox" checked={sdgs.includes(g.n)} onChange={() => toggleSdg(g.n)} />
-                <SdgIcon n={g.n} size={24} />
-                <span>SDG {g.n} – {g.title} <span className="facet-n">({g.count})</span></span>
-              </label>
-            ))}
-            <button type="button" className="link-btn facet-more" onClick={() => setMoreSdg(!moreSdg)} aria-expanded={moreSdg}>{moreSdg ? 'Show less ‹' : `Show all 17 goals ›`}</button>
-            {sdgs.length > 1 && <p className="hint">Showing faculty linked to any of the selected goals.</p>}
-          </fieldset>
-
-          <fieldset className="facet">
-            <legend>Department</legend>
-            {db.settings.departments.map((d) => (
-              <label key={d} className="facet-opt"><input type="checkbox" checked={depts.includes(d)} onChange={() => toggle('dept', d)} /><span>{d} <span className="facet-n">({deptCount(d)})</span></span></label>
-            ))}
-          </fieldset>
-
-          <fieldset className="facet">
-            <legend>Designation</legend>
-            {designations.map((d) => (
-              <label key={d} className="facet-opt"><input type="checkbox" checked={desigs.includes(d)} onChange={() => toggle('desig', d)} /><span>{d} <span className="facet-n">({desigCount(d)})</span></span></label>
-            ))}
-          </fieldset>
-
-          {isOffice && <label className="facet-opt" style={{ marginTop: 12 }}><input type="checkbox" checked={inactive} onChange={() => update((p) => (inactive ? p.delete('inactive') : p.set('inactive', '1')))} /><span>Include deactivated faculty (Office of Research)</span></label>}
+          {isOffice && (
+            <FacetGroup title="Account status" selected={inactive ? 1 : 0} defaultOpen>
+              <FacetOption checked={inactive} onChange={() => update((p) => (inactive ? p.delete('inactive') : p.set('inactive', '1')))} hint="Visible to the Office of Research only">Include deactivated faculty</FacetOption>
+            </FacetGroup>
+          )}
         </aside>
 
         <section className="dir-results" aria-label="Results">
@@ -242,20 +252,25 @@ function PersonCard({ e, tab }: { e: Entry; tab: string }) {
 
 const PersonGlyph = () => <svg className="dir-glyph" viewBox="0 0 40 44" aria-hidden><circle cx="20" cy="15" r="8.5" /><path d="M4 44c0-9.5 7.2-16 16-16s16 6.5 16 16Z" /></svg>;
 
-/** What the institution holds, counted from approved records, as icons with numbers under the search (like a research portal home). */
+/**
+ * What the institution holds, counted from approved records, as icons with numbers under the search (like a research
+ * portal home). Each number is exactly what its link lists: approved records only, active faculty only.
+ */
 function PortalCounts() {
   const { db } = useStore();
   const ok = <T extends { status: string }>(xs: T[] | undefined) => (xs ?? []).filter((r) => r.status === 'Approved').length;
+  const active = new Set(db.faculty.filter((f) => f.active).map((f) => f.id));
+  const people = (test: (b: Biodata) => boolean) => db.biodata.filter((b) => active.has(b.facultyId) && test(b)).length;
   const items: { label: string; n: number; to: string; d: string }[] = [
-    { label: 'Profiles', n: db.faculty.filter((f) => f.active).length, to: '/faculty', d: 'M16 15a6 6 0 1 0 0-12 6 6 0 0 0 0 12Zm-11 15c1-6.5 5.4-10 11-10s10 3.5 11 10Z' },
+    { label: 'Profiles', n: active.size, to: '/faculty', d: 'M16 15a6 6 0 1 0 0-12 6 6 0 0 0 0 12Zm-11 15c1-6.5 5.4-10 11-10s10 3.5 11 10Z' },
     { label: 'Research units', n: db.settings.departments.length, to: '/analytics/departments', d: 'M2 15 16 3l14 12h-4v14h-7v-8h-6v8H6V15Z' },
-    { label: 'Projects', n: ok(db.grants) + ok(db.seedMoney), to: '/grants', d: 'm16 2 13 6v15l-13 7-13-7V8Zm0 3.3L6.6 9.6 16 14l9.4-4.4ZM5 11.4v10.4l10 5.4V15.8Z' },
-    { label: 'Outputs', n: ok(db.publications), to: '/publications', d: 'M3 6c4.5-1.6 8.6-1.4 12 1.2V28c-3.4-2.6-7.5-2.8-12-1.2Zm26 0c-4.5-1.6-8.6-1.4-12 1.2V28c3.4-2.6 7.5-2.8 12-1.2Z' },
-    { label: 'Intellectual property', n: ok(db.ipr), to: '/ipr', d: 'M16 2a10 10 0 0 0-6 18c1.3 1 2 2.3 2 3.8V25h8v-1.2c0-1.5.7-2.8 2-3.8A10 10 0 0 0 16 2Zm-4 25h8v2h-8Zm1 3h6v1h-6Z' },
-    { label: 'Prizes', n: ok(db.awards), to: '/awards', d: 'M9 3h14v8a7 7 0 0 1-14 0Zm0 2H3a6 6 0 0 0 6 7Zm14 0h6a6 6 0 0 1-6 7Zm-9 13h4v5h-4Zm-4 6h12v5H10Z' },
-    { label: 'Activities', n: ok(db.fdps) + ok(db.conferences), to: '/conferences', d: 'M11 4h10v4h8v20H3V8h8Zm2 2v2h6V6ZM3 15h26v2H3Z' },
-    { label: 'Research supervisors', n: db.biodata.filter((b) => b.availableToSupervise && db.faculty.find((f) => f.id === b.facultyId)?.active).length, to: '/faculty?avail=supervise', d: 'M16 4 2 11l14 7 11-5.5V20h2v-9Zm-8 12.2V22c2.3 1.9 5.1 3 8 3s5.7-1.1 8-3v-5.8L16 20Z' },
-    { label: 'Press / media', n: db.biodata.reduce((a, b) => a + (b.media?.length ?? 0), 0), to: '/faculty?avail=press', d: 'M4 6h20v20H6a2 2 0 0 1-2-2Zm20 6h4v12a2 2 0 0 1-4 0ZM8 10v6h6v-6Zm9 0v2h4v-2Zm0 4v2h4v-2Zm-9 4v2h13v-2Zm0 4v2h13v-2Z' },
+    { label: 'Outputs', n: ok(db.publications), to: '/publications?status=Approved', d: 'M3 6c4.5-1.6 8.6-1.4 12 1.2V28c-3.4-2.6-7.5-2.8-12-1.2Zm26 0c-4.5-1.6-8.6-1.4-12 1.2V28c3.4-2.6 7.5-2.8 12-1.2Z' },
+    { label: 'Grants', n: ok(db.grants), to: '/grants?status=Approved', d: 'm16 2 13 6v15l-13 7-13-7V8Zm0 3.3L6.6 9.6 16 14l9.4-4.4ZM5 11.4v10.4l10 5.4V15.8Z' },
+    { label: 'Intellectual property', n: ok(db.ipr), to: '/ipr?status=Approved', d: 'M16 2a10 10 0 0 0-6 18c1.3 1 2 2.3 2 3.8V25h8v-1.2c0-1.5.7-2.8 2-3.8A10 10 0 0 0 16 2Zm-4 25h8v2h-8Zm1 3h6v1h-6Z' },
+    { label: 'Prizes', n: ok(db.awards), to: '/awards?status=Approved', d: 'M9 3h14v8a7 7 0 0 1-14 0Zm0 2H3a6 6 0 0 0 6 7Zm14 0h6a6 6 0 0 1-6 7Zm-9 13h4v5h-4Zm-4 6h12v5H10Z' },
+    { label: 'Conferences', n: ok(db.conferences), to: '/conferences?status=Approved', d: 'M11 4h10v4h8v20H3V8h8Zm2 2v2h6V6ZM3 15h26v2H3Z' },
+    { label: 'Research supervisors', n: people((b) => b.availableToSupervise), to: '/faculty?avail=supervise', d: 'M16 4 2 11l14 7 11-5.5V20h2v-9Zm-8 12.2V22c2.3 1.9 5.1 3 8 3s5.7-1.1 8-3v-5.8L16 20Z' },
+    { label: 'In the press', n: people((b) => (b.media?.length ?? 0) > 0), to: '/faculty?avail=press', d: 'M4 6h20v20H6a2 2 0 0 1-2-2Zm20 6h4v12a2 2 0 0 1-4 0ZM8 10v6h6v-6Zm9 0v2h4v-2Zm0 4v2h4v-2Zm-9 4v2h13v-2Zm0 4v2h13v-2Z' },
   ];
   return (
     <nav className="portal-counts" aria-label="What the institution holds">
@@ -284,13 +299,45 @@ function TopicBrowser({ entries, onPick }: { entries: Entry[]; onPick: (t: strin
   if (!topics.length) return null;
   const shown = all ? topics : topics.slice(0, 10);
   return (
-    <section className="dir-topics" id="dir-topics" aria-label="Browse by topic">
-      <div className="dir-topics-head"><h2>Browse by topic</h2><span className="muted">{topics.length} topics</span></div>
+    <FacetGroup title="Browse by topic" note={`${topics.length}`} className="dir-topics" id="dir-topics">
       <ul>{shown.map((t) => <li key={t.label}><button type="button" onClick={() => onPick(t.label)}>{t.label.charAt(0).toUpperCase() + t.label.slice(1)} <span>{t.n}</span></button></li>)}</ul>
-      {topics.length > 10 && <button type="button" className="link-btn" onClick={() => setAll(!all)}>{all ? 'Show fewer topics ‹' : `Show all ${topics.length} topics ›`}</button>}
-    </section>
+      {topics.length > 10 && <button type="button" className="link-btn facet-more" onClick={() => setAll(!all)}>{all ? 'Show fewer topics' : `Show all ${topics.length} topics`}</button>}
+    </FacetGroup>
   );
 }
+
+/**
+ * One group of filters: a heading that opens and closes it, with how many of its options are selected. Native
+ * <details>, so it works with the keyboard and screen readers without extra code.
+ */
+function FacetGroup({ title, selected = 0, note, defaultOpen = false, className = '', id, children }: { title: string; selected?: number; note?: string; defaultOpen?: boolean; className?: string; id?: string; children: ReactNode }) {
+  return (
+    <details className={`facet ${className}`} id={id} open={defaultOpen || selected > 0 || undefined}>
+      <summary>
+        <span className="facet-title">{title}</span>
+        {selected > 0 ? <span className="facet-badge" aria-label={`${selected} selected`}>{selected}</span> : note ? <span className="facet-note">{note}</span> : null}
+        <svg className="facet-chev" viewBox="0 0 16 16" aria-hidden><path d="m4 6 4 4 4-4" /></svg>
+      </summary>
+      <div className="facet-body">{children}</div>
+    </details>
+  );
+}
+
+/** A checkbox option with its result count on the right and an optional one-line hint. */
+function FacetOption({ checked, onChange, count, hint, icon, children }: { checked: boolean; onChange: () => void; count?: number; hint?: string; icon?: ReactNode; children: ReactNode }) {
+  return (
+    <label className={`facet-opt ${count === 0 && !checked ? 'zero' : ''}`}>
+      <input type="checkbox" checked={checked} onChange={onChange} />
+      {icon}
+      <span className="facet-label">{children}{hint && <span className="facet-hint">{hint}</span>}</span>
+      {count != null && <span className="facet-n">{count}</span>}
+    </label>
+  );
+}
+
+const Chip = ({ label, onRemove }: { label: string; onRemove: () => void }) => (
+  <li><button type="button" className="facet-chip" onClick={onRemove} aria-label={`Remove filter: ${label}`}>{label}<span aria-hidden>×</span></button></li>
+);
 
 /** Scrolls to the faculty list once the filtered results have rendered (below the sticky menu). */
 function scrollToResults() {

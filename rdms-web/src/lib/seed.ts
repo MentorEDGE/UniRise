@@ -200,24 +200,53 @@ export function createSeed(opts: SeedOptions = DEFAULT_SEED): DB {
   const peer = (f: Faculty) => faculty.filter((x) => x.department === f.department && x.id !== f.id);
   const facultyAuthor = (f: Faculty): Author => ({ kind: 'Faculty', code: f.id, name: `${f.title} ${f.name}`, institution: INST, department: f.department, email: f.email });
 
-  const statusFor = (iso: string): Status => {
-    // Older records are settled; recent ones are a mix of pending states.
-    if (iso < '2026-09-01') return rnd() < 0.94 ? 'Approved' : rnd() < 0.5 ? 'Rejected' : 'Approved';
-    const r = rnd();
-    return r < 0.45 ? 'Approved' : r < 0.75 ? 'Submitted' : r < 0.85 ? 'Rework' : r < 0.95 ? 'Draft' : 'Rejected';
+  // The review workflow, as it would have happened: who did what and when, with the Office of Research's comments
+  // and the faculty member's replies. Nothing is dated after the day the sample data stops (TODAY).
+  const TODAY = '2026-11-10';
+  const CHANGES: Record<string, string[]> = {
+    PUB: ['Please attach the full-text PDF and check the DOI.', 'The quartile does not match the journal\'s SJR listing for that year; please correct it.', 'List the co-authors in the order they appear on the paper.'],
+    GRT: ['Attach the proposal acknowledgement from the agency.', 'Investigator shares must match the proposal document.'],
+    SM: ['Add a short budget breakup to the abstract.'],
+    FDP: ['Upload the participation certificate.', 'The dates do not match the certificate; please correct them.'],
+    CNF: ['Upload the certificate of presentation.', 'Add the proceedings details (publisher and ISBN).'],
+    AWD: ['Attach the award certificate or the official announcement.'],
+    IPR: ['Attach the filing receipt with the application number visible.'],
   };
-  const historyFor = (status: Status, owner: Faculty, at: string): HistoryItem[] => {
+  const REPLIES = ['Corrected as suggested; the document is attached.', 'Updated the details and attached the certificate.', 'Done. Please check the revised entry.'];
+  const REJECTIONS = ['Duplicate of an existing entry.', 'Outside the reporting period of the institution.'];
+  const statusFor = (iso: string): Status => {
+    // Older records are settled; recent ones are spread over every stage of the workflow.
+    if (iso < '2026-07-01') return rnd() < 0.94 ? 'Approved' : rnd() < 0.5 ? 'Rejected' : 'Approved';
+    const r = rnd();
+    return r < 0.42 ? 'Approved' : r < 0.6 ? 'Submitted' : r < 0.72 ? 'UnderReview' : r < 0.82 ? 'Rework' : r < 0.92 ? 'Draft' : 'Rejected';
+  };
+  const historyFor = (status: Status, owner: Faculty, at: string, prefix: string): HistoryItem[] => {
+    let day = at;
+    const step = (min: number, max: number) => { const next = addDays(day, int(min, max)); day = next > TODAY ? TODAY : next; return day; };
     const h: HistoryItem[] = [{ at: `${at}T09:00:00.000Z`, by: owner.name, action: 'Created' }];
     if (status === 'Draft') return h;
-    h.push({ at: `${addDays(at, 1)}T10:00:00.000Z`, by: owner.name, action: 'Submitted' });
-    if (status === 'Approved') h.push({ at: `${addDays(at, int(3, 12))}T11:00:00.000Z`, by: opts.reviewerName, action: 'Approved' });
-    if (status === 'Rework') h.push({ at: `${addDays(at, int(3, 12))}T11:00:00.000Z`, by: opts.reviewerName, action: 'Returned for correction', remark: 'Please attach the full-text PDF and check the DOI.' });
-    if (status === 'Rejected') h.push({ at: `${addDays(at, int(3, 12))}T11:00:00.000Z`, by: opts.reviewerName, action: 'Rejected', remark: 'Duplicate of an existing entry.' });
+    const office = (action: string, remark?: string) => h.push({ at: `${step(1, 5)}T11:00:00.000Z`, by: opts.reviewerName, action, ...(remark ? { remark } : {}) });
+    const faculty = (action: string, remark?: string) => h.push({ at: `${step(1, 4)}T10:00:00.000Z`, by: owner.name, action, ...(remark ? { remark } : {}) });
+    faculty('Submitted');
+    // One round of changes for some entries: returned with a comment, corrected, and sent back in.
+    const corrected = status === 'Rework' || (status === 'Approved' && rnd() < 0.15) || ((status === 'Submitted' || status === 'UnderReview') && rnd() < 0.3);
+    if (corrected) {
+      office('Review started');
+      office('Returned for correction', pick(CHANGES[prefix]));
+      if (status === 'Rework') return h;
+      faculty('Edited');
+      const reply = rnd() < 0.6 ? pick(REPLIES) : undefined;
+      h.push({ at: h[h.length - 1].at.replace('T10:00', 'T10:30'), by: owner.name, action: 'Resubmitted', ...(reply ? { remark: reply } : {}) });
+    }
+    if (status === 'Submitted') return h;
+    office('Review started');
+    if (status === 'Approved') office('Approved');
+    if (status === 'Rejected') office('Rejected', pick(REJECTIONS));
     return h;
   };
-  const base = (owner: Faculty, at: string) => {
+  const base = (owner: Faculty, at: string, prefix: string) => {
     const status = statusFor(at);
-    const last = historyFor(status, owner, at);
+    const last = historyFor(status, owner, at, prefix);
     return { id: '', facultyId: owner.id, status, createdAt: `${at}T09:00:00.000Z`, updatedAt: last[last.length - 1].at, history: last };
   };
 
@@ -247,7 +276,7 @@ export function createSeed(opts: SeedOptions = DEFAULT_SEED): DB {
         if (ext.kind === 'External') ext.country = COUNTRY_OF[ext.institution];
         const isJournal = entryType === 'Journal Article';
         const p: Publication = {
-          ...base(f, at), id: nextId('PUB'), entryType,
+          ...base(f, at, 'PUB'), id: nextId('PUB'), entryType,
           category: isJournal ? (rnd() < 0.85 ? 'Research Article' : 'Review Article') : 'Research Article',
           title: `${pick(PREFIX)} ${pick(topicsOf(f.department))}`.replace(/^./, (c) => c.toUpperCase()),
           doi: `https://doi.org/10.${int(1000, 9999)}/${f.id.toLowerCase()}-${year}-${k}`,
@@ -275,7 +304,7 @@ export function createSeed(opts: SeedOptions = DEFAULT_SEED): DB {
         if (ps.length) { const co = pick(ps); investigators.push({ kind: 'Faculty', code: co.id, name: `${co.title} ${co.name}`, role: 'Co-PI', institution: INST, department: co.department, sharePct: 40 }); }
         else investigators[0].sharePct = 100;
         const g: Grant = {
-          ...base(f, at), id: nextId('GRT'), unit: ag[1] === 'International Agency' ? 'International Grant' : ag[1] === 'Industry' ? 'Consultancy' : 'Indian Grant',
+          ...base(f, at, 'GRT'), id: nextId('GRT'), unit: ag[1] === 'International Agency' ? 'International Grant' : ag[1] === 'Industry' ? 'Consultancy' : 'Indian Grant',
           grantType: ag[1] === 'Industry' ? 'Industry Sponsored' : pick(['Research Project', 'Research Project', 'Infrastructure', 'Fellowship']),
           utn: `UTN${year}${int(1000, 9999)}`, title: `${pick(PREFIX)} ${pick(topicsOf(f.department))}`.replace(/^./, (c) => c.toUpperCase()),
           description: 'Proposal submitted under the open call for extramural research funding.', callTitle: `${ag[0]} Call ${year}`,
@@ -286,6 +315,8 @@ export function createSeed(opts: SeedOptions = DEFAULT_SEED): DB {
           investigators, enclosures: ['Proposal.pdf', 'Endorsement_Letter.pdf'], otherRemarks: '',
         };
         if (g.sanctionDate > '2026-10-31') g.sanctionDate = '2026-10-31';
+        // The funding outcome is recorded by the Office of Research after the entry is approved; until then it is Applied.
+        if (g.status !== 'Approved') Object.assign(g, { outcome: 'Applied', sanctionDate: '', sanctionedAmount: 0, receivedAmount: 0 });
         grants.push(g);
       }
       // Seed money
@@ -293,7 +324,7 @@ export function createSeed(opts: SeedOptions = DEFAULT_SEED): DB {
         const at = dateIn(year);
         const req = int(1, 5) * 50000;
         const sm: SeedMoney = {
-          ...base(f, at), id: nextId('SM'), appliedDate: at, category: 'Faculty',
+          ...base(f, at, 'SM'), id: nextId('SM'), appliedDate: at, category: 'Faculty',
           title: `Pilot study on ${pick(topicsOf(f.department))}`, abstract: 'Preliminary work to generate data for an extramural proposal.',
           requestedAmount: req, sanctionedAmount: 0,
           investigators: [{ kind: 'Faculty', code: f.id, name: `${f.title} ${f.name}`, role: 'PI', institution: INST, department: f.department, sharePct: 100 }],
@@ -308,7 +339,7 @@ export function createSeed(opts: SeedOptions = DEFAULT_SEED): DB {
         const days = pick([1, 2, 3, 5, 5, 6, 10]);
         const role = rnd() < 0.8 ? 'Attended' : rnd() < 0.5 ? 'Organised' : 'Resource Person';
         fdps.push({
-          ...base(f, at), id: nextId('FDP'), role, programmeType: pick(['FDP', 'FDP', 'Workshop', 'STTP', 'Online Course (MOOC)', 'Refresher Course']),
+          ...base(f, at, 'FDP'), id: nextId('FDP'), role, programmeType: pick(['FDP', 'FDP', 'Workshop', 'STTP', 'Online Course (MOOC)', 'Refresher Course']),
           title: pick(FDP_TITLES), organiser: role === 'Organised' ? 'Internal (IQAC)' : pick(FDP_ORGS), sponsoredBy: pick(['AICTE', 'Self', 'Institution', 'ISTE', '']),
           mode: pick(['Offline', 'Online', 'Online', 'Hybrid']), level: pick(['Institutional', 'National', 'National', 'International', 'State']),
           fromDate: at, toDate: addDays(at, days - 1), hours: days * 6, outcome: 'Applied the learning in course delivery and lab sessions.',
@@ -326,7 +357,7 @@ export function createSeed(opts: SeedOptions = DEFAULT_SEED): DB {
         const fee = abroad ? int(25, 60) * 1000 : int(3, 12) * 1000;
         const funding = rnd() < 0.6 ? 'Institution' : rnd() < 0.7 ? 'Self' : 'External Agency';
         conferences.push({
-          ...base(f, at), id: nextId('CNF'), participation, conferenceName: c[0],
+          ...base(f, at, 'CNF'), id: nextId('CNF'), participation, conferenceName: c[0],
           paperTitle: participation.includes('Presented') ? `${pick(PREFIX)} ${pick(topicsOf(f.department))}` : '',
           organiser: pick(['IEEE', 'Springer', 'ACM', 'NIT Surathkal', 'IIT Bombay', 'Anna University']), venue: abroad ? c[1] : pick(VENUES),
           country: c[1], level: c[2], mode: pick(['Offline', 'Offline', 'Online', 'Hybrid']), fromDate: at, toDate: addDays(at, int(1, 2)),
@@ -353,7 +384,7 @@ export function createSeed(opts: SeedOptions = DEFAULT_SEED): DB {
   const awards: Honour[] = [];
   const addAward = (f: Faculty, at: string, title: string, category: string, awardedBy: string, level: string) => {
     awards.push({
-      ...base(f, at), id: nextId('AWD'), category, title, awardedBy, level, awardDate: at,
+      ...base(f, at, 'AWD'), id: nextId('AWD'), category, title, awardedBy, level, awardDate: at,
       citation: `In recognition of contributions to ${topicsOf(f.department)[0].toLowerCase()}.`, prizeAmount: level === 'Institutional' ? 0 : pick([0, 0, 10000, 25000, 50000]),
       certificateName: `AWARD_${f.id}_${at.slice(0, 4)}.pdf`,
     });
@@ -391,7 +422,7 @@ export function createSeed(opts: SeedOptions = DEFAULT_SEED): DB {
       const owner = pick(['University', 'University', 'University', 'Joint', 'Individual(s)']);
       const licensed = stage === 'Granted / Registered' && rnd() < 0.2;
       ipr.push({
-        ...base(f, filed), id: nextId('IPR'), ipType, ipTypeOther: '', title, stage,
+        ...base(f, filed, 'IPR'), id: nextId('IPR'), ipType, ipTypeOther: '', title, stage,
         description: ipType === 'Patent' ? `An invention in ${topic.toLowerCase()} that improves accuracy at lower cost.` : ipType === 'Design' ? 'The shape and configuration of the device enclosure.' : ipType === 'Copyright' ? 'Source code, documentation and course material.' : 'Name and logo of the research lab.',
         applicationNumber: ipType === 'Patent' ? `${filed.slice(0, 4)}4110${no}` : ipType === 'Design' ? `${int(300000, 420000)}-001` : ipType === 'Copyright' ? `SW-${no}/${filed.slice(0, 4)}` : `${int(4000000, 6999999)}`,
         filingDate: filed, grantDate: grantDate > '2026-10-31' ? '2026-10-31' : grantDate, office: IP_OFFICE[ipType],
@@ -470,8 +501,9 @@ export function fillSampleExpertProfiles(parts: Pick<DB, 'faculty' | 'biodata' |
     if (!b.keywords) b.keywords = [T[(bi + 1) % T.length], T[(bi + 2) % T.length]].join(', ');
     const code = f.department.split(/\s|&/).filter(Boolean).map((w) => w[0]).join('').toUpperCase().slice(0, 3);
     b.teaching = Array.from({ length: int(1, 3) }, (_, i) => ({ code: `${code}${int(2, 6)}${pad(int(1, 40))}`, title: `${pick(COURSE_WORDS)} ${T[(bi + i) % T.length]}`, level: i === 0 ? 'Undergraduate' : pick(['Undergraduate', 'Postgraduate', 'Doctoral']) }));
-    const scholars = (k: number, status: string) => Array.from({ length: Math.min(k, 4) }, (_, i) => ({
-      name: `Scholar ${f.name.replace('Faculty ', '')}${status === 'Current' ? '' : 'C'}${i + 1}`, degree: pick(['PhD', 'PhD', 'MPhil']), status,
+    // One named scholar per Ph.D. counted on the profile, so "Ph.D. guided / ongoing" and the supervision list agree.
+    const scholars = (k: number, status: string) => Array.from({ length: k }, (_, i) => ({
+      name: `Scholar ${f.name.replace('Faculty ', '')}${status === 'Current' ? '' : 'C'}${i + 1}`, degree: 'PhD', status,
       year: status === 'Current' ? String(int(2022, 2026)) : String(int(2016, 2025)), topic: `${pick(PREFIX)} ${T[(bi + i + 1) % T.length].toLowerCase()}`,
     }));
     b.supervision = [...scholars(b.phdOngoing, 'Current'), ...scholars(b.phdGuided, 'Completed')];

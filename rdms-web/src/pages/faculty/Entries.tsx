@@ -20,6 +20,15 @@ const VENUE_LABEL: Record<PubType, string> = {
   'Journal Article': 'Name Of Journal', Book: 'Publisher', 'Book Chapter': 'Book Title / Publisher', 'Conference Paper': 'Conference / Proceedings', 'Technical Report': 'Issuing Organisation',
 };
 
+const PUB_TYPE_HINT: Record<string, string> = {
+  'Journal Article': 'A paper in a journal, with its DOI and quartile',
+  'Conference Paper': 'A paper in conference proceedings',
+  Book: 'An authored or edited book',
+  'Book Chapter': 'A chapter in an edited book',
+  'Technical Report': 'A report, white paper or working paper',
+};
+const SUB = 'Saved entries stay private to you until you submit them. The Office of Research then reviews them.';
+
 export function PublicationEntry() {
   const e = useEntry<Publication>('publications', (fid) => ({
     entryType: '' as PubType, category: 'Research Article', title: '', doi: '', month: MONTHS[new Date().getMonth()], year: thisYear(), issn: '', venue: '',
@@ -49,14 +58,24 @@ export function PublicationEntry() {
   const t = r.entryType;
   return (
     <>
-      <PageTitle>Publication Entry/Update</PageTitle>
+      <PageTitle sub={SUB}>{e.isNew ? 'Add Publication' : `Edit Publication ${e.rec.id}`}</PageTitle>
       {e.banner}
       <Panel title="Basic Details" size="wide">
-        <p className="note">Please select the Entry Type to enter the basic publication details.</p>
+        {e.isNew && (
+          <fieldset className="type-pick">
+            <legend>What are you adding?{x.entryType && <span className="err"> {x.entryType}</span>}</legend>
+            <div>
+              {PUB_TYPES.map((p) => (
+                <label key={p} className={t === p ? 'on' : ''}>
+                  <input type="radio" name="pub-type" value={p} checked={t === p} onChange={() => u({ entryType: p, quartile: p === 'Journal Article' ? r.quartile : 'NA' })} />
+                  <b>{p}</b><span>{PUB_TYPE_HINT[p]}</span>
+                </label>
+              ))}
+            </div>
+          </fieldset>
+        )}
         <div className="grid">
-          <Field label="Entry Type" required error={x.entryType}>
-            <Select value={t} onChange={(v) => u({ entryType: v as PubType, quartile: v === 'Journal Article' ? r.quartile : 'NA' })} options={PUB_TYPES} placeholder="--Select--" disabled={!e.isNew} />
-          </Field>
+          {!e.isNew && <Field label="Entry Type"><Select value={t} onChange={() => {}} options={PUB_TYPES} disabled /></Field>}
           {t && <>
             <Field label="Category"><Select value={r.category} onChange={(v) => u({ category: v })} options={PUB_CATEGORIES} /></Field>
             <Field label="DOI/Webpage Link" required={t === 'Journal Article'} error={x.doi}><Input value={r.doi} onChange={(v) => u({ doi: v })} placeholder="https://doi.org/…" /></Field>
@@ -96,7 +115,7 @@ export function PublicationEntry() {
           <Field label="Upload PDF" hint="Only PDF files (optional for Books), up to 10 MB. Larger files: contact the research office." error={x.pdf}>
             <FileName value={r.pdfName} onChange={(v) => u({ pdfName: v })} />
           </Field>
-          <SaveBar onSave={e.save} isNew={e.isNew} />
+          <SaveBar onSave={e.save} isNew={e.isNew} resubmit={e.resubmit} />
         </Panel>
       </>}
     </>
@@ -133,7 +152,7 @@ export function GrantEntry() {
   const firstErrStep = Math.min(...Object.keys(x).map((k) => stepOf[k] ?? 0));
   return (
     <>
-      <PageTitle>Grant Entry/Update</PageTitle>
+      <PageTitle sub={SUB}>{e.isNew ? 'Add Grant or Fellowship' : `Edit Grant ${e.rec.id}`}</PageTitle>
       {e.banner}
       <Panel title="Add Grant Details" size="wide">
         <div className="steps" role="tablist">
@@ -197,7 +216,7 @@ export function GrantEntry() {
           {step > 0 && <button type="button" className="btn secondary" onClick={() => setStep(step - 1)}>‹ Previous</button>}
           {step < STEPS.length - 1 && <button type="button" className="btn secondary" onClick={() => setStep(step + 1)}>Next ›</button>}
         </div>
-        <SaveBar onSave={e.save} isNew={e.isNew} />
+        <SaveBar onSave={e.save} isNew={e.isNew} resubmit={e.resubmit} />
       </Panel>
     </>
   );
@@ -223,7 +242,7 @@ export function SeedMoneyEntry() {
   const closed = e.isNew && !db.settings.seedMoneyWindowOpen;
   return (
     <>
-      <PageTitle>Seed Money For Faculty Research</PageTitle>
+      <PageTitle sub="Seed money supports pilot work that leads to an external research proposal.">{e.isNew ? 'Apply for Seed Money' : `Edit Seed Money Application ${e.rec.id}`}</PageTitle>
       {e.banner}
       {closed && <div className="panel"><p className="note" style={{ color: 'var(--bad)' }}><b>Note:</b> Reception of applications for seed money proposals for this quarter is closed.</p></div>}
       <fieldset disabled={closed} style={{ border: 0, padding: 0, margin: 0 }}>
@@ -239,7 +258,7 @@ export function SeedMoneyEntry() {
         </Panel>
         <Panel title="Investigator Details" size="wide">
           <InvestigatorTable value={r.investigators} onChange={(v) => u({ investigators: v })} error={x.investigators} />
-          <SaveBar onSave={e.save} isNew={e.isNew} />
+          <SaveBar onSave={e.save} isNew={e.isNew} resubmit={e.resubmit} />
         </Panel>
       </fieldset>
     </>
@@ -270,7 +289,7 @@ export function FdpEntry() {
   const { rec: r, update: u, errors: x } = e;
   return (
     <>
-      <PageTitle>FDP Entry/Update</PageTitle>
+      <PageTitle sub={SUB}>{e.isNew ? 'Add Faculty Development Programme' : `Edit FDP ${e.rec.id}`}</PageTitle>
       {e.banner}
       <Panel title="Faculty Development Programme Details" size="wide">
         <div className="grid">
@@ -287,7 +306,7 @@ export function FdpEntry() {
           <Field label="Certificate" error={x.certificate}><FileName value={r.certificateName} onChange={(v) => u({ certificateName: v })} accept=".pdf,.jpg,.png" /></Field>
           <Field label="Key learning / how it was applied" className="span4"><TextArea value={r.outcome} onChange={(v) => u({ outcome: v })} /></Field>
         </div>
-        <SaveBar onSave={e.save} isNew={e.isNew} />
+        <SaveBar onSave={e.save} isNew={e.isNew} resubmit={e.resubmit} />
       </Panel>
     </>
   );
@@ -317,7 +336,7 @@ export function ConferenceEntry() {
   const presenting = r.participation.includes('Presented') || r.participation.includes('Invited');
   return (
     <>
-      <PageTitle>Conference Entry/Update</PageTitle>
+      <PageTitle sub={SUB}>{e.isNew ? 'Add Conference' : `Edit Conference ${e.rec.id}`}</PageTitle>
       {e.banner}
       <Panel title="Conference Participation Details" size="wide">
         <div className="grid">
@@ -338,7 +357,7 @@ export function ConferenceEntry() {
           <Field label="Award (if any)"><Input value={r.award} onChange={(v) => u({ award: v })} placeholder="e.g. Best Paper Award" /></Field>
           <Field label="Certificate" error={x.certificate} className="span2"><FileName value={r.certificateName} onChange={(v) => u({ certificateName: v })} accept=".pdf,.jpg,.png" /></Field>
         </div>
-        <SaveBar onSave={e.save} isNew={e.isNew} />
+        <SaveBar onSave={e.save} isNew={e.isNew} resubmit={e.resubmit} />
       </Panel>
     </>
   );
@@ -363,7 +382,7 @@ export function AwardEntry() {
   const { rec: r, update: u, errors: x } = e;
   return (
     <>
-      <PageTitle>Honours &amp; Awards Entry/Update</PageTitle>
+      <PageTitle sub={SUB}>{e.isNew ? 'Add Honour or Award' : `Edit Honour or Award ${e.rec.id}`}</PageTitle>
       {e.banner}
       <Panel title="Honour / Award Details" size="wide">
         <div className="grid">
@@ -376,7 +395,7 @@ export function AwardEntry() {
           <Field label="Citation / What it recognises" className="span3"><TextArea value={r.citation} onChange={(v) => u({ citation: v })} /></Field>
           <Field label="Certificate / Letter" error={x.certificate}><FileName value={r.certificateName} onChange={(v) => u({ certificateName: v })} accept=".pdf,.jpg,.png" /></Field>
         </div>
-        <SaveBar onSave={e.save} isNew={e.isNew} />
+        <SaveBar onSave={e.save} isNew={e.isNew} resubmit={e.resubmit} />
       </Panel>
     </>
   );
@@ -439,7 +458,7 @@ export function IpEntry() {
   const words = wordCount(r.description);
   return (
     <>
-      <PageTitle>Intellectual Property (IP) Submission Form</PageTitle>
+      <PageTitle sub="Patents, designs, copyrights and trademarks. The Office of Research checks the filing documents before approval.">{e.isNew ? 'Add Intellectual Property' : `Edit Intellectual Property ${e.rec.id}`}</PageTitle>
       {e.banner}
       <Panel size="wide">
         <p className="note" style={{ textAlign: 'center' }}>Fields marked <span className="req">*</span> are mandatory.</p>
@@ -493,7 +512,7 @@ export function IpEntry() {
           {x.declared && <span className="err" role="alert">{x.declared}</span>}
           <p className="ipf-note">Submitting this form records your name and the date in place of a signature.</p>
         </div>
-        <SaveBar onSave={e.save} isNew={e.isNew} />
+        <SaveBar onSave={e.save} isNew={e.isNew} resubmit={e.resubmit} />
       </Panel>
     </>
   );

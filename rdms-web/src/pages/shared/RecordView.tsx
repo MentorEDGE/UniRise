@@ -14,7 +14,7 @@ import type { Conference } from '../../lib/types';
 const ConferenceMap = lazy(() => import('../../components/ConferenceMap'));
 
 const TITLES: Record<EntityKind, string> = {
-  publications: 'Publication View', grants: 'Grant Entry/Update', seedMoney: 'Seed Money Status', fdps: 'Faculty Development Programmes', conferences: 'Conference Participation', awards: 'Honours & Awards', ipr: 'Intellectual Property',
+  publications: 'Publications', grants: 'Grants & Fellowships', seedMoney: 'Seed Money', fdps: 'Faculty Development Programmes', conferences: 'Conferences', awards: 'Honours & Awards', ipr: 'Intellectual Property',
 };
 
 export function RecordView({ kind }: { kind: EntityKind }) {
@@ -27,6 +27,9 @@ export function RecordView({ kind }: { kind: EntityKind }) {
   const [form, setForm] = useState(empty);
   const [applied, setApplied] = useState(empty);
   const [openId, setOpenId] = useState<string | null>(null);
+  // ID and date range sit under "More filters" unless one of them is in use.
+  const [more, setMore] = useState(!!(empty.from || empty.to));
+  const isMgmt = user?.role === 'management';
   const set = (k: keyof typeof empty) => (v: string) => setForm({ ...form, [k]: v });
 
   const rows = useMemo(() => {
@@ -64,13 +67,13 @@ export function RecordView({ kind }: { kind: EntityKind }) {
 
   return (
     <>
-      <PageTitle>{TITLES[kind]}</PageTitle>
+      <PageTitle sub={isFaculty ? 'Everything you have entered, in every status. Open an entry to see its progress and the Office of Research’s comments.' : user?.role === 'office' ? 'All entries from every faculty member, in every status.' : 'Approved records only, verified by the Office of Research.'}>{isFaculty ? `My ${TITLES[kind]}` : TITLES[kind]}</PageTitle>
       {isFaculty && pendingMine.length > 0 && (
         <Panel title="Entries Pending Action" boxed size="wide">
           <DataTable rows={pendingMine} columns={listColumns(db, kind, { showOwner: false })} rowKey={(r) => r.id} onRowClick={(r) => setOpenId(r.id)} pageSize={5} />
         </Panel>
       )}
-      <Panel title="Search" size="wide" actions={isFaculty ? <Link className="btn sm" to={cfg.entryPath}>+ New {cfg.label} Entry</Link> : undefined}>
+      <Panel title="Search" size="wide" actions={isFaculty ? <Link className="btn sm" to={cfg.entryPath}>+ Add {cfg.label}</Link> : undefined}>
         {isFaculty && (
           <Tabs value={scope} onChange={setScope} tabs={[
             { id: 'mine', label: `My ${cfg.plural}` },
@@ -80,17 +83,20 @@ export function RecordView({ kind }: { kind: EntityKind }) {
           <Field label={kind === 'conferences' ? 'Participation' : kind === 'seedMoney' || kind === 'awards' ? 'Category' : kind === 'ipr' ? 'Type' : `${cfg.label} Entry Type`}>
             <Select value={form.type} onChange={set('type')} options={cfg.typeOptions} placeholder="ALL" />
           </Field>
-          <Field label={`${cfg.label} ID`}><Input value={form.id} onChange={set('id')} /></Field>
           {(isFaculty || user?.role === 'office') && <Field label={`${cfg.label} Status`}><Select value={form.status} onChange={set('status')} options={STATUSES.map((x) => ({ value: x, label: STATUS_LABEL[x] }))} placeholder="ALL" /></Field>}
           <Field label="Title"><Input value={form.title} onChange={set('title')} /></Field>
           {(!isFaculty || scope === 'all') && <Field label="Author / Faculty" hint="Name or employee code"><Input value={form.person} onChange={set('person')} /></Field>}
           {(!isFaculty || scope === 'all') && <Field label="Department"><Select value={form.dept} onChange={set('dept')} options={db.settings.departments} placeholder="ALL" /></Field>}
           {kind === 'conferences' && <Field label="Conference type"><Select value={form.level} onChange={set('level')} options={['National', 'International']} placeholder="ALL" /></Field>}
-          <Field label="From date"><input type="date" value={form.from} onChange={(e) => set('from')(e.target.value)} /></Field>
-          <Field label="To date"><input type="date" value={form.to} onChange={(e) => set('to')(e.target.value)} /></Field>
-          <div className="span4 btn-row" style={{ marginTop: 2 }}>
+          {more && <>
+            <Field label={`${cfg.label} ID`}><Input value={form.id} onChange={set('id')} /></Field>
+            <Field label="From date"><input type="date" value={form.from} onChange={(e) => set('from')(e.target.value)} /></Field>
+            <Field label="To date"><input type="date" value={form.to} onChange={(e) => set('to')(e.target.value)} /></Field>
+          </>}
+          <div className="span4 btn-row search-actions">
             <button className="btn" type="submit">Search</button>
             <button className="btn secondary" type="button" onClick={() => { setForm({ ...empty, status: '', person: '', dept: '', from: '', to: '', level: '' }); setApplied({ ...empty, status: '', person: '', dept: '', from: '', to: '', level: '' }); }}>Clear</button>
+            <button className="link-btn more-filters" type="button" aria-expanded={more} onClick={() => setMore(!more)}>{more ? 'Fewer filters' : 'More filters: ID and dates'}</button>
           </div>
         </form>
       </Panel>
@@ -98,7 +104,7 @@ export function RecordView({ kind }: { kind: EntityKind }) {
         ? <Suspense fallback={<div className="panel wide insights"><p className="muted">Loading map…</p></div>}><ConferenceMap rows={rows as Conference[]} db={db} /></Suspense>
         : <RecordInsights key={kind} kind={kind} rows={rows} db={db} focus={focus} onFocus={setFocus} />}
       <Panel size="wide">
-        <DataTable rows={tableRows} columns={listColumns(db, kind, { showOwner: !isFaculty || scope === 'all' })} rowKey={(r) => r.id}
+        <DataTable rows={tableRows} columns={listColumns(db, kind, { showOwner: !isFaculty || scope === 'all' }).filter((c) => !(isMgmt && c.key === 'status'))} rowKey={(r) => r.id}
           onRowClick={(r) => setOpenId(r.id)} exportName={cfg.plural} empty={`No ${cfg.plural.toLowerCase()} match the search.`} />
         <p className="note">{isFaculty ? 'Click a row to see the full details and the Office of Research’s comments, edit a draft or submit it for approval.' : user?.role === 'office' ? 'All entries, in every status. Review submissions under Approval.' : 'Approved entries only (verified by the Office of Research). Click a row to see the full details.'}</p>
       </Panel>

@@ -1,12 +1,19 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from 'react';
 import type { ReactNode } from 'react';
 import type { Status } from '../lib/types';
-import { STATUS_LABEL } from '../lib/types';
+import { STATUS_LABEL, isResubmission } from '../lib/types';
+import type { HistoryItem } from '../lib/types';
 import { downloadCsv } from '../lib/csv';
 
-export function PageTitle({ children }: { children: ReactNode }) {
-  useEffect(() => { if (typeof children === 'string') document.title = `${children} · RDMS`; }, [children]);
-  return <h1 className="page-title">{children}</h1>;
+/** The page heading, with an optional one-line description of what the page is for. */
+export function PageTitle({ children, sub }: { children: ReactNode; sub?: ReactNode }) {
+  useEffect(() => { if (typeof children === 'string') document.title = `${children} · UniRise`; }, [children]);
+  return (
+    <header className="page-head">
+      <h1 className="page-title">{children}</h1>
+      {sub && <p className="page-sub">{sub}</p>}
+    </header>
+  );
 }
 
 export function Panel({ title, children, size, boxed, actions }: { title?: ReactNode; children: ReactNode; size?: 'wide' | 'full'; boxed?: boolean; actions?: ReactNode }) {
@@ -71,9 +78,11 @@ export function FileName({ value, onChange, accept = '.pdf' }: { value: string; 
   );
 }
 
-export function StatusBadge({ status }: { status: Status }) {
-  const icon = { Approved: '✓', Submitted: '⏳', Draft: '✎', Rework: '↺', Rejected: '✕' }[status];
-  return <span className={`badge ${status}`}><span aria-hidden>{icon}</span>{STATUS_LABEL[status]}</span>;
+/** A record's status. Pass the history to show a corrected entry that was sent back in as "Resubmitted". */
+export function StatusBadge({ status, history }: { status: Status; history?: HistoryItem[] }) {
+  const resubmitted = !!history && status === 'Submitted' && isResubmission(history);
+  const icon = resubmitted ? '↻' : { Approved: '✓', Submitted: '⏳', UnderReview: '◔', Draft: '✎', Rework: '↺', Rejected: '✕' }[status];
+  return <span className={`badge ${status}${resubmitted ? ' resub' : ''}`}><span aria-hidden>{icon}</span>{resubmitted ? 'Resubmitted' : STATUS_LABEL[status]}</span>;
 }
 
 export function Alert({ kind = 'info', children }: { kind?: 'info' | 'error' | 'success'; children: ReactNode }) {

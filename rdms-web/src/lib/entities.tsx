@@ -3,7 +3,7 @@ import type { Column } from '../components/ui';
 import { StatusBadge } from '../components/ui';
 import { dateOf, fmtDate, inr } from './analytics';
 import type { AnyRecord, Conference, DB, EntityKind, Fdp, Grant, Honour, IntellectualProperty, Publication, SeedMoney } from './types';
-import { AWARD_CATEGORIES, IP_TYPES, ipTypeLabel } from './types';
+import { AWARD_CATEGORIES, IP_TYPES, ipTypeLabel, statusLabel } from './types';
 
 export interface EntityConfig {
   kind: EntityKind;
@@ -166,15 +166,15 @@ export function listColumns(db: DB, kind: EntityKind, opts: { showOwner: boolean
   const cfg = ENTITIES[kind];
   const byId = new Map(db.faculty.map((f) => [f.id, f]));
   return [
-    { key: 'id', label: `${cfg.label} ID`, value: (r) => r.id },
-    { key: 'type', label: kind === 'conferences' ? 'Participation' : kind === 'seedMoney' || kind === 'awards' ? 'Category' : kind === 'ipr' ? 'Type of IP' : 'Type Of Entry', value: (r) => cfg.typeOf(r) },
+    { key: 'id', label: 'ID', value: (r) => r.id, className: 'nowrap' },
+    { key: 'type', label: kind === 'conferences' ? 'Participation' : kind === 'seedMoney' || kind === 'awards' ? 'Category' : kind === 'ipr' ? 'Type of IP' : 'Type', value: (r) => cfg.typeOf(r) },
     { key: 'title', label: kind === 'conferences' ? 'Conference' : kind === 'awards' ? 'Honour / Award' : 'Title', value: (r) => cfg.title(r), className: 'title-cell' },
     ...(opts.showOwner ? [
-      { key: 'owner', label: 'Faculty', value: (r: AnyRecord) => byId.get(r.facultyId)?.name ?? r.facultyId },
+      { key: 'owner', label: 'Faculty', value: (r: AnyRecord) => byId.get(r.facultyId)?.name ?? r.facultyId, className: 'nowrap' },
       { key: 'dept', label: 'Department', value: (r: AnyRecord) => byId.get(r.facultyId)?.department ?? '' },
     ] : []),
     ...cfg.columns,
-    { key: 'status', label: 'Status', value: (r) => r.status, render: (r) => <StatusBadge status={r.status} /> },
+    { key: 'status', label: 'Status', value: (r) => statusLabel(r), render: (r) => <StatusBadge status={r.status} history={r.history} /> },
   ];
 }
 

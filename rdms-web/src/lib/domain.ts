@@ -4,7 +4,7 @@
  * actor's own institution database, so nothing here can reach another institution.
  */
 import type {
-  AnyRecord, Author, Biodata, Course, Engagement, MediaItem, ProfileLinks, Supervisee, DB, EntityKind, Faculty, Grant, Investigator, Notice, ProfileChange, Publication, Settings, Status,
+  AnyRecord, Author, Biodata, Course, Engagement, HistoryItem, MediaItem, ProfileLinks, Supervisee, DB, EntityKind, Faculty, Grant, Investigator, Notice, ProfileChange, Publication, Settings, Status,
 } from './types';
 import { AUTHOR_KINDS, AWARD_CATEGORIES, EMPTY_LINKS, EMPTY_SCHOLAR, ENGAGEMENT_TYPES, MAX_HIGHLIGHTS, SUPERVISION_DEGREES, SUPERVISION_STATUS, IP_DESCRIPTION_WORDS, IP_OWNERS, IP_STATUSES, IP_TYPES, LEVELS, PUB_TYPES, wordCount } from './types';
 import type { IntellectualProperty } from './types';
@@ -47,13 +47,20 @@ export function canView(actor: Actor, kind: EntityKind, r: AnyRecord) {
 
 const KINDS: EntityKind[] = ['publications', 'grants', 'seedMoney', 'fdps', 'conferences', 'awards', 'ipr'];
 
+/** What management sees of a record's history: creation, the final approval and funding outcomes, never any remark. */
+export function managementHistory(h: HistoryItem[]): HistoryItem[] {
+  const approved = [...h].reverse().find((x) => x.action === 'Approved');
+  return h.filter((x) => x.action === 'Created' || x === approved || x.action.startsWith('Outcome')).filter((x, i, a) => x.action !== 'Created' || a.findIndex((y) => y.action === 'Created') === i).map(({ remark: _r, ...x }) => x);
+}
+
 /** The slice of the institution's data this actor may receive. */
 export function scopeFor(db: DB, actor: Actor): DB {
   if (actor.role === 'office') return db;
   if (actor.role === 'management') {
     const out: DB = { ...db };
-    // Approved records only, and without the review history: approval remarks stay with the Office of Research.
-    for (const k of KINDS) (out[k] as AnyRecord[]) = (db[k] as AnyRecord[]).filter((r) => r.status === 'Approved').map((r) => ({ ...r, history: r.history.filter((h) => h.action === 'Created' || h.action === 'Approved' || h.action.startsWith('Outcome')) }));
+    // Approved records only, and without the review conversation: comments, returns and resubmissions stay between
+    // the faculty member and the Office of Research. Management sees when the record was created and approved.
+    for (const k of KINDS) (out[k] as AnyRecord[]) = (db[k] as AnyRecord[]).filter((r) => r.status === 'Approved').map((r) => ({ ...r, history: managementHistory(r.history) }));
     out.profileChanges = []; // pending profile edits are not institutional information until approved
     out.faculty = db.faculty.filter((f) => f.active);
     return out;
@@ -187,13 +194,14 @@ export function saveRecord(db: DB, actor: Actor, kind: EntityKind, input: Record
   const existing = id ? list.find((r) => r.id === id) : undefined;
   if (id && (!existing || !canView(actor, kind, existing))) throw notFound();
   if (existing && existing.facultyId !== actor.facultyId) throw forbid('You can only edit entries you created.');
-  if (existing && !isEditable(existing)) throw forbid(`This entry is ${existing.status.toLowerCase()} and can no longer be edited.`);
+  if (existing && !isEditable(existing)) throw forbid(existing.status === 'Submitted' || existing.status === 'UnderReview' ? 'This entry is with the Office of Research and is locked until it is reviewed.' : `This entry is ${existing.status.toLowerCase()} and can no longer be edited.`);
   if (kind === 'seedMoney' && !existing && !db.settings.seedMoneyWindowOpen) throw forbid('The seed money window is closed for this quarter.');
 
   const at = now();
   const history = [...(existing?.history ?? [])];
   history.push({ at, by: actor.name, action: existing ? 'Edited' : 'Created' });
-  if (submit) history.push({ at, by: actor.name, action: existing?.status === 'Rework' ? 'Resubmitted' : 'Submitted' });
+  const note = str(input.note, 1000).trim(); // the faculty member's reply to the Office of Research, sent with the (re)submission
+  if (submit) history.push({ at, by: actor.name, action: existing?.status === 'Rework' ? 'Resubmitted' : 'Submitted', ...(note ? { remark: note } : {}) });
   let newId = id;
   if (!newId) { db.seq += 1; newId = `${PREFIX[kind]}${db.seq}`; }
   // Funding outcome fields belong to management; keep what is stored.
@@ -222,19 +230,33 @@ export function deleteRecord(db: DB, actor: Actor, kind: EntityKind, id: string)
 
 export type Decision = 'Approved' | 'Rework' | 'Rejected';
 
-/** Approve, send for rework or reject a submitted entry. Office of Research only. */
+/** The Office of Research opens a submitted entry for review: Submitted → Under Review. Already under review: no change. */
+export function startReview(db: DB, actor: Actor, kind: EntityKind, id: string) {
+  requireOffice(actor);
+  const list = db[kind] as AnyRecord[];
+  const i = list.findIndex((x) => x.id === id);
+  if (i < 0) throw notFound();
+  if (list[i].status === 'UnderReview') return;
+  if (list[i].status !== 'Submitted') throw invalid('Only submitted entries can be reviewed.');
+  const at = now();
+  list[i] = { ...list[i], status: 'UnderReview', updatedAt: at, history: [...list[i].history, { at, by: actor.name, action: 'Review started' }] } as AnyRecord;
+}
+
+/** Approve, request changes to, or reject an entry that is submitted or under review. Office of Research only. */
 export function review(db: DB, actor: Actor, kind: EntityKind, id: string, decision: Decision, remark: string, sanctionedAmount?: number) {
   requireOffice(actor);
   if (!['Approved', 'Rework', 'Rejected'].includes(decision)) throw invalid('Unknown decision.');
   const list = db[kind] as AnyRecord[];
   const i = list.findIndex((x) => x.id === id);
   if (i < 0) throw notFound();
-  if (list[i].status !== 'Submitted') throw invalid('Only submitted entries can be reviewed.');
+  if (list[i].status !== 'Submitted' && list[i].status !== 'UnderReview') throw invalid('Only submitted entries can be reviewed.');
   const note = str(remark, 1000).trim();
   if (decision !== 'Approved' && !note) throw invalid('Give a remark so the faculty member knows what to change.');
   const at = now();
   const action = decision === 'Approved' ? 'Approved' : decision === 'Rework' ? 'Returned for correction' : 'Rejected';
-  const updated = { ...list[i], status: decision, updatedAt: at, history: [...list[i].history, { at, by: actor.name, action, remark: note || undefined }] } as AnyRecord;
+  // A decision taken straight from the queue still passes through review, so every record's history reads the same way.
+  const started = list[i].status === 'Submitted' ? [{ at, by: actor.name, action: 'Review started' }] : [];
+  const updated = { ...list[i], status: decision, updatedAt: at, history: [...list[i].history, ...started, { at, by: actor.name, action, ...(note ? { remark: note } : {}) }] } as AnyRecord;
   if (kind === 'seedMoney' && decision === 'Approved' && sanctionedAmount != null) {
     if (num(sanctionedAmount) < 0) throw invalid('Sanctioned amount cannot be negative.');
     (updated as unknown as { sanctionedAmount: number }).sanctionedAmount = num(sanctionedAmount);
@@ -278,9 +300,11 @@ function cleanBiodata(b: Biodata, prev: Biodata | undefined, by: string): Biodat
   if (scholarUrl && !/^https:\/\/scholar\.google\.[a-z.]+\//.test(scholarUrl)) throw invalid('The Google Scholar link must start with https://scholar.google.');
   if (b.dob && str(b.dob, 10) > now().slice(0, 10)) throw invalid('Date of birth cannot be in the future.');
   const rows = <T,>(v: unknown, keys: (keyof T)[]) => list(v, 50, (x) => Object.fromEntries(keys.map((k) => [k, str(x[k as string], 300)])) as T);
+  const supervision = rows<Supervisee>(b.supervision, ['name', 'degree', 'status', 'year', 'topic']).filter((x) => x.name.trim()).map((x) => ({ ...x, degree: SUPERVISION_DEGREES.includes(x.degree) ? x.degree : 'PhD', status: SUPERVISION_STATUS.includes(x.status) ? x.status : 'Current' }));
+  const phd = phdCounts(supervision);
   return {
     facultyId: b.facultyId, dob: str(b.dob, 10), gender: str(b.gender, 40), address: str(b.address, 500), summary: str(b.summary, 3000),
-    researchInterests: str(b.researchInterests, 1000), googleScholar: scholarUrl, phdGuided: num(b.phdGuided), phdOngoing: num(b.phdOngoing),
+    researchInterests: str(b.researchInterests, 1000), googleScholar: scholarUrl, phdGuided: phd ? phd.guided : num(b.phdGuided), phdOngoing: phd ? phd.ongoing : num(b.phdOngoing),
     qualifications: rows(b.qualifications, ['degree', 'specialization', 'institution', 'year']),
     experience: rows(b.experience, ['organisation', 'designation', 'from', 'to']),
     awards: prev?.awards ?? [],
@@ -289,7 +313,7 @@ function cleanBiodata(b: Biodata, prev: Biodata | undefined, by: string): Biodat
     primaryInterest: str(b.primaryInterest, 120).trim(),
     highlights: [...new Set(list(b.highlights, MAX_HIGHLIGHTS, (x) => x as unknown).map((x) => str(x, 40)).filter((x) => /^(publications|grants|seedMoney|conferences|awards|ipr):[A-Z]+\d+$/.test(x)))],
     teaching: rows<Course>(b.teaching, ['code', 'title', 'level']).filter((c) => c.title.trim()),
-    supervision: rows<Supervisee>(b.supervision, ['name', 'degree', 'status', 'year', 'topic']).filter((x) => x.name.trim()).map((x) => ({ ...x, degree: SUPERVISION_DEGREES.includes(x.degree) ? x.degree : 'PhD', status: SUPERVISION_STATUS.includes(x.status) ? x.status : 'Current' })),
+    supervision,
     availableToSupervise: b.availableToSupervise === true, availableForMedia: b.availableForMedia === true,
     engagement: rows<Engagement>(b.engagement, ['type', 'role', 'organisation', 'from', 'to']).filter((x) => x.organisation.trim() || x.role.trim()).map((x) => ({ ...x, type: ENGAGEMENT_TYPES.includes(x.type) ? x.type : 'Other' })),
     media: rows<MediaItem>(b.media, ['headline', 'outlet', 'date', 'url']).filter((x) => x.headline.trim()).map((x) => { if (x.url && !/^https?:\/\//.test(x.url)) throw invalid('Media links must start with http:// or https://.'); return x; }),
@@ -302,6 +326,15 @@ function cleanBiodata(b: Biodata, prev: Biodata | undefined, by: string): Biodat
     })(),
     updatedAt: prev?.updatedAt ?? now(),
   };
+}
+
+/**
+ * Ph.D. guided and ongoing, counted from the scholars listed under supervision. Null when no Ph.D. scholar is listed:
+ * the faculty member may then give the numbers without naming anyone.
+ */
+export function phdCounts(supervision: Supervisee[]): { guided: number; ongoing: number } | null {
+  const phd = supervision.filter((x) => x.degree === 'PhD');
+  return phd.length ? { guided: phd.filter((x) => x.status === 'Completed').length, ongoing: phd.filter((x) => x.status === 'Current').length } : null;
 }
 
 const FIELD_LABEL: Record<string, string> = {
@@ -325,7 +358,8 @@ export function proposeProfileChange(db: DB, actor: Actor, input: { biodata: Bio
   if (!f?.active) throw forbid('Your faculty profile is inactive.');
   db.profileChanges ??= [];
   const prev = db.biodata.find((x) => x.facultyId === me);
-  const open = db.profileChanges.find((c) => c.facultyId === me && ['Draft', 'Submitted', 'Rework'].includes(c.status));
+  const open = db.profileChanges.find((c) => c.facultyId === me && ['Draft', 'Submitted', 'UnderReview', 'Rework'].includes(c.status));
+  if (open?.status === 'UnderReview') throw forbid('Your profile update is being reviewed by the Office of Research. You can change it again after the review.');
   const biodata = cleanBiodata({ ...(input.biodata ?? {}), facultyId: me } as Biodata, prev, actor.name);
   const c = input.contact ?? {};
   const contact = { email: str(c.email, 200).trim(), phone: str(c.phone, 20), orcid: str(c.orcid, 19).trim(), scopusId: str(c.scopusId, 20).trim() };
@@ -349,6 +383,18 @@ export function proposeProfileChange(db: DB, actor: Actor, input: { biodata: Bio
 }
 const PROFILE_KEYS = ['dob', 'gender', 'address', 'summary', 'researchInterests', 'googleScholar', 'phdGuided', 'phdOngoing', 'qualifications', 'experience', 'memberships', 'expertise', 'keywords', 'sdgs', 'photo', 'scholar', 'primaryInterest', 'highlights', 'teaching', 'supervision', 'availableToSupervise', 'availableForMedia', 'engagement', 'media', 'office', 'links'] as const;
 
+/** The Office of Research opens a submitted profile update for review. */
+export function startProfileReview(db: DB, actor: Actor, id: string) {
+  requireOffice(actor);
+  const i = (db.profileChanges ?? []).findIndex((c) => c.id === id);
+  if (i < 0) throw notFound('Profile update');
+  const c = db.profileChanges[i];
+  if (c.status === 'UnderReview') return;
+  if (c.status !== 'Submitted') throw invalid('Only submitted profile updates can be reviewed.');
+  const at = now();
+  db.profileChanges[i] = { ...c, status: 'UnderReview', updatedAt: at, history: [...c.history, { at, by: actor.name, action: 'Review started' }] };
+}
+
 /** Office of Research decision on a proposed profile update. Only an approval touches the live profile. */
 export function reviewProfileChange(db: DB, actor: Actor, id: string, decision: Decision, remark: string) {
   requireOffice(actor);
@@ -356,12 +402,13 @@ export function reviewProfileChange(db: DB, actor: Actor, id: string, decision: 
   const i = (db.profileChanges ?? []).findIndex((c) => c.id === id);
   if (i < 0) throw notFound('Profile update');
   const c = db.profileChanges[i];
-  if (c.status !== 'Submitted') throw invalid('Only submitted profile updates can be reviewed.');
+  if (c.status !== 'Submitted' && c.status !== 'UnderReview') throw invalid('Only submitted profile updates can be reviewed.');
   const note = str(remark, 1000).trim();
   if (decision !== 'Approved' && !note) throw invalid('Give a remark so the faculty member knows what to change.');
   const at = now();
   const action = decision === 'Approved' ? 'Approved' : decision === 'Rework' ? 'Returned for correction' : 'Rejected';
-  db.profileChanges[i] = { ...c, status: decision, updatedAt: at, history: [...c.history, { at, by: actor.name, action, remark: note || undefined }] };
+  const started = c.status === 'Submitted' ? [{ at, by: actor.name, action: 'Review started' }] : [];
+  db.profileChanges[i] = { ...c, status: decision, updatedAt: at, history: [...c.history, ...started, { at, by: actor.name, action, ...(note ? { remark: note } : {}) }] };
   if (decision !== 'Approved') return;
   const bi = db.biodata.findIndex((x) => x.facultyId === c.facultyId);
   const approved = { ...c.biodata, updatedAt: at };

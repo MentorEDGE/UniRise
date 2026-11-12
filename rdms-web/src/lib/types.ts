@@ -3,17 +3,30 @@ export type Role = 'office' | 'management' | 'faculty';
 export type InstitutionRole = Role;
 export type AccountStatus = 'pending' | 'active' | 'rejected' | 'suspended' | 'deactivated';
 
-/** Approval workflow shared by every entry type, as in the reference RMS. */
-export type Status = 'Draft' | 'Submitted' | 'Approved' | 'Rework' | 'Rejected';
-export const STATUSES: Status[] = ['Draft', 'Submitted', 'Approved', 'Rework', 'Rejected'];
-/** How each state is named on screen. A submitted entry is pending approval by the Office of Research. */
-export const STATUS_LABEL: Record<Status, string> = { Draft: 'Draft', Submitted: 'Submitted · Pending Approval', Approved: 'Approved', Rework: 'Returned for Correction', Rejected: 'Rejected' };
+/**
+ * Approval workflow shared by every entry type:
+ *   Draft → Submitted → Under Review → Approved (or Rejected)
+ *   … Under Review → Changes Requested (Rework) → Resubmitted (Submitted again) → Under Review → Approved
+ * Only the faculty member and the Office of Research see anything but Approved.
+ */
+export type Status = 'Draft' | 'Submitted' | 'UnderReview' | 'Approved' | 'Rework' | 'Rejected';
+export const STATUSES: Status[] = ['Draft', 'Submitted', 'UnderReview', 'Rework', 'Approved', 'Rejected'];
+/** How each state is named on screen. */
+export const STATUS_LABEL: Record<Status, string> = { Draft: 'Draft', Submitted: 'Submitted', UnderReview: 'Under Review', Approved: 'Approved', Rework: 'Changes Requested', Rejected: 'Rejected' };
+/** Waiting for the Office of Research (not yet decided). */
+export const isAwaitingOffice = (s: Status) => s === 'Submitted' || s === 'UnderReview';
+/** History actions that are decisions by the Office of Research. */
+export const DECISION_ACTIONS = ['Approved', 'Sent for rework', 'Returned for correction', 'Rejected'];
+/** True when the latest submission was a resubmission after changes were requested. */
+export const isResubmission = (h: HistoryItem[]) => [...h].reverse().find((x) => x.action === 'Submitted' || x.action === 'Resubmitted')?.action === 'Resubmitted';
+/** The status as shown: a submitted entry that was corrected after review shows as Resubmitted. */
+export const statusLabel = (r: { status: Status; history: HistoryItem[] }) => (r.status === 'Submitted' && isResubmission(r.history) ? 'Resubmitted' : STATUS_LABEL[r.status]);
 
 export interface HistoryItem {
   at: string; // ISO timestamp
   by: string; // display name
-  action: string; // Created, Submitted, Approved, Returned for correction, ...
-  remark?: string;
+  action: string; // Created, Submitted, Review started, Returned for correction, Resubmitted, Approved, Rejected, ...
+  remark?: string; // a comment by the Office of Research, or the faculty member's reply when resubmitting
 }
 
 /** A platform account as the client sees it (no password hash, ever). */

@@ -1,3 +1,4 @@
+import { plural } from '../../lib/analytics';
 import { lazy, Suspense, useEffect, useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { NetworkGraph, SharedOutputs, forceLayout, outputsOf } from '../../components/network';
@@ -81,13 +82,13 @@ export function InstitutionNetworks() {
 
   return (
     <>
-      <PageTitle>Research Networks</PageTitle>
+      <PageTitle sub="Who works with whom, across departments and with other institutions, from approved co-authored work.">Research Networks</PageTitle>
       <div style={{ maxWidth: 1180, margin: '0 auto 14px' }}>
         <div className="tiles">
           <Tile label="Collaborative outputs" value={collaborative} sub={`of ${outputs.length} approved outputs`} />
           <Tile label="Faculty collaborating" value={new Set(edges.flatMap((e) => [e.a, e.b])).size} sub={`of ${active.length} active faculty`} />
           <Tile label="Cross-department links" value={cross.length} sub={`${edges.length} faculty pairs in all`} />
-          <Tile label="External institutions" value={extInst.size} sub={`${countries.size} countries`} />
+          <Tile label="External institutions" value={extInst.size} sub={plural(countries.size, 'country', 'countries')} />
         </div>
       </div>
       <Panel size="wide">
@@ -165,7 +166,7 @@ export function MyCollaborations() {
   const [tab, setTab] = useState<'graph' | 'map'>('graph');
   return (
     <>
-      <PageTitle>My Collaborations</PageTitle>
+      <PageTitle sub="Built automatically from your approved co-authored publications and grants.">My Collaborations</PageTitle>
       <Panel size="wide" actions={<><Link className="btn sm secondary" to="/publications/entry">Add publication</Link> <Link className="btn sm secondary" to="/grants/entry">Add grant</Link></>}>
         <p className="note" style={{ marginTop: 0 }}>Your collaborators come from the co-authors and co-investigators on your approved publications, grants and seed-money projects. To add a collaboration, list the person (and, for external collaborators, their institution and country) on the entry.</p>
         <div className="net-tabs" role="tablist">

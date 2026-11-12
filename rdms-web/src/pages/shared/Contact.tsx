@@ -103,6 +103,7 @@ export function TalkToOurTeam() {
                 <h2>Bring Research And Opportunity Together</h2>
                 <p className="ct-lead">Tell us about your organisation and the goals you’d like to explore together.</p>
                 <p className="ct-small">From institutional partnerships, faculty development and industry–academia collaboration, let’s start a conversation.</p>
+                <p className="ct-feature"><strong>Need a feature that isn’t in UniRise yet?</strong> Describe what your institution requires in your message, and our team will look into adding it.</p>
                 <div className="ct-alt">
                   <p>Prefer to email us?</p>
                   <a href={`mailto:${ENQUIRY_EMAIL}`}>{MAIL}{ENQUIRY_EMAIL}</a>

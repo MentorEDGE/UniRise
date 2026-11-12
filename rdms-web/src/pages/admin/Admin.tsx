@@ -6,7 +6,8 @@ import { fmtDate } from '../../lib/analytics';
 import { ENTITIES, listColumns } from '../../lib/entities';
 import { adminApi, reloadData, useStore } from '../../lib/store';
 import type { AnyRecord, Biodata, DB, EntityKind, Faculty, Grant, HistoryItem, ProfileChange, SeedMoney, Status } from '../../lib/types';
-import { ENTITY_LABEL, GRANT_OUTCOMES, STATUS_LABEL } from '../../lib/types';
+import { DECISION_ACTIONS, ENTITY_LABEL, GRANT_OUTCOMES, STATUS_LABEL, isAwaitingOffice, statusLabel } from '../../lib/types';
+import { Conversation, ProgressTracker } from '../../components/workflow';
 
 interface Account {
   id: string; email: string; name: string; title: string; role: 'office' | 'management' | 'faculty'; status: string; institutionId: string | null; facultyId: string | null;
@@ -31,7 +32,16 @@ function useAdmin<T>(path: string) {
 const KINDS: EntityKind[] = ['publications', 'grants', 'seedMoney', 'fdps', 'conferences', 'awards', 'ipr'];
 type QueueKind = EntityKind | 'profiles';
 interface ApprovalQueue { records: Record<EntityKind, AnyRecord[]>; profiles: ProfileChange[]; currentProfiles: Record<string, Biodata | null> }
-const decisionOf = (h: HistoryItem[]) => [...h].reverse().find((x) => ['Approved', 'Sent for rework', 'Returned for correction', 'Rejected'].includes(x.action));
+const decisionOf = (h: HistoryItem[]) => [...h].reverse().find((x) => DECISION_ACTIONS.includes(x.action));
+/** The stages of the review workflow, one tab each. */
+type View = 'awaiting' | 'review' | 'returned' | 'approved' | 'rejected';
+const VIEWS: { id: View; label: string; hint: string }[] = [
+  { id: 'awaiting', label: 'New and resubmitted', hint: 'Oldest first. Open a submission to start its review: the faculty member then sees it as Under Review.' },
+  { id: 'review', label: 'Under review', hint: 'Opened and not yet decided. Approve it, request changes or reject it.' },
+  { id: 'returned', label: 'Changes requested', hint: 'Returned to the faculty member with your comment; they come back here as Resubmitted.' },
+  { id: 'approved', label: 'Approved', hint: 'Newest first. Only approved records reach Top-Level Management. Open an approved grant to record its funding outcome.' },
+  { id: 'rejected', label: 'Rejected', hint: 'Newest first, with the reason given to the faculty member.' },
+];
 
 /**
  * The Office of Research approval section for its own institution: faculty submissions (entries and profile updates)
@@ -39,8 +49,10 @@ const decisionOf = (h: HistoryItem[]) => [...h].reverse().find((x) => ['Approved
  */
 export function AdminApprovals() {
   const { db: full, institution } = useStore();
-  const [view, setView] = useState<'pending' | 'decided'>('pending');
+  const [view, setView] = useState<View>('awaiting');
   const queue = useAdmin<ApprovalQueue>(`/office/approvals?view=${view}`);
+  const totals = useAdmin<{ awaiting: number; review: number; returned: number }>('/office/approvals/count');
+  const pending = view === 'awaiting' || view === 'review';
   const [kind, setKind] = useState<QueueKind | ''>('');
   const [dept, setDept] = useState('');
   const [open, setOpen] = useState<AnyRecord | null>(null);
@@ -53,18 +65,20 @@ export function AdminApprovals() {
   const k: QueueKind = kind || (counts && ([...KINDS, 'profiles'] as QueueKind[]).find((x) => counts[x])) || 'publications';
   const byId = new Map(full.faculty.map((f) => [f.id, f]));
   const inDept = (facultyId: string) => !dept || byId.get(facultyId)?.department === dept;
-  const order = <T extends { updatedAt: string }>(xs: T[]) => [...xs].sort((a, b) => (view === 'pending' ? a.updatedAt.localeCompare(b.updatedAt) : b.updatedAt.localeCompare(a.updatedAt)));
+  const order = <T extends { updatedAt: string }>(xs: T[]) => [...xs].sort((a, b) => (pending ? a.updatedAt.localeCompare(b.updatedAt) : b.updatedAt.localeCompare(a.updatedAt)));
   const rows = k === 'profiles' ? [] : order((q?.records[k] ?? []).filter((r) => inDept(r.facultyId)));
   const profileRows = order((q?.profiles ?? []).filter((c) => inDept(c.facultyId)));
-  const timing: Column<{ updatedAt: string; history: HistoryItem[]; status: Status }>[] = view === 'pending' ? [
-    { key: 'submitted', label: 'Submitted', value: (r) => r.updatedAt, render: (r) => fmtDate(r.updatedAt) },
+  const submittedAt = (h: HistoryItem[]) => [...h].reverse().find((x) => x.action === 'Submitted' || x.action === 'Resubmitted')?.at ?? '';
+  const timing: Column<{ updatedAt: string; history: HistoryItem[]; status: Status }>[] = pending ? [
+    { key: 'stage', label: 'Status', value: (r) => statusLabel(r), render: (r) => <StatusBadge status={r.status} history={r.history} /> },
+    { key: 'submitted', label: 'Submitted', value: (r) => submittedAt(r.history), render: (r) => fmtDate(submittedAt(r.history)) },
     { key: 'wait', label: 'Waiting (days)', value: (r) => Math.max(0, Math.floor((Date.now() - Date.parse(r.updatedAt)) / 86400000)), num: true },
   ] : [
-    { key: 'status', label: 'Decision', value: (r) => STATUS_LABEL[r.status], render: (r) => <StatusBadge status={r.status} /> },
+    { key: 'status', label: 'Status', value: (r) => STATUS_LABEL[r.status], render: (r) => <StatusBadge status={r.status} /> },
     { key: 'by', label: 'Decided', value: (r) => decisionOf(r.history)?.at ?? '', render: (r) => { const d = decisionOf(r.history); return d ? `${fmtDate(d.at)} · ${d.by}` : '—'; } },
     { key: 'remark', label: 'Comment', value: (r) => decisionOf(r.history)?.remark ?? '' },
   ];
-  const act = view === 'pending' ? 'Review' : 'Open';
+  const act = pending ? 'Review' : 'Open';
   // Review button first, then only what is needed to pick the entry; the full details open in the review window.
   const cols: Column<AnyRecord>[] = db && k !== 'profiles' ? [
     { key: 'act', label: 'Action', value: () => '', render: (r) => <button type="button" className="btn sm" onClick={(e) => { e.stopPropagation(); setOpen(r); }}>{act}</button> },
@@ -79,25 +93,26 @@ export function AdminApprovals() {
     ...(timing as Column<ProfileChange>[]),
   ];
   profileCols.unshift({ key: 'act', label: 'Action', value: () => '', render: (c) => <button type="button" className="btn sm" onClick={(e) => { e.stopPropagation(); setOpenProfile(c); }}>{act}</button> });
-  const refresh = () => { queue.reload(); void reloadData(); window.dispatchEvent(new Event('rdms:approvals')); };
+  const refresh = () => { queue.reload(); totals.reload(); void reloadData(); window.dispatchEvent(new Event('rdms:approvals')); };
+  const count = (v: View) => (v === 'awaiting' || v === 'review' || v === 'returned' ? totals.data?.[v] : undefined);
   const label = (x: QueueKind) => (x === 'profiles' ? 'Profile updates' : ENTITY_LABEL[x]);
   return (
     <>
-      <PageTitle>Approval</PageTitle>
+      <PageTitle sub="Review faculty submissions: approve them, request changes or reject them. Only approved records reach Top-Level Management.">Approvals</PageTitle>
       <Panel size="wide">
         {queue.error && <Alert kind="error">{queue.error}</Alert>}
-        <Tabs value={view} onChange={(v) => { setView(v); setKind(''); }} tabs={[{ id: 'pending', label: 'Waiting for review' }, { id: 'decided', label: 'Approved, returned and rejected' }]} />
+        <Tabs value={view} onChange={(v) => { setView(v); setKind(''); }} tabs={VIEWS.map((v) => ({ id: v.id, label: count(v.id) != null ? `${v.label} (${count(v.id)})` : v.label }))} />
         <div className="filters" style={{ marginBottom: 10 }}>
           <Field label="Department"><Select value={dept} onChange={setDept} options={full.settings.departments} placeholder="All departments" /></Field>
-          <span className="muted" style={{ paddingBottom: 6 }}>{view === 'pending' ? 'Oldest first. Click Review to check a submission and its documents, then Approve, Return for correction or Reject it.' : 'Newest first, with the reviewer and time of each decision. Open an approved grant to record its funding outcome.'}</span>
+          <span className="muted" style={{ paddingBottom: 6 }}>{VIEWS.find((v) => v.id === view)!.hint}</span>
         </div>
         {counts && <Tabs value={k} onChange={setKind} tabs={([...KINDS, 'profiles'] as QueueKind[]).map((x) => ({ id: x, label: `${label(x)} (${counts[x]})` }))} />}
         {k === 'profiles'
           ? <DataTable rows={profileRows} columns={profileCols} rowKey={(c) => c.id} onRowClick={setOpenProfile} empty={q ? 'No profile updates here.' : 'Loading…'} />
           : <DataTable rows={rows} columns={cols} rowKey={(r) => r.id} onRowClick={setOpen} exportName={`${view}_${k}`} empty={q ? `No ${ENTITIES[k].plural.toLowerCase()} here.` : 'Loading…'} />}
       </Panel>
-      {open && db && k !== 'profiles' && <ReviewEntry inst={inst} db={db} kind={k} r={open} onClose={() => setOpen(null)} onDone={() => { setOpen(null); refresh(); }} />}
-      {openProfile && q && <ReviewProfile inst={inst} change={openProfile} faculty={byId.get(openProfile.facultyId)} current={q.currentProfiles[openProfile.facultyId] ?? null} onClose={() => setOpenProfile(null)} onDone={() => { setOpenProfile(null); refresh(); }} />}
+      {open && db && k !== 'profiles' && <ReviewEntry inst={inst} db={db} kind={k} r={open} onClose={() => { setOpen(null); refresh(); }} onDone={() => { setOpen(null); refresh(); }} />}
+      {openProfile && q && <ReviewProfile inst={inst} change={openProfile} faculty={byId.get(openProfile.facultyId)} current={q.currentProfiles[openProfile.facultyId] ?? null} onClose={() => { setOpenProfile(null); refresh(); }} onDone={() => { setOpenProfile(null); refresh(); }} />}
     </>
   );
 }
@@ -114,44 +129,54 @@ export function Decide({ path, onDone, extra, label }: { path: string; onDone: (
     setBusy(true);
     try {
       await adminApi('POST', path, { decision, remark, ...(extra?.() ?? {}) });
-      toast(decision === 'Approved' ? `${label} approved.` : decision === 'Rework' ? `${label} returned for correction.` : `${label} rejected.`);
+      toast(decision === 'Approved' ? `${label} approved.` : decision === 'Rework' ? `Changes requested on ${label}.` : `${label} rejected.`);
       onDone();
     } catch (e) { setError((e as Error).message); } finally { setBusy(false); }
   };
   return (
     <>
       {error && <Alert kind="error">{error}</Alert>}
-      <Field label="Comment" hint="Required when returning for correction or rejecting. The faculty member sees it."><TextArea value={remark} onChange={setRemark} /></Field>
+      <Field label="Comment to the faculty member" hint="Required when requesting changes or rejecting. Only the faculty member and the Office of Research see it."><TextArea value={remark} onChange={setRemark} /></Field>
       <div className="btn-row">
         <button className="btn ok" disabled={busy} onClick={() => decide('Approved')}>Approve</button>
-        <button className="btn warn" disabled={busy} onClick={() => decide('Rework')}>Return for correction</button>
+        <button className="btn warn" disabled={busy} onClick={() => decide('Rework')}>Request changes</button>
         <button className="btn danger" disabled={busy} onClick={() => decide('Rejected')}>Reject</button>
       </div>
     </>
   );
 }
 
-const History = ({ h }: { h: HistoryItem[] }) => (
-  <>
-    <h3 style={{ fontSize: 15, margin: '14px 0 4px' }}>History</h3>
-    <ul className="history">{h.map((x, i) => <li key={i}><b>{fmtDate(x.at)}</b> · {x.action} by {x.by}{x.remark && <> — <i>{x.remark}</i></>}</li>)}</ul>
-  </>
-);
+/**
+ * Opening a submitted entry starts its review (Submitted → Under Review). Returns the status and history to show,
+ * updated straight away so the reviewer sees the step they just took.
+ */
+function useStartReview(path: string, r: { status: Status; history: HistoryItem[] }) {
+  const { user } = useStore();
+  const [live, setLive] = useState({ status: r.status, history: r.history });
+  useEffect(() => {
+    if (!path) return;
+    adminApi('POST', path).then(() => setLive({ status: 'UnderReview', history: [...r.history, { at: new Date().toISOString(), by: user?.name ?? 'Office of Research', action: 'Review started' }] })).catch(() => {});
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [path]);
+  return live;
+}
 
 function ReviewEntry({ inst, db, kind, r, onClose, onDone }: { inst: { id: string; name: string }; db: DB; kind: EntityKind; r: AnyRecord; onClose: () => void; onDone: () => void }) {
   const cfg = ENTITIES[kind];
   const owner = db.faculty.find((f) => f.id === r.facultyId);
   const [sanction, setSanction] = useState(kind === 'seedMoney' ? (r as SeedMoney).requestedAmount : 0);
   const base = '/office/approvals';
+  const live = useStartReview(r.status === 'Submitted' ? `${base}/${kind}/${encodeURIComponent(r.id)}/start` : '', r);
   return (
-    <Modal title={<>{cfg.label} {r.id} <span style={{ marginLeft: 8 }}><StatusBadge status={r.status} /></span></>} onClose={onClose}>
+    <Modal title={<>{cfg.label} {r.id} <span style={{ marginLeft: 8 }}><StatusBadge status={live.status} history={live.history} /></span></>} onClose={onClose}>
+      <ProgressTracker status={live.status} history={live.history} />
       <dl className="kv">
         <dt>Institution</dt><dd>{inst.name}</dd>
         <dt>Entered by</dt><dd>{owner ? `${owner.title} ${owner.name} (${owner.id}), ${owner.designation}, ${owner.department}` : r.facultyId}</dd>
         {cfg.details(r).map(([key, v]) => <div key={key} style={{ display: 'contents' }}><dt>{key}</dt><dd>{v}</dd></div>)}
       </dl>
-      <History h={r.history} />
-      {r.status === 'Submitted' && (
+      <Conversation history={live.history} />
+      {isAwaitingOffice(r.status) && (
         <div className="panel" style={{ marginTop: 12 }}>
           <h3 className="panel-title">Review</h3>
           {kind === 'seedMoney' && (
@@ -203,8 +228,10 @@ const PROFILE_ROWS: [string, (b: Biodata) => ReactNode][] = [
 function ReviewProfile({ inst, change: c, faculty: f, current, onClose, onDone }: { inst: { id: string; name: string }; change: ProfileChange; faculty?: Faculty; current: Biodata | null; onClose: () => void; onDone: () => void }) {
   const show = (v: ReactNode) => (v === '' || v == null ? <span className="muted">—</span> : v);
   const contact: [string, string, string][] = (['email', 'phone', 'orcid', 'scopusId'] as const).map((k) => [({ email: 'Email', phone: 'Phone', orcid: 'ORCID', scopusId: 'Scopus ID' })[k], f?.[k] ?? '', c.contact[k]]);
+  const live = useStartReview(c.status === 'Submitted' ? `/office/approvals/profiles/${encodeURIComponent(c.id)}/start` : '', c);
   return (
-    <Modal title={<>Profile update {c.id} <span style={{ marginLeft: 8 }}><StatusBadge status={c.status} /></span></>} onClose={onClose}>
+    <Modal title={<>Profile update {c.id} <span style={{ marginLeft: 8 }}><StatusBadge status={live.status} history={live.history} /></span></>} onClose={onClose}>
+      <ProgressTracker status={live.status} history={live.history} />
       <p style={{ marginTop: 0 }}><b>{f ? `${f.title} ${f.name}` : c.facultyId}</b> · {f?.designation}, {f?.department} · {inst.name}</p>
       <p className="muted">Changed: {c.changed.join(', ')}</p>
       <div className="tbl-wrap">
@@ -220,8 +247,8 @@ function ReviewProfile({ inst, change: c, faculty: f, current, onClose, onDone }
           </tbody>
         </table>
       </div>
-      <History h={c.history} />
-      {c.status === 'Submitted' && (
+      <Conversation history={live.history} />
+      {isAwaitingOffice(c.status) && (
         <div className="panel" style={{ marginTop: 12 }}>
           <h3 className="panel-title">Review</h3>
           <Decide path={`/office/approvals/profiles/${encodeURIComponent(c.id)}/review`} label={`Profile update ${c.id}`} onDone={onDone} />
@@ -287,6 +314,11 @@ function AddUser({ onClose, onDone }: { onClose: () => void; onDone: () => void 
 
 // ---------------- Users ----------------
 
+const ROLE_ORDER: Record<string, number> = { office: 0, management: 1, faculty: 2 };
+/** "Faculty B" before "Faculty AA": placeholder letter codes sort like spreadsheet columns, real names alphabetically. */
+const nameKey = (n: string) => n.split(' ').map((w) => (/^[A-Z]{1,3}$/.test(w) ? `${w.length}${w}` : w)).join(' ');
+const byRoleThenName = (a: Account, b: Account) => (ROLE_ORDER[a.role] ?? 9) - (ROLE_ORDER[b.role] ?? 9) || nameKey(a.name).localeCompare(nameKey(b.name), undefined, { numeric: true, sensitivity: 'base' });
+
 export function AdminUsers() {
   const users = useAdmin<Account[]>('/office/users');
   const toast = useToast();
@@ -296,8 +328,9 @@ export function AdminUsers() {
   const [error, setError] = useState('');
   const [temp, setTemp] = useState('');
   const [adding, setAdding] = useState(false);
-  const rows = (users.data ?? []).filter((a) => (!filter.role || a.role === filter.role)
-    && (!filter.status || a.status === filter.status) && (!filter.q || `${a.name} ${a.email}`.toLowerCase().includes(filter.q.toLowerCase())));
+  const all = useMemo(() => [...(users.data ?? [])].sort(byRoleThenName), [users.data]);
+  const rows = all.filter((a) => (!filter.role || a.role === filter.role)
+    && (!filter.status || a.status === filter.status) && (!filter.q || `${a.name} ${a.email} ${a.employeeCode}`.toLowerCase().includes(filter.q.toLowerCase())));
   const act = async (path: string, body: unknown, msg: string) => {
     try {
       const r = await adminApi<{ temporaryPassword?: string }>('POST', path, body);
@@ -307,22 +340,27 @@ export function AdminUsers() {
     } catch (e) { setError((e as Error).message); }
   };
   const cols: Column<Account>[] = [
-    { key: 'name', label: 'Name', value: (a) => a.name },
-    { key: 'email', label: 'Email', value: (a) => a.email },
+    { key: 'name', label: 'Name', value: (a) => `${a.name} <${a.email}>`, className: 'person-cell', render: (a) => <><b>{a.name}</b><small>{a.email}</small></> },
     { key: 'role', label: 'Role', value: (a) => ROLE[a.role] },
     { key: 'dept', label: 'Department', value: (a) => a.department || '—' },
     { key: 'desig', label: 'Designation', value: (a) => a.designation || '—' },
-    { key: 'profile', label: 'Faculty profile', value: (a) => a.facultyId ?? '—' },
+    { key: 'profile', label: 'Emp. code', value: (a) => a.facultyId ?? '—', className: 'nowrap' },
     { key: 'status', label: 'Status', value: (a) => a.status, render: (a) => statusBadge(a.status) },
-    { key: 'by', label: 'Approved by', value: (a) => a.reviewedBy ?? '' },
+    { key: 'added', label: 'Added', value: (a) => a.requestedAt, render: (a) => fmtDate(a.requestedAt), className: 'nowrap' },
   ];
   return (
     <>
-      <PageTitle>User Management</PageTitle>
+      <PageTitle sub="Create and manage faculty and Top-Level Management accounts for your institution.">User Management</PageTitle>
       <Panel size="wide" actions={<button className="btn sm" onClick={() => setAdding(true)}>+ Add user</button>}>
+        <div className="role-chips" role="group" aria-label="Accounts by role">
+          {([['', 'All accounts'], ['faculty', 'Faculty'], ['management', 'Top-Level Management'], ['office', 'Office of Research']] as const).map(([role, label]) => (
+            <button key={role} type="button" className={filter.role === role ? 'on' : ''} aria-pressed={filter.role === role} onClick={() => setFilter({ ...filter, role })}>
+              {label}<span>{role ? all.filter((a) => a.role === role).length : all.length}</span>
+            </button>
+          ))}
+        </div>
         <div className="filters" style={{ marginBottom: 10 }}>
-          <Field label="Search"><Input value={filter.q} onChange={(v) => setFilter({ ...filter, q: v })} placeholder="Name or email" type="search" /></Field>
-          <Field label="Role"><Select value={filter.role} onChange={(v) => setFilter({ ...filter, role: v })} options={[{ value: 'management', label: 'Top-Level Management' }, { value: 'faculty', label: 'Faculty' }, { value: 'office', label: 'Office of Research' }]} placeholder="All" /></Field>
+          <Field label="Search"><Input value={filter.q} onChange={(v) => setFilter({ ...filter, q: v })} placeholder="Name, email or code" type="search" /></Field>
           <Field label="Status"><Select value={filter.status} onChange={(v) => setFilter({ ...filter, status: v })} options={['active', 'suspended', 'deactivated']} placeholder="All" /></Field>
         </div>
         {users.error && <Alert kind="error">{users.error}</Alert>}
@@ -367,7 +405,7 @@ export function AdminAudit() {
   const audit = useAdmin<{ id: number; at: string; actor_name: string | null; action: string; target: string | null; institution_id: string | null; detail: string }[]>('/office/audit');
   return (
     <>
-      <PageTitle>Audit Log</PageTitle>
+      <PageTitle sub="Every sign-in, account change and approval decision, newest first.">Audit Log</PageTitle>
       <Panel size="wide">
         {audit.error && <Alert kind="error">{audit.error}</Alert>}
         <DataTable rows={audit.data ?? []} rowKey={(r) => String(r.id)} exportName="platform_audit" pageSize={25} columns={[

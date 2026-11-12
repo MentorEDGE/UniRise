@@ -6,7 +6,8 @@ import { biodataCompleteness, displayPhone, fmtDate, inr, isSanctioned } from '.
 import { creditedFaculty, proposeProfileChange, useStore } from '../../lib/store';
 import { StatusBadge } from '../../components/ui';
 import { STATUS_LABEL } from '../../lib/types';
-import { blankBiodata, normalizeBiodata } from '../../lib/domain';
+import { ProgressTracker } from '../../components/workflow';
+import { blankBiodata, normalizeBiodata, phdCounts } from '../../lib/domain';
 import type { Biodata, Course, Engagement, Experience, Faculty, MediaItem, Membership, Qualification, Supervisee } from '../../lib/types';
 import { COURSE_LEVELS, ENGAGEMENT_TYPES, MAX_HIGHLIGHTS, SDGS, SUPERVISION_DEGREES, SUPERVISION_STATUS, ipTypeLabel } from '../../lib/types';
 import { highlightOptions } from '../../components/research';
@@ -41,7 +42,7 @@ export function BiodataView() {
   const editPath = '/biodata/edit';
   return (
     <>
-      <PageTitle>{user?.role === 'faculty' ? 'My Profile' : 'Faculty Profile'}</PageTitle>
+      <PageTitle sub="Print it, or save it as a PDF from the print dialog.">Curriculum Vitae</PageTitle>
       <div className="panel wide no-print" style={{ display: 'flex', gap: 12, alignItems: 'center', flexWrap: 'wrap' }}>
         <div style={{ flex: 1, minWidth: 220 }}><b>Profile completeness</b><Attainment value={pct} target={100} /></div>
         {canEdit && <Link className="btn" to={editPath}>Edit Profile</Link>}
@@ -132,7 +133,7 @@ export function BiodataEdit() {
   const nav = useNavigate();
   const toast = useToast();
   // Continue an open proposal if there is one; otherwise start from the approved profile.
-  const open = db.profileChanges.find((c) => c.facultyId === facultyId && ['Draft', 'Submitted', 'Rework'].includes(c.status));
+  const open = db.profileChanges.find((c) => c.facultyId === facultyId && ['Draft', 'Submitted', 'UnderReview', 'Rework'].includes(c.status));
   const last = [...db.profileChanges].filter((c) => c.facultyId === facultyId).sort((x, y) => y.updatedAt.localeCompare(x.updatedAt))[0];
   const [bio, setBio] = useState<Biodata>(() => structuredClone(open ? normalizeBiodata(open.biodata) : b ? normalizeBiodata(b) : blankBiodata(facultyId, '')));
   const [photoError, setPhotoError] = useState('');
@@ -141,6 +142,7 @@ export function BiodataEdit() {
   if (!f || !fac) return <Panel><Alert kind="error">Faculty member not found.</Alert></Panel>;
   if (!canEdit) return <Panel><Alert kind="error">Only the faculty member can update their profile. Top-Level Management has read-only access.</Alert></Panel>;
   const u = (p: Partial<Biodata>) => setBio({ ...bio, ...p });
+  const phd = phdCounts(bio.supervision.filter((x) => x.name.trim()));
   const remark = last && ['Rework', 'Rejected'].includes(last.status) ? [...last.history].reverse().find((h) => h.remark)?.remark : undefined;
   const save = async (submit: boolean) => {
     if (fac.orcid && !/^\d{4}-\d{4}-\d{4}-\d{3}[\dX]$/.test(fac.orcid)) { setError('ORCID must look like 0000-0002-1825-0097.'); return; }
@@ -157,14 +159,16 @@ export function BiodataEdit() {
   };
   return (
     <>
-      <PageTitle>Edit Profile</PageTitle>
+      <PageTitle sub="Your official details, personal details and research profile.">Edit Profile</PageTitle>
       <div className="panel wide">
         {last ? (
-          <p style={{ margin: 0 }}><b>Latest profile update {last.id}:</b> <StatusBadge status={last.status} /> <span className="muted">· {fmtDate(last.updatedAt)} · changes: {last.changed.join(', ')}</span></p>
+          <p style={{ margin: 0 }}><b>Latest profile update {last.id}:</b> <StatusBadge status={last.status} history={last.history} /> <span className="muted">· {fmtDate(last.updatedAt)} · changes: {last.changed.join(', ')}</span></p>
         ) : <p style={{ margin: 0 }}>Changes you make here are sent to the Office of Research. Your public profile keeps its approved details until they approve the update.</p>}
         {remark && <Alert kind="info">Office of Research comment ({STATUS_LABEL[last!.status]}): <b>{remark}</b></Alert>}
+        {last && <ProgressTracker status={last.status} history={last.history} />}
         {open?.status === 'Submitted' && <p className="note" style={{ marginBottom: 0 }}>Your update is waiting for approval. Saving again replaces the pending update.</p>}
-        {open && open.status !== 'Submitted' && <p className="note" style={{ marginBottom: 0 }}>You are editing your unsent update {open.id}.</p>}
+        {open?.status === 'UnderReview' && <Alert kind="info">The Office of Research is reviewing your update {open.id}. You can make further changes after their decision.</Alert>}
+        {open && open.status !== 'Submitted' && open.status !== 'UnderReview' && <p className="note" style={{ marginBottom: 0 }}>You are editing your unsent update {open.id}.</p>}
       </div>
       {error && <div className="panel wide"><Alert kind="error">{error}</Alert></div>}
       <Panel title="Official Details" size="wide">
@@ -185,8 +189,8 @@ export function BiodataEdit() {
           <Field label="Date of Birth"><input type="date" value={bio.dob} onChange={(e) => u({ dob: e.target.value })} /></Field>
           <Field label="Gender"><Select value={bio.gender} onChange={(v) => u({ gender: v })} options={['Female', 'Male', 'Other', 'Prefer not to say']} placeholder="--Select--" /></Field>
           <Field label="Address" className="span2"><TextArea value={bio.address} onChange={(v) => u({ address: v })} /></Field>
-          <Field label="Ph.D. students guided (awarded)"><NumberInput value={bio.phdGuided} onChange={(v) => u({ phdGuided: v })} min={0} /></Field>
-          <Field label="Ph.D. students ongoing"><NumberInput value={bio.phdOngoing} onChange={(v) => u({ phdOngoing: v })} min={0} /></Field>
+          <Field label="Ph.D. students guided (awarded)" hint={phd ? 'Counted from your supervision list below' : 'Or list your scholars under Supervision to count them automatically'}>{phd ? <input type="text" readOnly value={phd.guided} /> : <NumberInput value={bio.phdGuided} onChange={(v) => u({ phdGuided: v })} min={0} />}</Field>
+          <Field label="Ph.D. students ongoing" hint={phd ? 'Counted from your supervision list below' : undefined}>{phd ? <input type="text" readOnly value={phd.ongoing} /> : <NumberInput value={bio.phdOngoing} onChange={(v) => u({ phdOngoing: v })} min={0} />}</Field>
           <Field label="Profile summary" className="span2"><TextArea value={bio.summary} onChange={(v) => u({ summary: v })} rows={3} /></Field>
           <Field label="Research interests" className="span2" hint="Separate with semicolons"><TextArea value={bio.researchInterests} onChange={(v) => u({ researchInterests: v })} rows={3} /></Field>
         </div>

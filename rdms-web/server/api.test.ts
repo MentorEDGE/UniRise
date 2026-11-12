@@ -114,6 +114,8 @@ describe('faculty access', () => {
     const m = await signedIn('dean@abc.edu.in', DEMO_PASSWORDS.management);
     expect((await m.post(`/api/records/fdps/${id}/review`, { decision: 'Approved', remark: '' })).status).toBe(403);
     expect((await m.post(`/api/office/approvals/fdps/${id}/review`, { decision: 'Approved', remark: '' })).status).toBe(403);
+    expect((await m.post(`/api/office/approvals/fdps/${id}/start`)).status).toBe(403);
+    expect((await f.post(`/api/office/approvals/fdps/${id}/start`)).status).toBe(403);
     expect((await m.get('/api/office/approvals')).status).toBe(403);
     const mdata = (await m.get('/api/data')).body;
     expect(mdata.fdps.some((x) => x.id === id)).toBe(false);
@@ -124,9 +126,16 @@ describe('faculty access', () => {
     expect(((await a.get('/api/office/approvals/count')).body as unknown as { total: number }).total).toBeGreaterThan(0);
     const queue = (await a.get('/api/office/approvals')).body as unknown as { records: Record<string, { id: string }[]> };
     expect(queue.records.fdps.some((x) => x.id === id)).toBe(true);
-    expect((await a.post(`/api/office/approvals/fdps/${id}/review`, { decision: 'Approved', remark: '' })).status).toBe(200);
+    // Opening it starts the review: Under Review for the faculty member, still invisible to management.
+    expect((await a.post(`/api/office/approvals/fdps/${id}/start`)).status).toBe(200);
+    expect(store.tenant('abc').fdps.find((x) => x.id === id)!.status).toBe('UnderReview');
+    expect(((await a.get('/api/office/approvals?view=review')).body as unknown as { records: Record<string, { id: string }[]> }).records.fdps.some((x) => x.id === id)).toBe(true);
+    expect((await m.get('/api/data')).body.fdps.some((x) => x.id === id)).toBe(false);
+    expect((await a.post(`/api/office/approvals/fdps/${id}/review`, { decision: 'Approved', remark: 'Verified against the certificate.' })).status).toBe(200);
     expect(store.tenant('abc').fdps.find((x) => x.id === id)!.status).toBe('Approved');
-    expect((await m.get('/api/data')).body.fdps.some((x) => x.id === id)).toBe(true);
+    const approved = (await m.get('/api/data')).body.fdps.find((x) => x.id === id)!;
+    expect(approved).toBeTruthy();
+    expect(approved.history.some((h) => h.remark)).toBe(false); // the reviewer's comment stays with the faculty member
   });
 
   it('honours and awards are saved, checked and approved through the API', async () => {

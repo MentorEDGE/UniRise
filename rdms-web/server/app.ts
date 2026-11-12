@@ -5,6 +5,7 @@ import * as rules from '../src/lib/domain';
 import type { Actor } from '../src/lib/domain';
 import { RuleError } from '../src/lib/domain';
 import type { EntityKind, User } from '../src/lib/types';
+import { DECISION_ACTIONS } from '../src/lib/types';
 import {
   burnPasswordCheck, createSession, endAllSessions, endSession, hashPassword, passwordProblem, randomPassword, readSession, SESSION_COOKIE,
   Throttle, verifyPassword,
@@ -202,14 +203,22 @@ export function createApp(store: Storage, opts: { secureCookies?: boolean; maile
 
   const decisionAction = (d: unknown, what: string) => ({ Approved: `${what} approved`, Rework: `${what} returned for correction`, Rejected: `${what} rejected` } as Record<string, string>)[String(d)] ?? `${what} reviewed`;
 
-  /** view=pending (default): the queue. view=decided: entries already approved, returned or rejected, newest first. */
+  /**
+   * One view of the review workflow:
+   *   awaiting  submitted or resubmitted, not yet opened (oldest first)   review    under review (oldest first)
+   *   returned  changes requested, waiting for the faculty member         approved / rejected   decided (newest first)
+   *   pending   awaiting + under review (older clients)                   decided   approved, returned and rejected
+   */
   app.get('/api/office/approvals', office, (req, res) => {
     const db = store.tenant(req.institutionId!);
-    const decided = req.query.view === 'decided';
-    const reviewed = (h: { action: string }[]) => h.some((x) => ['Approved', 'Sent for rework', 'Returned for correction', 'Rejected'].includes(x.action));
+    const view = String(req.query.view ?? 'pending');
+    const reviewed = (h: { action: string }[]) => h.some((x) => DECISION_ACTIONS.includes(x.action));
+    const STATUSES_OF: Record<string, string[]> = { awaiting: ['Submitted'], review: ['UnderReview'], returned: ['Rework'], approved: ['Approved'], rejected: ['Rejected'], pending: ['Submitted', 'UnderReview'], decided: ['Approved', 'Rework', 'Rejected'] };
+    const want = STATUSES_OF[view] ?? STATUSES_OF.pending;
+    const decided = ['approved', 'rejected', 'decided', 'returned'].includes(view);
     const pick = <T extends { status: string; history: { action: string }[]; updatedAt: string }>(xs: T[]) => (decided
-      ? xs.filter((r) => ['Approved', 'Rework', 'Rejected'].includes(r.status) && reviewed(r.history)).sort((a, b) => b.updatedAt.localeCompare(a.updatedAt)).slice(0, 300)
-      : xs.filter((r) => r.status === 'Submitted'));
+      ? xs.filter((r) => want.includes(r.status) && reviewed(r.history)).sort((a, b) => b.updatedAt.localeCompare(a.updatedAt)).slice(0, 300)
+      : xs.filter((r) => want.includes(r.status)));
     const profiles = pick(db.profileChanges ?? []);
     res.json({
       records: Object.fromEntries(KINDS.map((k) => [k, pick(db[k] as never[])])),
@@ -219,7 +228,22 @@ export function createApp(store: Storage, opts: { secureCookies?: boolean; maile
   });
   app.get('/api/office/approvals/count', office, (req, res) => {
     const db = store.tenant(req.institutionId!);
-    res.json({ total: KINDS.reduce((a, k) => a + (db[k] as { status: string }[]).filter((r) => r.status === 'Submitted').length, 0) + (db.profileChanges ?? []).filter((c) => c.status === 'Submitted').length });
+    const open = (r: { status: string }) => r.status === 'Submitted' || r.status === 'UnderReview';
+    const views = { awaiting: 0, review: 0, returned: 0 };
+    for (const r of [...KINDS.flatMap((k) => db[k] as { status: string }[]), ...(db.profileChanges ?? [])]) {
+      if (r.status === 'Submitted') views.awaiting++; else if (r.status === 'UnderReview') views.review++; else if (r.status === 'Rework') views.returned++;
+    }
+    res.json({ total: KINDS.reduce((a, k) => a + (db[k] as { status: string }[]).filter(open).length, 0) + (db.profileChanges ?? []).filter(open).length, ...views });
+  });
+  /** Opening a submission for review moves it to Under Review, so the faculty member can see it is being looked at. */
+  app.post('/api/office/approvals/profiles/:id/start', office, (req, res) => {
+    store.mutateTenant(req.institutionId!, (db) => rules.startProfileReview(db, req.actor!, String(req.params.id)));
+    res.json({ ok: true });
+  });
+  app.post('/api/office/approvals/:kind/:id/start', office, (req, res) => {
+    const kind = kindParam(req);
+    store.mutateTenant(req.institutionId!, (db) => rules.startReview(db, req.actor!, kind, String(req.params.id)));
+    res.json({ ok: true });
   });
   app.post('/api/office/approvals/profiles/:id/review', office, (req, res) => {
     store.mutateTenant(req.institutionId!, (db) => rules.reviewProfileChange(db, req.actor!, String(req.params.id), req.body?.decision, s(req.body?.remark, 1000)));
