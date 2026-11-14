@@ -1,0 +1,109 @@
+{
+  "schema_version": 1,
+  "diagram_type": "architecture",
+  "meta": {
+    "title": "UniRise system architecture (dev, 14 Nov 2026)",
+    "output": ".archify/architecture-unirise-system-20261114-103608/unirise-system.html",
+    "quality_profile": "showcase"
+  },
+  "components": [
+    { "id": "users", "type": "external", "label": "Institution users", "sublabel": "Faculty · Mgmt · Office", "pos": [20, 380], "size": [150, 64] },
+    { "id": "web", "type": "frontend", "label": "rdms-web", "sublabel": "React 18 · Vite · Hostinger", "pos": [240, 380], "size": [164, 64], "tag": "not wired to API yet" },
+    { "id": "alb", "type": "security", "label": "Load balancer", "sublabel": "ACM TLS :443 · 80→443", "pos": [570, 380], "size": [160, 64] },
+    { "id": "api", "type": "backend", "label": "unirise-api", "sublabel": "Spring Boot 4.1 · Java 21", "pos": [830, 376], "size": [164, 72], "tag": "Fargate ARM64 · 1 task" },
+
+    { "id": "secrets", "type": "security", "label": "Secrets Manager", "sublabel": "app-db · admin-key", "pos": [640, 180], "size": [150, 60] },
+    { "id": "ecr", "type": "cloud", "label": "ECR", "sublabel": "unirise-backend images", "pos": [837, 180], "size": [150, 60] },
+    { "id": "logs", "type": "cloud", "label": "CloudWatch Logs", "sublabel": "14-day retention", "pos": [1034, 180], "size": [150, 60] },
+
+    { "id": "control", "type": "database", "label": "Control-plane DB", "sublabel": "institutions · keys · tokens", "pos": [1210, 290], "size": [174, 62] },
+    { "id": "tenants", "type": "database", "label": "Tenant databases", "sublabel": "one per institution", "pos": [1210, 470], "size": [174, 62] },
+
+    { "id": "uploads", "type": "cloud", "label": "S3 uploads", "sublabel": "PDFs · certificates", "pos": [740, 580], "size": [150, 60], "tag": "planned" },
+    { "id": "ses", "type": "cloud", "label": "SES", "sublabel": "domain verified · sandbox", "pos": [912, 580], "size": [150, 60], "tag": "planned" },
+
+    { "id": "operator", "type": "external", "label": "UniRise operator", "sublabel": "CLI · OpenTofu", "pos": [247, 620], "size": [150, 64] },
+    { "id": "dbadmin", "type": "backend", "label": "DB admin task", "sublabel": "on demand · no inbound", "pos": [1210, 740], "size": [174, 64], "tag": "Fargate" },
+    { "id": "exports", "type": "cloud", "label": "S3 exports", "sublabel": "backups · tenant export", "pos": [1560, 742], "size": [150, 60] }
+  ],
+  "boundaries": [
+    { "kind": "region", "label": "AWS ap-south-1 · account 417441726165 · dev", "wraps": ["alb", "api", "secrets", "ecr", "logs", "control", "tenants", "uploads", "ses", "dbadmin", "exports"], "pad": 24 },
+    { "kind": "security-group", "label": "private subnets · one RDS PostgreSQL 16 instance", "wraps": ["control", "tenants"], "pad": 16 }
+  ],
+  "connections": [
+    { "from": "users", "to": "web", "label": "HTTPS", "variant": "emphasis" },
+    { "from": "web", "to": "alb", "label": "planned · cookie auth", "variant": "dashed" },
+    { "from": "alb", "to": "api", "label": ":8080", "variant": "emphasis" },
+    { "from": "api", "to": "control", "label": "JDBC · TLS", "route": "orthogonal-h" },
+    { "from": "api", "to": "tenants", "label": "JDBC · pool per tenant", "route": "orthogonal-h" },
+    { "from": "secrets", "to": "api", "label": "injected at start", "variant": "security" },
+    { "from": "ecr", "to": "api", "label": "image by digest" },
+    { "from": "api", "to": "logs", "label": "stdout", "variant": "dashed" },
+    { "from": "api", "to": "uploads", "label": "planned · files", "variant": "dashed" },
+    { "from": "api", "to": "ses", "label": "planned · email", "variant": "dashed" },
+    { "from": "operator", "to": "alb", "label": "X-Admin-Key · /api/platform", "variant": "security" },
+    { "from": "operator", "to": "dbadmin", "label": "ECS RunTask", "fromSide": "bottom", "toSide": "left" },
+    { "from": "dbadmin", "to": "tenants", "label": "bootstrap · dump · restore" },
+    { "from": "dbadmin", "to": "exports", "label": "AES256 dump · 30-day expiry" }
+  ],
+  "cards": [
+    { "dot": "slate", "title": "How to read this", "items": [
+      "Solid lines are deployed and verified in dev",
+      "Dashed lines and 'planned' tags are designed but not built",
+      "Health endpoint returned UP on 14 Nov 2026",
+      "AWS details come from the Terraform files and 4 Nov deployment notes, not a live inventory"
+    ] },
+    { "dot": "cyan", "title": "Frontend: rdms-web", "items": [
+      "React 18, Vite, TypeScript, React Router 6, Recharts, d3-geo maps",
+      "Roles: Faculty, Top-Level Management, Office of Research (one office per institution)",
+      "Seven record types: publications, grants, seed money, FDPs, conferences, honours and awards, intellectual property",
+      "Loads one role-scoped data slice, then computes 54 reports, analytics, scores, networks and maps in the browser",
+      "Today it runs on its own Node/Express + SQLite prototype server; src/lib/store.ts is the only seam to replace",
+      "Decided host: Hostinger at dev-unirise.mentoredge.co.in, manual upload of dist/"
+    ] },
+    { "dot": "emerald", "title": "unirise-api: built", "items": [
+      "Spring Boot 4.1.2 (webmvc, security, validation, actuator), Java 21, Maven, JdbcClient, no JPA",
+      "Tenancy: TenantRoutingDataSource, TenantDirectory, Provisioner, Migrator, TenantLifecycle; LRU pools (5 connections per tenant, 50 open pools)",
+      "Flyway run in code: control V1-V4 at start, tenant V1-V5 by the migrator",
+      "Platform API (X-Admin-Key): create, list, suspend, export, delete tenants; migrations; usage",
+      "Entries: publications, grants, seed money with draft, submit, review (EntryWorkflow)",
+      "Also built with no screen: org tree, role grants, milestones, meeting logs, projects, periods, CSV import (parked)",
+      "19 SQL reports with CSV export; 36 tests on real PostgreSQL 16 via Testcontainers"
+    ] },
+    { "dot": "amber", "title": "unirise-api: planned", "items": [
+      "Three-role AccessService; only the Office of Research reviews",
+      "Email + password sign-in: cookie session, CSRF header, lockout, idle timeouts (OIDC later)",
+      "New tables: fdp, conference, honour, intellectual_property, biodata, profile_change, notice",
+      "Under Review status, display codes (PUB, GRT, ...), grant outcome endpoint",
+      "Office approvals queue, user management, settings, notices, admin action log",
+      "Per institution: feature switches, custom fields (JSONB), configurable option lists",
+      "Scoped data-slice endpoint so reports stay computed in the browser"
+    ] },
+    { "dot": "violet", "title": "Data", "items": [
+      "One PostgreSQL 16 RDS instance: db.t4g.micro, 20 GB gp3, encrypted, private, 7-day backups, no Multi-AZ",
+      "Control plane: institution, institution_credential, institution_secret, user_token, migration_run, usage_counter, platform_access_log",
+      "Each tenant database: institution, researcher, org_unit (+closure), appointment, app_user, role_grant, relationship, access_log",
+      "Entries: publication (+author), research_grant (+investigator), seed_window, seed_proposal (+investigator), review_event",
+      "Other: tenant_settings, milestone, meeting_log, project (+member), period, period_snapshot",
+      "The tenant is chosen from the credential only, never from the request"
+    ] },
+    { "dot": "rose", "title": "Security and network", "items": [
+      "API accepts :8080 only from the load balancer's security group",
+      "RDS accepts :5432 only from the API and DB admin task security groups",
+      "No NAT, bastion, EC2 or paid interface endpoints; tasks use public IPs for outbound HTTPS; free S3 gateway endpoint",
+      "CORS allows only https://dev-unirise.mentoredge.co.in on /api/**",
+      "Today: X-API-Key per tenant, X-Admin-Key for operators, invitation token to bearer session",
+      "Only the admin task's execution role can read the RDS master secret",
+      "Still a shortcut: tenant DB passwords sit in a control-plane table; move to Secrets Manager before real data"
+    ] },
+    { "dot": "orange", "title": "Operations", "items": [
+      "DNS in Hostinger: CNAME api.dev-unirise.mentoredge.co.in to the load balancer",
+      "CI (GitHub Actions): mvnw verify and docker build; no deploy step",
+      "Deploy by hand: scripts/push-image.sh, then tofu apply with the pinned image digest",
+      "scripts/run-db-admin.sh bootstrap | backup-restore <tenant>; restore drill passed 4 Nov",
+      "OpenTofu state in an encrypted S3 bucket; 71 managed resources",
+      "Estimated cost: $50 to $70 a month before tax and usage",
+      "Not started: deploy pipeline, scheduled backups, alarms, IAM users with MFA, budget alerts, SES production access, production environment"
+    ] }
+  ]
+}

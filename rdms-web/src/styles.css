@@ -1,5 +1,5 @@
 /* RMS layout (header band, dropdown menu bar, centred form panels, footer bar) dressed in the UniRise identity:
-   tokens copied from ../unirise-web/src/index.css and tailwind.config.ts. Keep them in sync with that file. */
+   the tokens below are the source of truth (values documented in rms-docs/RMS_FRONTEND_ARCHITECTURE.md §3). */
 :root {
   color-scheme: light;
   --bg-hsl: 252 100% 99%;

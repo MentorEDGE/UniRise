@@ -3,7 +3,7 @@ import type { ReactNode } from 'react';
 import { useTheme } from '../lib/theme';
 import { Bar, BarChart, CartesianGrid, Line, LineChart, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts';
 
-/** UniRise chart palette (../unirise-web/src/index.css --viz-*): violet, pink, amber, teal, in this fixed order.
+/** UniRise chart palette: violet, pink, amber, teal, in this fixed order.
  *  Validated: all adjacent pairs pass CVD and normal-vision separation on the light surface. Never more than four series. */
 export const SERIES = ['#7c3aed', '#db2777', '#d97706', '#0d9488'];
 /** One violet ramp for journal quartiles (strongest = Q1), plus slate for unranked. On dark, the strongest step is the lightest. */
