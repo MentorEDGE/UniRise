@@ -3,6 +3,24 @@ variable "region" {
   default = "ap-south-1"
 }
 
+variable "api_image_digest" {
+  description = "ECR sha256 digest of the verified arm64 API image. Set after scripts/push-image.sh."
+  type        = string
+  validation {
+    condition     = can(regex("^sha256:[a-f0-9]{64}$", var.api_image_digest))
+    error_message = "api_image_digest must be a sha256 image digest from ECR."
+  }
+}
+
+variable "db_admin_image_digest" {
+  description = "ECR sha256 digest of the tested PostgreSQL 16 administration image."
+  type        = string
+  validation {
+    condition     = can(regex("^sha256:[a-f0-9]{64}$", var.db_admin_image_digest))
+    error_message = "db_admin_image_digest must be a sha256 image digest from ECR."
+  }
+}
+
 variable "vpc_cidr" {
   type    = string
   default = "10.20.0.0/16"
@@ -16,12 +34,6 @@ variable "db_instance_class" {
 variable "db_allocated_storage" {
   type    = number
   default = 20
-}
-
-variable "enable_bastion" {
-  description = "A tiny EC2 instance reachable only through SSM, used to reach the private database from a laptop."
-  type        = bool
-  default     = true
 }
 
 variable "ses_sender_email" {

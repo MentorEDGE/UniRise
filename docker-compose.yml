@@ -7,7 +7,7 @@ services:
       POSTGRES_DB: unirise
       POSTGRES_USER: unirise
       POSTGRES_PASSWORD: ${RMS_DB_PASSWORD:?Set RMS_DB_PASSWORD in .env}
-    ports: ["127.0.0.1:5432:5432"]
+    ports: ["127.0.0.1:${POSTGRES_PORT:-5432}:5432"]
     volumes: ["pgdata:/var/lib/postgresql/data"]
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U unirise -d unirise"]

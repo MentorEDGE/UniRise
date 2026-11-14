@@ -1,6 +1,7 @@
 # The account is shared with other projects, so the budget only counts resources tagged Project=UniRise.
 # Cost-allocation tags take up to 24 hours to appear in billing data.
 resource "aws_ce_cost_allocation_tag" "project" {
+  count   = var.budget_email != "" ? 1 : 0
   tag_key = "Project"
   status  = "Active"
 }

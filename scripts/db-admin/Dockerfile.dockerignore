@@ -1,0 +1,6 @@
+**
+!scripts/
+!scripts/db-admin/
+!scripts/db-admin/entrypoint.sh
+!scripts/tenant-backup.sh
+!scripts/restore-drill.sh

@@ -77,7 +77,7 @@ resource "aws_iam_policy" "require_mfa" {
   policy = data.aws_iam_policy_document.require_mfa.json
 }
 
-# --- Developers: use the dev data stores, push images, read logs, reach the database through SSM. Nothing else. ---
+# --- Developers: use dev data stores, push images and read logs. Privileged DB tasks are operator-only. ---
 data "aws_iam_policy_document" "developer" {
   statement {
     sid       = "ListUniRiseBuckets"
@@ -130,40 +130,7 @@ data "aws_iam_policy_document" "developer" {
     ]
     resources = [aws_ecr_repository.backend.arn]
   }
-  statement {
-    sid       = "FindBastion"
-    actions   = ["ec2:DescribeInstances", "ssm:DescribeInstanceInformation", "ssm:GetConnectionStatus"]
-    resources = ["*"]
-  }
-  dynamic "statement" {
-    for_each = var.enable_bastion ? [1] : []
-    content {
-      sid       = "StartTunnelToTheBastionOnly"
-      actions   = ["ssm:StartSession"]
-      resources = [aws_instance.bastion[0].arn]
-      condition {
-        test     = "StringEquals"
-        variable = "ssm:resourceTag/Project"
-        values   = ["UniRise"]
-      }
-      # Make SSM check the caller's access to the session document too, so only the document below can be used.
-      condition {
-        test     = "BoolIfExists"
-        variable = "ssm:SessionDocumentAccessCheck"
-        values   = ["true"]
-      }
-    }
-  }
-  statement {
-    sid       = "UseTheDatabaseTunnelDocumentOnly"
-    actions   = ["ssm:StartSession"]
-    resources = [aws_ssm_document.db_tunnel.arn]
-  }
-  statement {
-    sid       = "ManageOwnSessions"
-    actions   = ["ssm:TerminateSession", "ssm:ResumeSession"]
-    resources = ["arn:aws:ssm:*:*:session/$${aws:username}-*"]
-  }
+
 }
 
 resource "aws_iam_policy" "developer" {

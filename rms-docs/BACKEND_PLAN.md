@@ -212,13 +212,13 @@ Account `417441726165`, `ap-south-1`, shared with MentorEDGE. Only UniRise resou
 | A8 | Alarms (task health, 5xx, RDS storage and CPU), rate limiting at the edge | No monitoring today |
 | A9 | Upload scanning for PDFs and certificates | Needed once uploads exist |
 | A10 | Production environment: region and account choice, Multi-AZ, deletion protection | Not designed |
-| A11 | Commit the infra and API changes from 2026-11-04 | The running image was built from uncommitted source |
+| A11 | ~~Commit the infra and API changes from 2026-11-04~~ **Done 2026-11-14** | The running image was built from source that was uncommitted until then |
 
 ## 7. Plan
 
 Each phase ends with tests passing and the docs updated. Order matters: phases 2 to 5 depend on phase 1.
 
-**Phase 0. Housekeeping.** Commit the pending infra and API changes (A11). Refresh `RDMS_WEB_FEATURES.md` (7 record types, 54 reports, closed registration, review states).
+**Phase 0. Housekeeping.** Pending infra and API changes committed on 2026-11-14 (A11). Still to do: refresh `RDMS_WEB_FEATURES.md` (7 record types, 54 reports, closed registration, review states).
 
 **Phase 1. Decisions.** D1 to D4 were decided on 2026-11-14 (section 8). D5 to D8 follow the recommendations unless changed.
 

@@ -28,6 +28,9 @@ The API listens on `127.0.0.1:8081` in compose. Create an institution with the o
 `POST /api/platform/tenants` with header `X-Admin-Key: <RMS_ADMIN_KEY>` and body `{"slug":"demo","name":"Demo University"}`.
 The response holds that institution's API key, shown once.
 
+CORS allows `https://dev-unirise.mentoredge.co.in` on `/api/**`, including preflight requests. API calls still need their
+normal credentials. Other browser origins are rejected. `TenantIsolationTest` checks preflight, origin rejection and missing-key behaviour.
+
 ## Configuration (environment)
 | Variable | Meaning |
 |---|---|

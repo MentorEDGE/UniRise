@@ -74,6 +74,28 @@ class TenantIsolationTest {
 	}
 
 	@Test
+	void devWebsitePreflightSucceedsWithoutCredentials() throws Exception {
+		var request = HttpRequest.newBuilder(URI.create("http://localhost:" + port + "/api/researchers"))
+			.method("OPTIONS", HttpRequest.BodyPublishers.noBody())
+			.header("Origin", "https://dev-unirise.mentoredge.co.in")
+			.header("Access-Control-Request-Method", "POST")
+			.header("Access-Control-Request-Headers", "content-type,x-api-key").build();
+		var response = HTTP.send(request, HttpResponse.BodyHandlers.ofString());
+		assertEquals(200, response.statusCode());
+		assertEquals("https://dev-unirise.mentoredge.co.in", response.headers().firstValue("Access-Control-Allow-Origin").orElseThrow());
+	}
+
+	@Test
+	void corsRejectsOtherOriginsAndStillRequiresAuthentication() throws Exception {
+		for (String origin : List.of("https://dev-unirise.mentoredge.co.in", "https://untrusted.example")) {
+			var response = HTTP.send(HttpRequest.newBuilder(URI.create("http://localhost:" + port + "/api/researchers"))
+				.header("Origin", origin).build(), HttpResponse.BodyHandlers.ofString());
+			assertEquals(origin.endsWith(".example") ? 403 : 401, response.statusCode());
+			assertEquals(!origin.endsWith(".example"), response.headers().firstValue("Access-Control-Allow-Origin").isPresent());
+		}
+	}
+
+	@Test
 	void userOfOneTenantCannotReachAnotherTenantsData() throws Exception {
 		ensureTenants();
 		var created = call("POST", "/api/researchers", "X-API-Key", keyA, "{\"name\":\"Alice\"}");

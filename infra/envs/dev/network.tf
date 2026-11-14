@@ -1,5 +1,5 @@
-# No NAT gateway on purpose: it costs about as much as the rest of dev. Databases sit in private subnets with no route
-# to the internet; the optional bastion sits in a public subnet with no inbound rules and is reached through SSM.
+# Dev tasks use public IPs for outbound HTTPS; security groups restrict API ingress to the load balancer.
+# RDS stays in private subnets with no internet route. No NAT gateway or paid interface endpoints.
 resource "aws_vpc" "main" {
   cidr_block           = var.vpc_cidr
   enable_dns_support   = true
@@ -64,43 +64,9 @@ resource "aws_vpc_endpoint" "s3" {
   tags              = { Name = "${local.name}-s3" }
 }
 
-resource "aws_security_group" "bastion" {
-  name        = "${local.name}-bastion"
-  description = "No inbound. Reached through SSM Session Manager only. Egress: PostgreSQL to the database and HTTPS only."
-  vpc_id      = aws_vpc.main.id
-}
-
+# Keep the existing description: changing it would replace the live database security group.
 resource "aws_security_group" "db" {
   name        = "${local.name}-db"
   description = "PostgreSQL from the bastion (and later the app service)."
   vpc_id      = aws_vpc.main.id
-}
-
-resource "aws_vpc_security_group_ingress_rule" "db_from_bastion" {
-  security_group_id            = aws_security_group.db.id
-  referenced_security_group_id = aws_security_group.bastion.id
-  from_port                    = 5432
-  to_port                      = 5432
-  ip_protocol                  = "tcp"
-  description                  = "bastion"
-}
-
-# Egress is limited so the tunnel cannot be used to reach anything but the database: PostgreSQL to the DB security group, plus
-# HTTPS for the SSM agent and package repositories (there are no VPC endpoints for SSM, to avoid their hourly cost).
-resource "aws_vpc_security_group_egress_rule" "bastion_to_db" {
-  security_group_id            = aws_security_group.bastion.id
-  referenced_security_group_id = aws_security_group.db.id
-  from_port                    = 5432
-  to_port                      = 5432
-  ip_protocol                  = "tcp"
-  description                  = "PostgreSQL to the database"
-}
-
-resource "aws_vpc_security_group_egress_rule" "bastion_https" {
-  security_group_id = aws_security_group.bastion.id
-  cidr_ipv4         = "0.0.0.0/0"
-  from_port         = 443
-  to_port           = 443
-  ip_protocol       = "tcp"
-  description       = "HTTPS for the SSM agent"
 }

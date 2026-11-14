@@ -1,194 +1,126 @@
-# UniRise dev on AWS: setup and deploy runbook
+# UniRise dev deployment runbook
 
-Written 2026-11-04 from the real state of the repo and the AWS account. Region `ap-south-1`, account `417441726165` (shared with MentorEDGE).
-Companion files: `infra/README.md` (what each Terraform file creates), `rms-docs/MULTI_TENANCY_DESIGN.md` (why one database per institution), `unirise-api/README.md` (the API's settings), `infra/DEV_DEPLOY_PROMPT.md` (a prompt to hand this runbook to an AI agent).
+Updated 2026-11-04. Deployment completed and verified; the commands below are the repeatable operations record. AWS account `417441726165`, region `ap-south-1`, shared with MentorEDGE. Only resources named/tagged for UniRise are in scope. The current reviewable resource list and costs are in [DEV_ENV_IMPLEMENTATION_PLAN.md](DEV_ENV_IMPLEMENTATION_PLAN.md).
 
-Rules that apply to every step:
-- **Read every `plan` before you apply.** Nothing here is meant to be applied blind.
-- **Stop using the root login once the first admin exists** (stage B).
-- **No secrets in git, in chat, in Terraform variables or in Terraform state.** Passwords go into Secrets Manager by hand.
-- Tools: `tofu` (OpenTofu) is what was used and tested. `terraform` 1.10 or newer works the same.
+## Current state and design
 
-## 0. State today (checked 2026-11-04)
+The user chose the cheaper dev design: Fargate tasks with public IPs and restricted security groups, private RDS, an HTTPS load balancer, and temporary Fargate database administration jobs. No EC2 bastion, NAT gateway or paid interface endpoints are needed. The free S3 gateway endpoint stays.
 
-| Item | State |
-|---|---|
-| Terraform state bucket `unirise-tfstate-417441726165` | Created (stack `infra/bootstrap`) |
-| Dev stack `infra/envs/dev` | **Only 3 resources applied**: the certificate request for `api.dev-unirise.mentoredge.co.in`, the SES domain identity `dev-unirise.mentoredge.co.in`, and the SES configuration set. State is in the bucket above. Local files `backend.hcl` and `terraform.tfvars` exist (git-ignored; `tfvars` only sets `region` and `domain_name`). |
-| DNS records in Hostinger | 4 CNAMEs added (certificate validation and 3 SES DKIM). Live and correct. |
-| SES domain | **Verified**, DKIM `SUCCESS`. Still in the SES sandbox (can only mail verified addresses). |
-| ACM certificate | `PENDING_VALIDATION` at last check. It turns `ISSUED` by itself; recheck with the command in section 9. |
-| Database, network, bastion, S3, ECR, IAM, budget | **Not created yet** |
-| API image | Builds and runs locally; **not pushed** (no ECR repository exists yet) |
-| ECS service, load balancer | **Not written** (no `ecs.tf`); section 6 specifies it |
-| AWS login | The CLI is signed in as the **root user** |
+The base VPC, subnets, RDS, S3, ECR, application log group, certificate and SES identity are already applied. RDS is available, encrypted and private at `unirise-dev.cn6m28eewk6s.ap-south-1.rds.amazonaws.com`. The certificate for `api.dev-unirise.mentoredge.co.in` is issued; SES domain verification and DKIM succeeded. SES is still in the sandbox.
 
-Local repo: 7 backend commits and the infra commits are on `main` and **not pushed** to GitHub.
+The earlier apply created 45 of 48 planned additions. A bastion VM was never created: its EC2 launch hit a vCPU quota. The new design retires that dependency and removes its unused IAM/security-group/SSM resources after plan approval. The old AWS quota case `179378613200293` no longer blocks this design; no other project's resources are used.
 
-## 1. Before you start
+The two manual secrets `unirise/dev/app-db` and `unirise/dev/admin-key` exist. Database roles are configured; live Fargate bootstrap returned success. The demo report and live encrypted S3 backup/restore passed. ECS is stable with one running task and public HTTPS health returns `UP`. The final OpenTofu plan has no changes.
 
-You need:
-- A **budget alert email**, an IAM **admin user name** (for example `surya`), and optionally developer names.
-- Installed: AWS CLI v2, OpenTofu or Terraform, Docker, `psql`, and the **Session Manager plugin** (`brew install --cask session-manager-plugin`).
-- `aws login` done in this terminal. Check:
+The normal API task cannot read the RDS master secret. Only the separate admin execution role can inject the master password and app database password into an operator-started task.
+
+Local checkout is `dev` at `9717fb9`, including local `main` and fetched `origin/main`, 11 commits ahead of `origin/dev`. Changes are uncommitted. No Git push is authorised. Root remains in use for now; IAM users and budget alerts were explicitly deferred by the user.
+
+## Rules
+
+- Show the full resource plan and costs and get an explicit yes before any apply, destroy or delete. The user's design choice authorises preparation; it does not replace review of the generated Terraform plan.
+- Never write secret values to the repo, Terraform variables/state, command output or replies. Terraform stores secret ARNs only; ECS injects values at task startup.
+- Keep RDS private. API task ingress is only from the ALB on `8080`; admin tasks have no ingress. Database ingress is only from the API and admin security groups on `5432`.
+- Do not commit or push unless asked. When asked, commit locally and report before pushing.
+- DNS changes are manual in Hostinger. Give the user the exact record and target.
+
+## 1. Verify identity, images and the plan
+
+Use AWS CLI v2, OpenTofu, Docker and Java 21. Check the account before any operation:
+
 ```bash
-aws sts get-caller-identity
+aws sts get-caller-identity --region ap-south-1
 ```
 
-## 2. Stage A: create the whole dev environment
+Build/test the API before pushing it. CORS is already implemented for `https://dev-unirise.mentoredge.co.in` on `/api/**`; the backend suite passed all 36 tests. The admin image has its own real PostgreSQL 16 check:
+
+```bash
+docker build --platform linux/arm64 -f scripts/db-admin/Dockerfile -t unirise-db-admin:check .
+scripts/db-admin/check.sh
+scripts/push-image.sh
+scripts/push-image.sh db-admin
+```
+
+The image push helper accepts only this account and region. It uses the existing ECR repository `unirise-backend`; the API tag is the Git short SHA, the admin tag is `db-admin-` plus that SHA. Get both digests:
+
+```bash
+aws ecr describe-images --region ap-south-1 --repository-name unirise-backend --image-ids imageTag="$(git rev-parse --short HEAD)" --query 'imageDetails[0].imageDigest' --output text
+aws ecr describe-images --region ap-south-1 --repository-name unirise-backend --image-ids imageTag="db-admin-$(git rev-parse --short HEAD)" --query 'imageDetails[0].imageDigest' --output text
+```
+
+Put the digests into `api_image_digest` and `db_admin_image_digest` in the git-ignored `infra/envs/dev/terraform.tfvars`. Keep the existing region/domain, empty budget email, and empty admin/developer lists. The two existing manual secrets must exist before planning.
 
 ```bash
 cd infra/envs/dev
-```
-Edit `terraform.tfvars` (git-ignored). Keep the two existing lines and add yours:
-```hcl
-region             = "ap-south-1"
-domain_name        = "dev-unirise.mentoredge.co.in"
-budget_email       = "you@example.com"
-monthly_budget_usd = 50
-admins             = ["your-admin-name"]
-developers         = []
-# leave ses_sender_email empty: the whole domain is already verified in SES
-```
-```bash
 tofu init -backend-config=backend.hcl
+tofu fmt -check
+tofu validate
+tofu plan -out=/private/tmp/unirise-dev-budget.tfplan
 ```
+
+Review every addition, modification, replacement and deletion. The expected deletions are unused bastion IAM, security-group/rule and SSM resources. RDS, its existing security group, the buckets and unrelated infrastructure must not be destroyed or replaced. Stop for approval.
+
+## 2. Apply the approved infrastructure
+
+After approval, apply that saved plan. Do not use the superseded private-endpoint Stage E plan.
+
 ```bash
-tofu plan -out=dev.plan
-```
-**Read the plan.** Expect about 70 to 90 resources, all named `unirise-dev-*` and tagged `Project=UniRise`: VPC with 2 public and 2 private subnets, S3 gateway endpoint, RDS PostgreSQL 16 (`db.t4g.micro`), bastion `t4g.nano`, SSM tunnel document, S3 buckets `uploads` and `exports`, ECR `unirise-backend`, a CloudWatch log group, IAM groups `unirise-developers` and `unirise-admins`, your admin user, the MFA-required policy, and the budget. Nothing may be named outside `unirise`. Roughly US$20 to 40 a month.
-```bash
-tofu apply dev.plan
-```
-Then note the outputs:
-```bash
+tofu apply /private/tmp/unirise-dev-budget.tfplan
 tofu output
 ```
 
-## 3. Stage B: first admin, then stop using root
+The API service may initially fail startup because its database login does not exist. Complete bootstrap next, then force a fresh API deployment. During the initial deployment this restart completed successfully; subsequent image deployments use the already-configured database.
 
-1. Give your admin user a console login (a one-time temporary password you share with yourself privately):
+## 3. Bootstrap the database through Fargate
+
+From the repo root, as an operator authorised to run the admin task and pass its roles:
+
 ```bash
-aws iam create-login-profile --user-name your-admin-name --password-reset-required --password 'TEMPORARY-PASSWORD-HERE'
+scripts/run-db-admin.sh bootstrap
 ```
-2. Sign in to the AWS console as that user, set a new password, and **set up MFA** (the policy denies everything else until you do).
-3. In the terminal, sign in with `aws login` and choose the IAM user (the CLI supports console-style login for IAM users). Confirm:
+
+The helper runs the digest-pinned admin image in a public subnet with no inbound ports. It waits for the task, prints its logs and checks the exit code. ECS injects the RDS-managed JSON `password` field and the existing app password from Secrets Manager. No password is fetched onto the laptop.
+
+The job idempotently creates `unirise_dev` with IAM authentication and connection to `unirise`, and `unirise_app` with `LOGIN`, `CREATEROLE` and `CREATEDB`. It grants `pg_signal_backend`, grants the operator role membership needed to transfer database ownership, and makes `unirise_app` the control-plane database owner. The app role is not a superuser. Expected output: `database bootstrap OK`.
+
+The admin task has a separate execution role and a task role limited to backup objects in the UniRise exports bucket. Developer IAM users do not receive permissions to launch privileged admin tasks or read the master secret. There is no always-running admin service.
+
+## 4. Start and verify the API
+
+After bootstrap, restart the API deployment and wait for health:
+
 ```bash
-aws sts get-caller-identity
+cd infra/envs/dev
+aws ecs update-service --region ap-south-1 --cluster "$(tofu output -raw ecs_cluster)" --service "$(tofu output -raw ecs_service)" --force-new-deployment
+aws ecs wait services-stable --region ap-south-1 --cluster "$(tofu output -raw ecs_cluster)" --services "$(tofu output -raw ecs_service)"
 ```
-The ARN must end in `user/unirise/your-admin-name`, **not** `:root`. From here on, never use root.
 
-## 4. Stage C: database logins and secrets (one time, by the admin)
+Verify healthy ALB targets, `UP` at `/actuator/health`, allowed-origin preflight, rejection of other origins and unauthenticated API requests, then an authenticated report. The operator key must be fetched into memory without printing it. Provision a synthetic `demo` institution, create test researcher/publication data, and keep the returned tenant key in memory while testing.
 
-1. Open the tunnel (leave it running in its own terminal tab). The command is the `db_tunnel_command` output:
+Provisioning through the deployed API records the real RDS endpoint, so the old laptop `localhost:15432` host gotcha does not apply. Never expose RDS or put operator/service keys into a frontend build.
+
+## 5. Backup and restore drill
+
+From the repo root:
+
 ```bash
-tofu output -raw db_tunnel_command
-```
-2. Get the master password **without printing it** and connect as `unirise_admin`. The secret ARN is the `rds_secret_arn` output:
-```bash
-PGPASSWORD=$(aws secretsmanager get-secret-value --secret-id "$(tofu output -raw rds_secret_arn)" --query SecretString --output text | python3 -c "import sys,json;print(json.load(sys.stdin)['password'])") psql "host=localhost port=15432 dbname=unirise user=unirise_admin sslmode=require"
-```
-3. In `psql`, run (use a freshly generated password for `unirise_app`, for example `openssl rand -hex 24` in another tab; do not reuse any other password):
-```sql
--- developers: IAM sign-in, connect to the control-plane database only
-CREATE USER unirise_dev;
-GRANT rds_iam TO unirise_dev;
-GRANT CONNECT ON DATABASE unirise TO unirise_dev;
-
--- the API: may create institution databases, is not a superuser (tested in NonSuperuserTest)
-CREATE ROLE unirise_app LOGIN PASSWORD 'GENERATED-PASSWORD' CREATEROLE CREATEDB;
-GRANT pg_signal_backend TO unirise_app;
-ALTER DATABASE unirise OWNER TO unirise_app;
-```
-4. Store that password in Secrets Manager (so it never enters Terraform state), and make an operator key for the API the same way:
-```bash
-aws secretsmanager create-secret --region ap-south-1 --name unirise/dev/app-db --secret-string 'GENERATED-PASSWORD'
-```
-```bash
-aws secretsmanager create-secret --region ap-south-1 --name unirise/dev/admin-key --secret-string "$(openssl rand -hex 32)"
+scripts/run-db-admin.sh backup-restore demo
 ```
 
-## 5. Stage D: push the image and run the API against dev
+The temporary task reuses `tenant-backup.sh` and `restore-drill.sh` with PostgreSQL 16 tools. It uploads the encrypted dump under the exports bucket's `backups/demo/` prefix, restores a scratch database, compares table row counts and removes the scratch database. Expected output: `restore drill OK for demo`, followed by a successful job exit. Use a quiet test tenant so concurrent writes do not invalidate the row-count comparison. Exports expire after 30 days under the existing bucket lifecycle.
 
-1. Push the image (needs Docker running; builds for arm64 and pushes tag = git short sha to ECR `unirise-backend`):
-```bash
-scripts/push-image.sh
-```
-2. Run the API **on your laptop** against dev RDS through the open tunnel. Fetch the two secrets into environment variables without printing them, then start it:
-```bash
-export RMS_DB_PASSWORD=$(aws secretsmanager get-secret-value --secret-id unirise/dev/app-db --query SecretString --output text) RMS_ADMIN_KEY=$(aws secretsmanager get-secret-value --secret-id unirise/dev/admin-key --query SecretString --output text)
-```
-```bash
-cd unirise-api && CONTROL_DB_URL='jdbc:postgresql://localhost:15432/unirise?sslmode=require' CONTROL_DB_USER=unirise_app TENANT_DB_HOST=localhost TENANT_DB_PORT=15432 TENANT_DB_JDBC_PARAMS=sslmode=require JAVA_HOME=~/.jdks/temurin21/Contents/Home ./mvnw spring-boot:run
-```
-3. Prove it end to end (in another tab; `$RMS_ADMIN_KEY` is exported above):
-```bash
-curl -s -X POST localhost:8080/api/platform/tenants -H "X-Admin-Key: $RMS_ADMIN_KEY" -H 'Content-Type: application/json' -d '{"slug":"demo","name":"Demo University"}'
-```
-The response holds that institution's API key, shown once. Use it as `X-API-Key` to create a researcher and open `/api/reports/pub-university`. Then take a backup and run the restore drill (`scripts/tenant-backup.sh`, `scripts/restore-drill.sh`, which need PostgreSQL 16 client tools and the `PG*` variables; the drill ran inside a `postgres:16` container in the tests).
+The local admin image check passed non-superuser bootstrap, idempotence, password login, role/owner checks and a real PostgreSQL backup/restore. Live AWS secret injection and the AES256-encrypted S3 upload also passed. This manual job is not a nightly backup schedule; automated RDS backups already protect the instance.
 
-**Gotcha: where the database host is stored.** Each institution row in the control plane stores `db_host` and `db_port` from `TENANT_DB_HOST`/`TENANT_DB_PORT` **at provisioning time**. Provisioning from a laptop stores `localhost:15432`, which is wrong for the ECS service. Either delete the demo institutions before moving to ECS (suspend, set `closing`, delete: retention is 30 days by default, set `TENANT_RETENTION_DAYS=0` for dev), or fix the rows:
-```sql
-UPDATE institution SET db_host = '<rds_endpoint>', db_port = 5432;
-```
+## 6. Hostinger DNS and completion
 
-## 6. Stage E: ECS behind a load balancer (still to be written)
+Under Domains > `mentoredge.co.in` > DNS records, the user adds a CNAME with name `api.dev-unirise` and target from `api_load_balancer_dns`. The zone appends `.mentoredge.co.in`. Keep the default TTL. The existing certificate and SES DKIM CNAMEs remain unchanged.
 
-No `ecs.tf` exists. Write it with these requirements, then plan and apply as in stage A (cost: about US$30 to 45 a month more):
-- ECS cluster, Fargate task definition **arm64**, 0.25 vCPU / 0.5 GB, one service with desired count 1, in the **private subnets**, image `<ecr_repository_url>:<tag>`.
-- Task environment: `CONTROL_DB_URL=jdbc:postgresql://<rds_endpoint>:5432/unirise?sslmode=require`, `CONTROL_DB_USER=unirise_app`, `TENANT_DB_HOST=<rds_endpoint>`, `TENANT_DB_PORT=5432`, `TENANT_DB_JDBC_PARAMS=sslmode=require`. Task **secrets** from Secrets Manager: `RMS_DB_PASSWORD` from `unirise/dev/app-db`, `RMS_ADMIN_KEY` from `unirise/dev/admin-key`.
-- Execution role (pull from ECR, write logs to `/unirise/dev/app`, read those two secrets only) and a task role (the `uploads` and `exports` buckets, SES send).
-- Security groups: load balancer in from the internet on 443 (consider limiting to known IPs at first, because `/api/platform/**` is guarded only by the operator key); tasks in from the load balancer on 8080; **add an ingress rule on the database security group (`aws_security_group.db`) from the task security group on 5432** (today it only allows the bastion).
-- Application Load Balancer in the public subnets: HTTPS listener using the issued ACM certificate for `api.dev-unirise.mentoredge.co.in`, HTTP listener redirecting to HTTPS, target group health check `/actuator/health` on 8080.
-- **No NAT gateway exists**, so private tasks need VPC interface endpoints for `ecr.api`, `ecr.dkr`, `secretsmanager` and `logs` (the S3 gateway endpoint already exists). Alternative: tasks in public subnets with a public IP, locked down by security group; cheaper but less clean.
-- Output the load balancer's DNS name. Deploy updates with `scripts/push-image.sh` then `aws ecs update-service --cluster ... --service ... --force-new-deployment`.
-- Hostinger: add the last CNAME (section 7).
+All backend completion checks passed: bootstrap, stable ECS/healthy ALB, demo report, live restore drill, public HTTPS health and a no-change OpenTofu plan. The user added CNAME `api.dev-unirise` -> `unirise-dev-api-2002016511.ap-south-1.elb.amazonaws.com`. IAM admin/MFA setup remains deferred by the current root override. The demo already exists; its one-time test credentials were kept in process memory and not retained. Create a separate test institution for new credential-based verification.
 
-## 7. DNS records (Hostinger, zone `mentoredge.co.in`)
+## Costs and remaining product work
 
-`dev-unirise.mentoredge.co.in` is **not its own zone**: it is a record inside `mentoredge.co.in` (the "external domain" page for it in hPanel fails with "Domain not found"). Add records under **Domains → mentoredge.co.in → DNS records**, with the Name ending in `.dev-unirise` (the panel adds `.mentoredge.co.in`). Field names: Type, Name, Target, TTL (leave the default).
+At the checked Mumbai on-demand rates and 730 hours/month, the API task costs about $5.30/month, its public IPv4 address $3.65, ALB hourly usage $17.45 and its minimum two IPv4 addresses $7.30: about $33.70/month added baseline. RDS compute is about $15.33/month, plus storage, secrets and usage. Expect roughly $50–70/month for the dev environment before tax and variable usage. Temporary admin tasks add compute/IP charges only while running. No paid interface endpoints, NAT gateway or EC2 bastion are included. Budget alerts are disabled; there is no spending cap.
 
-Already added and verified:
-| Type | Name | Target |
-|---|---|---|
-| CNAME | `_356c950350455a94c758ba98023804fa.api.dev-unirise` | `_c13e9757c8d89dbf47103ae3daab35ec.wzccmgtwzk.acm-validations.aws.` |
-| CNAME | `yvjnv7hfitje3wpj5dxpeiozhm7bmcp6._domainkey.dev-unirise` | `yvjnv7hfitje3wpj5dxpeiozhm7bmcp6.dkim.amazonses.com` |
-| CNAME | `wozpakfhti6twozaavg3xklzl43xas4o._domainkey.dev-unirise` | `wozpakfhti6twozaavg3xklzl43xas4o.dkim.amazonses.com` |
-| CNAME | `7h2ybu7p2cnerogfibplymxyufo5phh7._domainkey.dev-unirise` | `7h2ybu7p2cnerogfibplymxyufo5phh7.dkim.amazonses.com` |
+Rates checked through the AWS Price List API on 2026-11-04: ARM Fargate $0.02383/vCPU-hour and $0.00261/GiB-hour; ALB $0.0239/hour plus $0.008/LCU-hour; IPv4 $0.005/address-hour; RDS db.t4g.micro $0.021/hour. See [Fargate pricing](https://aws.amazon.com/fargate/pricing/), [ALB pricing](https://aws.amazon.com/elasticloadbalancing/pricing/) and [VPC pricing](https://aws.amazon.com/vpc/pricing/).
 
-Still to add after the load balancer exists:
-| Type | Name | Target |
-|---|---|---|
-| CNAME | `api.dev-unirise` | the load balancer's DNS name (`...ap-south-1.elb.amazonaws.com`) |
-
-If Hostinger rejects a trailing dot on a Target, remove it.
-
-## 8. Gaps to close before the frontend can use the API
-
-- The API sends **no CORS headers**. The dev website `https://dev-unirise.mentoredge.co.in` calling `https://api.dev-unirise.mentoredge.co.in` will be blocked by the browser until CORS allows that one origin.
-- The frontend still runs on mock data; switch it feature by feature (`VITE_USE_MOCK=false` and an API base URL).
-- Tenant database passwords still live in a control-plane table (dev shortcut); move them to Secrets Manager before real data.
-- Invitations are returned to the admin, not emailed; wire SES. Ask AWS to move SES out of the sandbox before real users get mail.
-- Sign-in is API key or invitation only; OIDC is next.
-
-## 9. Checks
-
-Certificate and SES:
-```bash
-ARN=$(aws acm list-certificates --region ap-south-1 --query "CertificateSummaryList[?DomainName=='api.dev-unirise.mentoredge.co.in'].CertificateArn" --output text); aws acm describe-certificate --region ap-south-1 --certificate-arn $ARN --query 'Certificate.Status' --output text; aws sesv2 get-email-identity --region ap-south-1 --email-identity dev-unirise.mentoredge.co.in --query '{verified:VerifiedForSendingStatus,dkim:DkimAttributes.Status}'
-```
-Done means:
-- `aws sts get-caller-identity` shows your IAM admin, not root.
-- `tofu plan` in `infra/envs/dev` shows no changes.
-- A `demo` institution is provisioned on dev RDS and a report returns data.
-- The restore drill prints `restore drill OK`.
-- After stage E: `curl https://api.dev-unirise.mentoredge.co.in/actuator/health` returns `UP`.
-
-## 10. Cost, teardown, troubleshooting
-
-- Stage A about US$20 to 40 a month (RDS and bastion dominate); stage E adds about US$30 to 45. The budget emails you at 80% and at a 100% forecast. Cost-allocation tags take up to 24 hours to show in billing.
-- Stop spending: `tofu destroy` in `infra/envs/dev` (the database keeps a final snapshot `unirise-dev-final`; delete it by hand if not wanted). The state bucket in `infra/bootstrap` is cheap; leave it.
-- "Domain not found" in Hostinger: you are in the wrong zone; see section 7.
-- Certificate stuck `PENDING_VALIDATION`: confirm the record resolves with `dig +short CNAME _356c950350455a94c758ba98023804fa.api.dev-unirise.mentoredge.co.in`, then wait up to an hour.
-- API fails to connect to RDS with an SSL error: set `TENANT_DB_JDBC_PARAMS=sslmode=require` and add `?sslmode=require` to `CONTROL_DB_URL`.
-- Tunnel will not open: check the Session Manager plugin is installed and that you are signed in as the admin or a developer (MFA done).
+Frontend contract integration, tenant credentials in Secrets Manager, SES invitations and OIDC remain product work. `unirise-web` was superseded and removed (2026-11-14); `rdms-web`, the product frontend, has its own Node/SQLite backend. It does not become a Spring client by flipping a URL or flag. CORS is implemented, but it becomes live only after this image is deployed.
