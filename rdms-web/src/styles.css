@@ -2564,3 +2564,34 @@ details.facet[open] > summary .facet-chev { transform: rotate(180deg); }
 .ct-feature strong { display: block; margin-bottom: 2px; color: #5b21b6; font-weight: 650; }
 :root[data-theme='dark'] .ct-feature { background: rgb(167 139 250 / 0.12); border-left-color: #a78bfa; color: #e2e8f0; }
 :root[data-theme='dark'] .ct-feature strong { color: #c4b5fd; }
+/* Follow me: the researcher's social and research links */
+.follow { margin: 16px 0 0; padding-top: 14px; border-top: 1px solid var(--border); }
+.follow h2 { margin: 0 0 10px; font-size: 13px; font-weight: 650; text-transform: uppercase; letter-spacing: .08em; color: var(--muted-fg); }
+.follow ul { list-style: none; display: flex; flex-wrap: wrap; gap: 8px; margin: 0; padding: 0; }
+.follow a { display: inline-flex; align-items: center; gap: 8px; padding: 7px 14px 7px 10px; border: 1px solid var(--border); border-radius: 999px; background: var(--card); color: var(--foreground); font-size: 14px; font-weight: 550; text-decoration: none; transition: border-color .2s, background-color .2s, transform .15s; }
+.follow a:hover, .follow a:focus-visible { border-color: var(--primary); background: hsl(var(--tint) / .7); }
+.follow a:active { transform: scale(.97); }
+.follow svg { width: 18px; height: 18px; fill: currentColor; flex: none; }
+.follow-linkedin svg { color: #0a66c2; } .follow-youtube svg { color: #e62117; } .follow-researchgate svg { color: #00ccbb; } .follow-ssrn svg { color: #1f5f8b; }
+:root[data-theme='dark'] .follow-linkedin svg { color: #4ea3ff; } :root[data-theme='dark'] .follow-ssrn svg { color: #6bb0e0; }
+.follow-empty { margin: 14px 0 0; font-size: 14px; color: var(--muted-fg); }
+@media print { .follow a { border: 0; padding: 0; } .follow-empty { display: none; } }
+
+/* ---------- Responsive fixes (phone and tablet) ---------- */
+fieldset { min-width: 0; }                       /* a fieldset otherwise grows to fit wide tables inside it */
+.tbl-scroll { overflow-x: auto; -webkit-overflow-scrolling: touch; }
+.rep-layout > * { min-width: 0; }
+.net-sel { flex-wrap: wrap; }
+.net-sel select { max-width: 100%; }
+@media (max-width: 900px) {
+  .rep-layout { grid-template-columns: minmax(0, 1fr); padding: 0 12px; }
+}
+@media (max-width: 600px) {
+  .tbl td.title-cell { min-width: 180px; }
+  .btn-row { flex-wrap: wrap; }
+}
+/* Step tabs on the grant form: wrap or scroll on narrow screens instead of running off the edge */
+.steps { overflow-x: auto; scrollbar-width: none; }
+.steps::-webkit-scrollbar { display: none; }
+.steps button { white-space: nowrap; min-width: max-content; }
+@media (max-width: 600px) { .steps { flex-wrap: wrap; border-radius: 18px; } .steps button { flex: 1 1 40%; } }

@@ -56,6 +56,33 @@ async function enter(s: { user: User; institution: Institution | null }) {
   set({ user: s.user, institution: s.institution, db });
 }
 
+/**
+ * Keeps an open tab up to date with what others do: an approval by the Office of Research shows on the faculty
+ * member's screen, and a new submission in the Office's queue, without reloading the page. Refreshes when the tab
+ * comes back into view, when moving to another page (at most every 5 seconds) and every minute while visible.
+ * Nothing re-renders unless the data actually changed.
+ */
+let lastData = '';
+let lastRefresh = 0;
+async function refreshQuietly(minGapMs: number) {
+  if (!snapshot.user || document.visibilityState !== 'visible' || Date.now() - lastRefresh < minGapMs) return;
+  lastRefresh = Date.now();
+  try {
+    const res = await fetch('/api/data', { credentials: 'same-origin', headers: { 'X-RDMS': '1' } });
+    if (res.status === 401) { set({ user: null, institution: null, db: EMPTY }); return; }
+    if (!res.ok) return;
+    const text = await res.text();
+    if (text !== lastData) { lastData = text; set({ db: JSON.parse(text) as DB }); }
+    window.dispatchEvent(new Event('rdms:approvals'));
+  } catch { /* offline for a moment: the next refresh catches up */ }
+}
+if (typeof window !== 'undefined') {
+  document.addEventListener('visibilitychange', () => void refreshQuietly(2_000));
+  window.addEventListener('focus', () => void refreshQuietly(2_000));
+  window.addEventListener('hashchange', () => void refreshQuietly(5_000));
+  setInterval(() => void refreshQuietly(55_000), 60_000);
+}
+
 /** Called once on start: restores the session from the HttpOnly cookie, if any. */
 export async function bootstrap() {
   try {

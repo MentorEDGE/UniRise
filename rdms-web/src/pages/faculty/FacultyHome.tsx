@@ -61,12 +61,12 @@ export function FacultyHome() {
         <section className="card">
           <h3>Needs your action ({action.length})</h3><p className="sub">Drafts to submit and entries the Office of Research asked you to change</p>
           {action.length ? (
-            <table className="tbl"><tbody>{action.map(({ k, r }) => (
+            <div className="tbl-scroll"><table className="tbl"><tbody>{action.map(({ k, r }) => (
               <tr key={r.id} style={{ cursor: 'pointer' }} onClick={() => setOpen({ k, id: r.id })}>
                 <td><StatusBadge status={r.status} history={r.history} /></td><td>{ENTITY_LABEL[k]}</td><td className="title-cell">{ENTITIES[k].title(r)}
                   {r.status === 'Rework' && <div className="muted">“{[...r.history].reverse().find((h) => h.remark && h.action === 'Returned for correction')?.remark}”</div>}</td>
               </tr>
-            ))}</tbody></table>
+            ))}</tbody></table></div>
           ) : <p className="muted">Nothing needs your action.</p>}
           {bio < 80 && <p className="note">Your profile is {bio}% complete. <Link to="/biodata/edit">Complete it</Link> for accreditation records.</p>}
         </section>
@@ -77,12 +77,12 @@ export function FacultyHome() {
         </section>
         <section className="card span-all">
           <h3>Recent entries</h3>
-          <table className="tbl">
+          <div className="tbl-scroll"><table className="tbl">
             <thead><tr><th>Type</th><th>ID</th><th>Title</th><th>Status</th><th>Updated</th></tr></thead>
             <tbody>{recent.map(({ k, r }) => (
               <tr key={r.id} style={{ cursor: 'pointer' }} onClick={() => setOpen({ k, id: r.id })}><td>{ENTITY_LABEL[k]}</td><td>{r.id}</td><td className="title-cell">{ENTITIES[k].title(r)}</td><td><StatusBadge status={r.status} history={r.history} /></td><td>{fmtDate(r.updatedAt)}</td></tr>
             ))}</tbody>
-          </table>
+          </table></div>
         </section>
       </div>
       {open && <RecordDetail kind={open.k} id={open.id} onClose={() => setOpen(null)} />}

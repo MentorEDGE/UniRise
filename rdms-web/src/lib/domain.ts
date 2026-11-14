@@ -6,7 +6,7 @@
 import type {
   AnyRecord, Author, Biodata, Course, Engagement, HistoryItem, MediaItem, ProfileLinks, Supervisee, DB, EntityKind, Faculty, Grant, Investigator, Notice, ProfileChange, Publication, Settings, Status,
 } from './types';
-import { AUTHOR_KINDS, AWARD_CATEGORIES, EMPTY_LINKS, EMPTY_SCHOLAR, ENGAGEMENT_TYPES, MAX_HIGHLIGHTS, SUPERVISION_DEGREES, SUPERVISION_STATUS, IP_DESCRIPTION_WORDS, IP_OWNERS, IP_STATUSES, IP_TYPES, LEVELS, PUB_TYPES, wordCount } from './types';
+import { PROFILE_LINKS, linkAllowed, AUTHOR_KINDS, AWARD_CATEGORIES, EMPTY_LINKS, EMPTY_SCHOLAR, ENGAGEMENT_TYPES, MAX_HIGHLIGHTS, SUPERVISION_DEGREES, SUPERVISION_STATUS, IP_DESCRIPTION_WORDS, IP_OWNERS, IP_STATUSES, IP_TYPES, LEVELS, PUB_TYPES, wordCount } from './types';
 import type { IntellectualProperty } from './types';
 
 /** 'office' is the Office of Research acting on one institution's database (record approvals only). */
@@ -320,8 +320,11 @@ function cleanBiodata(b: Biodata, prev: Biodata | undefined, by: string): Biodat
     office: str(b.office, 200),
     links: (() => {
       const l = (b.links ?? {}) as Partial<ProfileLinks>;
-      const out = { linkedin: str(l.linkedin, 300).trim(), ssrn: str(l.ssrn, 300).trim(), researchgate: str(l.researchgate, 300).trim(), website: str(l.website, 300).trim() };
-      for (const v of Object.values(out)) if (v && !/^https:\/\//.test(v)) throw invalid('Profile links must start with https://.');
+      const out = Object.fromEntries(PROFILE_LINKS.map(({ key }) => [key, str(l[key], 300).trim()])) as unknown as ProfileLinks;
+      for (const { key, label, hosts } of PROFILE_LINKS) {
+        const v = out[key];
+        if (v && !linkAllowed(key, v)) throw invalid(hosts.length ? `The ${label} link must be an https:// address on ${hosts.join(' or ')}.` : `The ${label} link must start with https://.`);
+      }
       return out;
     })(),
     updatedAt: prev?.updatedAt ?? now(),

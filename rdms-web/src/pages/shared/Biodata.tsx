@@ -5,7 +5,7 @@ import { Alert, Attainment, Field, Input, NumberInput, PageTitle, Panel, Select,
 import { biodataCompleteness, displayPhone, fmtDate, inr, isSanctioned } from '../../lib/analytics';
 import { creditedFaculty, proposeProfileChange, useStore } from '../../lib/store';
 import { StatusBadge } from '../../components/ui';
-import { STATUS_LABEL } from '../../lib/types';
+import { PROFILE_LINKS, STATUS_LABEL, linkAllowed } from '../../lib/types';
 import { ProgressTracker } from '../../components/workflow';
 import { blankBiodata, normalizeBiodata, phdCounts } from '../../lib/domain';
 import type { Biodata, Course, Engagement, Experience, Faculty, MediaItem, Membership, Qualification, Supervisee } from '../../lib/types';
@@ -148,7 +148,8 @@ export function BiodataEdit() {
     if (fac.orcid && !/^\d{4}-\d{4}-\d{4}-\d{3}[\dX]$/.test(fac.orcid)) { setError('ORCID must look like 0000-0002-1825-0097.'); return; }
     if (fac.email && !/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(fac.email)) { setError('Enter a valid email address.'); return; }
     if (bio.dob && bio.dob > new Date().toISOString().slice(0, 10)) { setError('Date of birth cannot be in the future.'); return; }
-    if (Object.values(bio.links).some((v) => v && !/^https:\/\//.test(v))) { setError('Profile links must start with https://.'); return; }
+    const badLink = PROFILE_LINKS.find((l) => bio.links[l.key] && !linkAllowed(l.key, bio.links[l.key]));
+    if (badLink) { setError(`Check the ${badLink.label} link: it must be an https:// address${badLink.hosts.length ? ` on ${badLink.hosts.join(' or ')}` : ''}.`); return; }
     if (bio.media.some((m) => m.url && !/^https?:\/\//.test(m.url))) { setError('Media links must start with http:// or https://.'); return; }
     try {
       await proposeProfileChange({ ...bio, qualifications: bio.qualifications.filter((q) => q.degree.trim()), experience: bio.experience.filter((x) => x.organisation.trim()), memberships: bio.memberships.filter((m) => m.body.trim()), teaching: bio.teaching.filter((c) => c.title.trim()), supervision: bio.supervision.filter((x) => x.name.trim()), engagement: bio.engagement.filter((x) => x.organisation.trim() || x.role.trim()), media: bio.media.filter((x) => x.headline.trim()) },
@@ -219,11 +220,18 @@ export function BiodataEdit() {
           <Field label="Research keywords" className="span2" hint="Separate with commas"><TextArea value={bio.keywords} onChange={(v) => u({ keywords: v })} rows={2} /></Field>
           <Field label="Primary interest" className="span2" hint="One area, shown first on your profile"><Input value={bio.primaryInterest} onChange={(v) => u({ primaryInterest: v })} /></Field>
           <Field label="Office location" className="span2" hint="e.g. Block A · Room 214"><Input value={bio.office} onChange={(v) => u({ office: v })} /></Field>
-          <Field label="LinkedIn" hint="https://www.linkedin.com/in/…"><Input value={bio.links.linkedin} onChange={(v) => u({ links: { ...bio.links, linkedin: v } })} /></Field>
-          <Field label="SSRN" hint="https://papers.ssrn.com/…"><Input value={bio.links.ssrn} onChange={(v) => u({ links: { ...bio.links, ssrn: v } })} /></Field>
-          <Field label="ResearchGate" hint="https://www.researchgate.net/profile/…"><Input value={bio.links.researchgate} onChange={(v) => u({ links: { ...bio.links, researchgate: v } })} /></Field>
-          <Field label="Personal website" hint="https://…"><Input value={bio.links.website} onChange={(v) => u({ links: { ...bio.links, website: v } })} /></Field>
         </div>
+        <fieldset className="weight-group" id="follow">
+          <legend>Follow me: social and research links</legend>
+          <p className="note" style={{ marginTop: 0 }}>Shown as “Follow me” on your research profile. Leave blank any you do not use.</p>
+          <div className="grid">
+            {PROFILE_LINKS.map((l) => (
+              <Field key={l.key} label={l.label} hint={l.hint} error={bio.links[l.key] && !linkAllowed(l.key, bio.links[l.key]) ? (l.hosts.length ? `Use an https:// address on ${l.hosts.join(' or ')}` : 'Use an https:// address') : undefined}>
+                <Input value={bio.links[l.key] ?? ''} onChange={(v) => u({ links: { ...bio.links, [l.key]: v.trim() } })} type="url" />
+              </Field>
+            ))}
+          </div>
+        </fieldset>
         <div className="avail-checks">
           <label className="check"><input type="checkbox" checked={bio.availableToSupervise} onChange={(e) => u({ availableToSupervise: e.target.checked })} /> <span><b>Available to supervise</b> research students</span></label>
           <label className="check"><input type="checkbox" checked={bio.availableForMedia} onChange={(e) => u({ availableForMedia: e.target.checked })} /> <span><b>Available for media comment</b> in my areas of expertise</span></label>

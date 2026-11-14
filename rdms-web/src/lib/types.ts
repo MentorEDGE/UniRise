@@ -73,12 +73,32 @@ export interface Course { code: string; title: string; level: string }
 export interface Supervisee { name: string; degree: string; status: string; year: string; topic: string }
 export interface Engagement { type: string; role: string; organisation: string; from: string; to: string }
 export interface MediaItem { headline: string; outlet: string; date: string; url: string }
-export interface ProfileLinks { linkedin: string; ssrn: string; researchgate: string; website: string }
+/** "Follow me" links on a researcher's profile. Empty when not given; never invented. */
+export interface ProfileLinks { linkedin: string; twitter: string; researchgate: string; github: string; youtube: string; ssrn: string; website: string }
+/** Each link, its label, and the sites it may point to ('' = any https address). */
+export const PROFILE_LINKS: { key: keyof ProfileLinks; label: string; hint: string; hosts: string[] }[] = [
+  { key: 'linkedin', label: 'LinkedIn', hint: 'https://www.linkedin.com/in/…', hosts: ['linkedin.com'] },
+  { key: 'twitter', label: 'X (Twitter)', hint: 'https://x.com/…', hosts: ['x.com', 'twitter.com'] },
+  { key: 'researchgate', label: 'ResearchGate', hint: 'https://www.researchgate.net/profile/…', hosts: ['researchgate.net'] },
+  { key: 'github', label: 'GitHub', hint: 'https://github.com/…', hosts: ['github.com'] },
+  { key: 'youtube', label: 'YouTube', hint: 'https://www.youtube.com/@…', hosts: ['youtube.com', 'youtu.be'] },
+  { key: 'ssrn', label: 'SSRN', hint: 'https://papers.ssrn.com/…', hosts: ['ssrn.com'] },
+  { key: 'website', label: 'Personal website', hint: 'https://…', hosts: [] },
+];
+/** True when the address is https and on one of the link's sites (or any site for the personal website). */
+export function linkAllowed(key: keyof ProfileLinks, url: string) {
+  const def = PROFILE_LINKS.find((l) => l.key === key);
+  let u: URL;
+  try { u = new URL(url); } catch { return false; }
+  if (u.protocol !== 'https:') return false;
+  const host = u.hostname.toLowerCase();
+  return !def?.hosts.length || def.hosts.some((h) => host === h || host.endsWith(`.${h}`));
+}
 export const ENGAGEMENT_TYPES = ['Editorial board', 'Professional society', 'Industry / advisory', 'Policy contribution', 'Other'];
 export const SUPERVISION_DEGREES = ['PhD', 'MPhil', 'Masters'];
 export const SUPERVISION_STATUS = ['Current', 'Completed'];
 export const COURSE_LEVELS = ['Undergraduate', 'Postgraduate', 'Doctoral'];
-export const EMPTY_LINKS: ProfileLinks = { linkedin: '', ssrn: '', researchgate: '', website: '' };
+export const EMPTY_LINKS: ProfileLinks = { linkedin: '', twitter: '', researchgate: '', github: '', youtube: '', ssrn: '', website: '' };
 /** Highlights point at the owner's own approved records as "kind:id", at most this many. */
 export const MAX_HIGHLIGHTS = 6;
 

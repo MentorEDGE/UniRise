@@ -2,7 +2,7 @@ import type {
   IntellectualProperty,
   Author, Biodata, Conference, DB, Faculty, Fdp, Grant, HistoryItem, Honour, Investigator, Publication, SeedMoney, Status,
 } from './types';
-import { AWARD_WEIGHT_DEFAULTS, IP_WEIGHT_DEFAULTS, MONTHS } from './types';
+import { AWARD_WEIGHT_DEFAULTS, EMPTY_LINKS, IP_WEIGHT_DEFAULTS, MONTHS } from './types';
 
 /** Deterministic PRNG so the sample data is identical on every machine. */
 function mulberry32(seed: number) {
@@ -186,7 +186,7 @@ export function createSeed(opts: SeedOptions = DEFAULT_SEED): DB {
         // Researcher-profile fields. No photograph and no Google Scholar metrics: those are never invented.
         expertise: complete > 0.3 ? `${T[0]}; ${T[1]}` : '', keywords: '', sdgs: [], photo: '',
         scholar: { citations: null, hIndex: null, i10Index: null, updatedAt: '', updatedBy: '' },
-        primaryInterest: '', highlights: [], teaching: [], supervision: [], availableToSupervise: false, availableForMedia: false, engagement: [], media: [], office: '', links: { linkedin: '', ssrn: '', researchgate: '', website: '' },
+        primaryInterest: '', highlights: [], teaching: [], supervision: [], availableToSupervise: false, availableForMedia: false, engagement: [], media: [], office: '', links: { ...EMPTY_LINKS },
         updatedAt: '2026-06-01T10:00:00.000Z',
       });
       const b = biodata[biodata.length - 1];

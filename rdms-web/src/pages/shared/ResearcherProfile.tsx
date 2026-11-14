@@ -1,4 +1,5 @@
 import { lazy, Suspense, useMemo, useState } from 'react';
+import { FollowMe } from '../../components/FollowMe';
 import type { ReactNode } from 'react';
 import { Link, useParams, useSearchParams } from 'react-router-dom';
 import { Alert, Field, Input, Modal, Panel, Select, useToast } from '../../components/ui';
@@ -125,14 +126,7 @@ export function ResearcherProfile({ facultyId }: { facultyId: string }) {
               {isMgmt && f.phone && <div><dt>Phone</dt><dd>{SHOW_FULL_PHONE_NUMBERS ? <a href={`tel:${f.phone}`}>{f.phone}</a> : displayPhone(f.phone)}</dd></div>}
               {b?.office && <div><dt>Office</dt><dd>{b.office}</dd></div>}
             </dl>
-            {b && Object.values(b.links).some(Boolean) && (
-              <p className="rp-links">
-                {b.links.linkedin && <a href={b.links.linkedin} target="_blank" rel="noreferrer">LinkedIn ↗</a>}
-                {b.links.ssrn && <a href={b.links.ssrn} target="_blank" rel="noreferrer">SSRN ↗</a>}
-                {b.links.researchgate && <a href={b.links.researchgate} target="_blank" rel="noreferrer">ResearchGate ↗</a>}
-                {b.links.website && <a href={b.links.website} target="_blank" rel="noreferrer">Website ↗</a>}
-              </p>
-            )}
+            <FollowMe links={b?.links} isOwner={!isMgmt && user?.facultyId === f.id} />
             <div className="rp-actions no-print">
               {!isMgmt && <Link className="btn sm" to="/biodata/edit">Update profile</Link>}
               <Link className="btn sm secondary" to={isMgmt ? `/faculty/${f.id}/performance` : '/performance'}>Performance</Link>

@@ -220,3 +220,21 @@ describe('profile updates keep Ph.D. counts and the supervision list in agreemen
     expect(rules.phdCounts([])).toBeNull();
   });
 });
+
+describe('Follow me links', () => {
+  it('accept only https addresses on the right site, and keep them out of the profile until approved', () => {
+    const d = createSeed();
+    const b = d.biodata[0];
+    const f = d.faculty.find((x) => x.id === b.facultyId)!;
+    const me: Actor = { userId: f.id, name: f.name, role: 'faculty', facultyId: f.id };
+    const contact = { email: f.email, phone: f.phone, orcid: f.orcid, scopusId: f.scopusId };
+    const propose = (links: Record<string, string>) => rules.proposeProfileChange(d, me, { biodata: { ...b, links: { ...b.links, ...links } }, contact }, true);
+    expect(() => propose({ linkedin: 'https://example.com/me' })).toThrow(/LinkedIn/);
+    expect(() => propose({ twitter: 'http://x.com/me' })).toThrow(/X \(Twitter\)/);
+    expect(() => propose({ github: 'https://github.com.evil.io/me' })).toThrow(/GitHub/);
+    const id = propose({ linkedin: 'https://www.linkedin.com/in/someone', twitter: 'https://x.com/someone', website: 'https://example.org' });
+    expect(d.biodata.find((x) => x.facultyId === f.id)!.links.twitter ?? '').toBe(''); // not live yet
+    rules.reviewProfileChange(d, { userId: 'o', name: 'Office of Research', role: 'office' }, id, 'Approved', '');
+    expect(d.biodata.find((x) => x.facultyId === f.id)!.links).toMatchObject({ linkedin: 'https://www.linkedin.com/in/someone', twitter: 'https://x.com/someone', website: 'https://example.org' });
+  });
+});
