@@ -20,3 +20,8 @@ infra/envs/dev/backend.hcl
 
 # backend
 target/
+
+# local working material (demo video sources and renders, diagram scratch)
+.archify/
+rdms-web/demo-video/
+rdms-web/demo_build/

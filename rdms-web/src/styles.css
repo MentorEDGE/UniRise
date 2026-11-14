@@ -681,7 +681,6 @@ a.rp-title:hover, button.rp-title:hover { text-decoration: underline; }
   .cmap { grid-template-columns: 1fr; }
 }
 @media (max-width: 640px) { .rp-tabs-inner { flex-wrap: nowrap; overflow-x: auto; } .rp-tabs { position: static; } }
-@media (max-width: 1520px) { .nav.many .nav-ic { display: none; } }
 
 /* ================= Introduction page (signed out "/") and the separate sign-in page ================= */
 .land-head { position: sticky; top: 0; z-index: 20; display: flex; align-items: center; gap: 24px; height: 84px; padding: 0 40px; background: hsl(var(--bg-hsl) / 0.82); backdrop-filter: blur(10px); border-bottom: 1px solid hsl(var(--tint) / 0.9); }
@@ -1231,14 +1230,7 @@ a.rp-title:hover, button.rp-title:hover { text-decoration: underline; }
   :root[data-theme='dark'] .me-reach-ic.wa { background: rgb(34 197 94 / 0.15); color: #4ade80; box-shadow: inset 0 0 0 1px rgb(34 197 94 / 0.25); }
   :root[data-theme='dark'] .me-reach-ic.mail { background: rgb(59 130 246 / 0.15); color: #60a5fa; box-shadow: inset 0 0 0 1px rgb(59 130 246 / 0.25); }
 }
-/* the longest menus (faculty, Office of Research) stay on one line on laptop screens */
-.nav.many { gap: 0; padding-left: 8px; padding-right: 8px; }
-.nav.many .nav-btn { padding: 9px 8px; font-size: 14.5px; gap: 5px; }
-.nav.many .nav-btn .caret { margin-left: 1px; font-size: 9px; }
-.nav.many .nav-theme { margin-left: 2px; }
-@media (max-width: 1500px) { .nav.many .nav-btn { font-size: 14px; padding: 9px 7px; } }
-@media (max-width: 1700px) { .nav.many .nav-ic { display: none; } }
-@media (max-width: 1300px) { .nav.many .nav-btn { font-size: 13.5px; padding: 8px 5px; } .nav.many .nav-btn .caret { display: none; } }
+.nav.many .nav-ic { display: none; }
 .auth-row { justify-content: space-between; flex-wrap: wrap; gap: 6px 12px; }
 .auth-new { color: var(--muted-fg); }
 .auth-new a { color: var(--primary-text); font-weight: 500; }
@@ -1498,9 +1490,6 @@ a.rp-title:hover, button.rp-title:hover { text-decoration: underline; }
 .me .me-feature-who { font-size: calc(var(--r) * 1.1); margin-bottom: 6px !important; }
 @media (min-width: 1024px) { .me #overview .me-about, .me .me-about:has(.me-panel) { align-items: center; } }
 .me .me-orbit-name { color: var(--me-eyebrow); }
-/* Ten or more menus (faculty and Office of Research, with Intellectual Property): tighter so the bar stays on one line. */
-@media (max-width: 1640px) { .nav.many .nav-btn { font-size: 13.5px; padding: 8px 6px; } .nav.many .nav-btn .caret { display: none; } }
-@media (max-width: 1380px) { .nav.many .nav-btn { font-size: 12.5px; padding: 7px 4px; } .nav.many { padding-left: 4px; padding-right: 4px; } }
 
 /* SDG goal grid (Research Networks → SDG distribution) */
 .sdg-tile { display: inline-grid; place-items: center; flex: none; }
@@ -2362,8 +2351,48 @@ h1, h2, h3, .panel-title { letter-spacing: -0.022em; }
 .nav-theme .theme-toggle { width: 30px; height: 30px; border: 0; background: transparent; }
 .nav-theme .theme-toggle:hover { background: rgb(120 120 128 / 0.14); }
 .nav-theme .theme-toggle svg { width: 16px; height: 16px; }
-@media (max-width: 1180px) { .nav { border-radius: 24px; } }
 @media (prefers-reduced-transparency: reduce) { .nav { box-shadow: var(--hairline); } }
+
+/* ---- Menu bar, responsive ----
+   Wide screens: one row, full labels (short ones below 1560px so the row never wraps).
+   Narrow screens (<=1100px): the bar folds into a "Menu" button; the menus open as a stacked list. */
+.nav-list { display: flex; align-items: center; justify-content: center; flex-wrap: wrap; gap: 2px; }
+.nav-m { display: none; }
+.nl-short { display: none; }
+.nav.many .nav-list { gap: 0; }
+.nav.many { padding-left: 8px; padding-right: 8px; }
+.nav.many .nav-btn { padding: 8px 11px; font-size: 14.5px; gap: 5px; }
+.nav.many .nav-btn .caret { display: none; }
+@media (max-width: 1560px) {
+  .nav.many .nl-full { display: none; }
+  .nav.many .nl-short { display: inline; }
+  .nav.many .nav-btn { padding: 8px 10px; }
+}
+@media (max-width: 1240px) { .nav.many .nav-btn { padding: 7px 8px; font-size: 14px; } }
+@media (max-width: 1100px) {
+  .nav, .nav.many { width: auto; max-width: none; margin: 8px 12px; padding: 6px; border-radius: 22px; display: block; }
+  .nav-m { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+  .nav-toggle { display: inline-flex; align-items: center; gap: 10px; flex: 1; min-width: 0; min-height: 44px; padding: 6px 12px; border: 0; border-radius: 999px; background: transparent; color: var(--foreground); font: inherit; font-weight: 600; cursor: pointer; text-align: left; }
+  .nav-toggle:hover, .nav.open .nav-toggle { background: rgb(120 120 128 / 0.12); }
+  .nav-toggle svg { width: 18px; height: 18px; flex: none; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; }
+  .nav-toggle small { margin-left: auto; padding-left: 8px; color: var(--muted-fg); font-size: 13px; font-weight: 500; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .nav-m .nav-theme { margin: 0; padding: 0 4px 0 6px; }
+  .nav-list { display: none; flex-direction: column; align-items: stretch; flex-wrap: nowrap; gap: 2px; padding: 6px 0 4px; max-height: calc(100dvh - 140px); overflow-y: auto; overscroll-behavior: contain; }
+  .nav.open .nav-list { display: flex; }
+  .nav-list > .nav-theme { display: none; }
+  .nav-list > .nav-item { width: 100%; }
+  .nav .nav-btn, .nav.many .nav-btn { width: 100%; justify-content: flex-start; padding: 11px 14px; font-size: 15.5px; min-height: 44px; border-radius: 14px; }
+  .nav .nav-btn .caret, .nav.many .nav-btn .caret { display: inline; margin-left: auto; font-size: 12px; opacity: .6; transition: transform .2s; }
+  .nav .nav-btn[aria-expanded='true'] .caret { transform: rotate(180deg); }
+  .nav.many .nl-full, .nav .nl-full { display: inline; }
+  .nav.many .nl-short, .nav .nl-short { display: none; }
+  .nav-ic, .nav.many .nav-ic { display: inline-block; }
+  /* menus open inline under their button instead of floating */
+  .nav .menu { position: static; min-width: 0; margin: 2px 0 6px 14px; padding: 4px 0 4px 8px; background: transparent; border: 0; border-left: 2px solid var(--border); border-radius: 0; box-shadow: none; -webkit-backdrop-filter: none; backdrop-filter: none; animation: none; }
+  .nav .menu::before { display: none; }
+  .nav .menu a, .nav .menu button { white-space: normal; padding: 10px 12px; min-height: 44px; }
+}
+@media (min-width: 1101px) { .nav-m { display: none; } }
 
 /* ---- Find Profiles: the violet glow starts at the top of the page and fades out, instead of a hard-edged band ---- */
 .app:has(.dir-hero) {

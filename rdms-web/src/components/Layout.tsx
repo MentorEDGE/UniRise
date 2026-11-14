@@ -79,8 +79,12 @@ export function menusFor(role: Role, pending: number): MenuDef[] {
   ];
 }
 
+/** Shorter labels for the single-row bar on mid-width screens; the full name stays in the tooltip and the accessible name. */
+const SHORT: Record<string, string> = { 'Grants and Fellowships': 'Grants', 'Faculty Development Programmes': 'FDPs', 'Honours & Awards': 'Awards', 'Intellectual Property': 'IP', 'User Management': 'Users' };
+
 function NavBar({ menus }: { menus: MenuDef[] }) {
   const [open, setOpenNow] = useState<string | null>(null);
+  const [folded, setFolded] = useState(false); // narrow screens: the whole bar is a "Menu" button
   const nav = useNavigate();
   const loc = useLocation();
   const ref = useRef<HTMLElement>(null);
@@ -91,7 +95,7 @@ function NavBar({ menus }: { menus: MenuDef[] }) {
   const setOpen = (label: string | null) => { cancelClose(); setOpenNow(label); };
   const closeSoon = () => { cancelClose(); closeTimer.current = window.setTimeout(() => setOpenNow(null), 300); };
   useEffect(() => cancelClose, []);
-  useEffect(() => setOpen(null), [loc.pathname]);
+  useEffect(() => { setOpen(null); setFolded(false); }, [loc.pathname]);
   useEffect(() => {
     const onDoc = (e: MouseEvent) => { if (!ref.current?.contains(e.target as Node)) setOpen(null); };
     const onKey = (e: KeyboardEvent) => e.key === 'Escape' && setOpen(null);
@@ -99,18 +103,31 @@ function NavBar({ menus }: { menus: MenuDef[] }) {
     document.addEventListener('keydown', onKey);
     return () => { document.removeEventListener('mousedown', onDoc); document.removeEventListener('keydown', onKey); };
   }, []);
+  const homeOwned = menus.some((m) => m.to === '/'); // e.g. Office: Approval is home, so '/' must not also light up Faculty
   const isActive = (m: MenuDef) => (m.to ? (m.to === '/' ? loc.pathname === '/' : loc.pathname.startsWith(m.to))
-    : m.items?.some((i) => i !== 'sep' && 'to' in i && (loc.pathname === i.to || (i.to === '/faculty' && (loc.pathname === '/' || loc.pathname.startsWith('/faculty/'))))));
+    : m.items?.some((i) => i !== 'sep' && 'to' in i && (loc.pathname === i.to || (i.to === '/faculty' && ((!homeOwned && loc.pathname === '/') || loc.pathname.startsWith('/faculty/'))))));
+
+  const labelOf = (label: string) => SHORT[label]
+    ? <><span className="nl-full">{label}</span><span className="nl-short" aria-hidden>{SHORT[label]}</span></>
+    : label;
 
   return (
-    <nav className={`nav no-print ${menus.length > 11 || menus.reduce((a, m) => a + m.label.length, 0) > 90 ? 'compact' : ''} ${menus.length >= 9 ? 'many' : ''}`} ref={ref} aria-label="Main menu">
+    <nav className={`nav no-print ${menus.length > 11 || menus.reduce((a, m) => a + m.label.length, 0) > 90 ? 'compact' : ''} ${menus.length >= 9 ? 'many' : ''} ${folded ? 'open' : ''}`} ref={ref} aria-label="Main menu">
+      <div className="nav-m">
+        <button type="button" className="nav-toggle" aria-expanded={folded} aria-controls="nav-list" onClick={() => setFolded(!folded)}>
+          <svg viewBox="0 0 24 24" aria-hidden>{folded ? <path d="M6 6l12 12M18 6 6 18" /> : <path d="M4 7h16M4 12h16M4 17h16" />}</svg>
+          Menu<small>{menus.find(isActive)?.label.replace(/ \(\d+\)$/, '')}</small>
+        </button>
+        <div className="nav-item nav-theme"><ThemeToggle /></div>
+      </div>
+      <div className="nav-list" id="nav-list">
       {menus.map((m) => (
         <div className="nav-item" key={m.label} onMouseEnter={() => (m.items ? setOpen(m.label) : open && closeSoon())} onMouseLeave={() => m.items && closeSoon()}>
           {m.to ? (
-            <Link to={m.to} className={`nav-btn ${isActive(m) ? 'active' : ''}`} style={{ textDecoration: 'none' }}>{m.icon && NAV_ICONS[m.icon]}{m.label}</Link>
+            <Link to={m.to} className={`nav-btn ${isActive(m) ? 'active' : ''}`} style={{ textDecoration: 'none' }}>{m.icon && NAV_ICONS[m.icon]}{labelOf(m.label)}</Link>
           ) : (
             <button className={`nav-btn ${isActive(m) ? 'active' : ''}`} aria-haspopup="true" aria-expanded={open === m.label} onClick={() => setOpen(open === m.label ? null : m.label)}>
-              {m.icon && NAV_ICONS[m.icon]}{m.label}<span className="caret" aria-hidden>▾</span>
+              {m.icon && NAV_ICONS[m.icon]}{labelOf(m.label)}<span className="caret" aria-hidden>▾</span>
             </button>
           )}
           {m.items && open === m.label && (
@@ -123,6 +140,7 @@ function NavBar({ menus }: { menus: MenuDef[] }) {
         </div>
       ))}
       <div className="nav-item nav-theme"><ThemeToggle /></div>
+      </div>
     </nav>
   );
 }
