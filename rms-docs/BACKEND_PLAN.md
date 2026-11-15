@@ -4,7 +4,8 @@ Date: 2026-11-14. Branch `dev` at 649ee73. Sources: `unirise-api/` (code and mig
 
 ## 1. Where we stand
 
-- `unirise-api` is built and deployed to AWS dev. `https://api.dev-unirise.mentoredge.co.in/actuator/health` returned `UP` on 2026-11-14.
+- `unirise-api` is built and deployed to AWS dev. Its health page returned `UP` on 2026-11-14, but that page does not test the database (`management.health.db.enabled=false`).
+- **Dev database down (found 2026-11-15).** The dev RDS instance was reported in `inaccessible-encryption-credentials` since 2026-11-04. A request with an API key returns 500 after 30 seconds, so the deployed API cannot read or write data. Fix: restore from the snapshot into a new instance, then bring the OpenTofu state in line. The cause is unknown. The RDS status, dates and snapshots were reported by a teammate and not checked from this repo.
 - `rdms-web` is the product frontend (decided 2026-11-06). It still runs on its own Node/SQLite server. **No screen calls `unirise-api` yet.**
 - The backend was built for the older model (researcher, scholar, supervisor, HoD, Dean, Executive). The UI uses the final model (Faculty, Top-Level Management, Office of Research). Most of the work below comes from that difference.
 - The UI has kept moving since the last feature snapshot: it now has 7 record types and 54 reports. `RDMS_WEB_FEATURES.md` still says 6 and 46.
@@ -209,7 +210,7 @@ Account `417441726165`, `ap-south-1`, shared with MentorEDGE. Only UniRise resou
 | A5 | Scheduled tenant backups (EventBridge Scheduler running the existing admin task) | Backups are manual today |
 | A6 | Frontend hosting for `dev-unirise.mentoredge.co.in`: Hostinger, not AWS (D4). Build `rdms-web` with the API base URL and upload `dist/` | The UI is not deployed anywhere |
 | A7 | Human IAM users with MFA instead of root; budget alerts | Deferred by request; needed before production |
-| A8 | Alarms (task health, 5xx, RDS storage and CPU), rate limiting at the edge | No monitoring today |
+| A8 | Alarms (task health, 5xx, RDS storage and CPU), rate limiting at the edge | No monitoring today. The dev database was down for 11 days unnoticed because the health page does not test it; include a check that reaches the database |
 | A9 | Upload scanning for PDFs and certificates | Needed once uploads exist |
 | A10 | Production environment: region and account choice, Multi-AZ, deletion protection | Not designed |
 | A11 | ~~Commit the infra and API changes from 2026-11-04~~ **Done 2026-11-14** | The running image was built from source that was uncommitted until then |
@@ -251,6 +252,6 @@ Each phase ends with tests passing and the docs updated. Order matters: phases 2
 
 ## 9. Not checked for this document
 
-- AWS resources were not listed live. Section 6 comes from the Terraform files and the 2026-11-04 deployment notes; only the public health endpoint was called today.
+- AWS resources were not listed live. Section 6 comes from the Terraform files and the 2026-11-04 deployment notes; only the public health endpoint was called on 2026-11-14, and it does not prove the database works.
 - The backend tests were not re-run.
 - Grant and seed-money columns were compared at table level, not field by field. That comparison belongs to phase 3.
