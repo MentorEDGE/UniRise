@@ -182,10 +182,13 @@ export function biodataCompleteness(b: Biodata | undefined, f: Faculty): number 
   return Math.round((checks.filter(Boolean).length / checks.length) * 100);
 }
 
-/** Unique institution-level counts in a range: a co-authored paper counts once. */
+/**
+ * Unique institution-level counts in a range: a co-authored paper counts once. Only records that credit at least one
+ * current (active) faculty member count: former faculty are part of the history, not of current performance.
+ */
 export function uniqueCounts(db: DB, f: Filter) {
-  const deptOf = new Map(db.faculty.map((x) => [x.id, x.department]));
-  const inDept = (kind: EntityKind, r: AnyRecord) => !f.department || creditedFaculty(kind, r).some((id) => deptOf.get(id) === f.department);
+  const deptOf = new Map(db.faculty.filter((x) => x.active).map((x) => [x.id, x.department]));
+  const inDept = (kind: EntityKind, r: AnyRecord) => creditedFaculty(kind, r).some((id) => deptOf.has(id) && (!f.department || deptOf.get(id) === f.department));
   const pubs = approvedIn(db, 'publications', f).filter((r) => inDept('publications', r));
   const grants = approvedIn(db, 'grants', f).filter((r) => inDept('grants', r));
   const seed = approvedIn(db, 'seedMoney', f).filter((r) => inDept('seedMoney', r));

@@ -6,7 +6,7 @@
 import type {
   AnyRecord, Author, Biodata, Course, Engagement, HistoryItem, MediaItem, ProfileLinks, Supervisee, DB, EntityKind, Faculty, Grant, Investigator, Notice, ProfileChange, Publication, Settings, Status,
 } from './types';
-import { PROFILE_LINKS, linkAllowed, AUTHOR_KINDS, AWARD_CATEGORIES, EMPTY_LINKS, EMPTY_SCHOLAR, ENGAGEMENT_TYPES, MAX_HIGHLIGHTS, SUPERVISION_DEGREES, SUPERVISION_STATUS, IP_DESCRIPTION_WORDS, IP_OWNERS, IP_STATUSES, IP_TYPES, LEVELS, PUB_TYPES, wordCount } from './types';
+import { EXIT_REASONS, PROFILE_LINKS, linkAllowed, AUTHOR_KINDS, AWARD_CATEGORIES, EMPTY_LINKS, EMPTY_SCHOLAR, ENGAGEMENT_TYPES, MAX_HIGHLIGHTS, SUPERVISION_DEGREES, SUPERVISION_STATUS, IP_DESCRIPTION_WORDS, IP_OWNERS, IP_STATUSES, IP_TYPES, LEVELS, PUB_TYPES, wordCount } from './types';
 import type { IntellectualProperty } from './types';
 
 /** 'office' is the Office of Research acting on one institution's database (record approvals only). */
@@ -60,7 +60,11 @@ export function scopeFor(db: DB, actor: Actor): DB {
     const out: DB = { ...db };
     // Approved records only, and without the review conversation: comments, returns and resubmissions stay between
     // the faculty member and the Office of Research. Management sees when the record was created and approved.
-    for (const k of KINDS) (out[k] as AnyRecord[]) = (db[k] as AnyRecord[]).filter((r) => r.status === 'Approved').map((r) => ({ ...r, history: managementHistory(r.history) }));
+    // Former faculty (retired, resigned, transferred) stay with the Office of Research for the record; management sees
+    // current faculty only, and records that credit at least one of them.
+    const current = new Set(db.faculty.filter((f) => f.active).map((f) => f.id));
+    for (const k of KINDS) (out[k] as AnyRecord[]) = (db[k] as AnyRecord[]).filter((r) => r.status === 'Approved' && creditedFaculty(k, r).some((id) => current.has(id))).map((r) => ({ ...r, history: managementHistory(r.history) }));
+    out.biodata = db.biodata.filter((b) => current.has(b.facultyId));
     out.profileChanges = []; // pending profile edits are not institutional information until approved
     out.faculty = db.faculty.filter((f) => f.active);
     return out;
@@ -439,6 +443,13 @@ export function saveFaculty(db: DB, actor: Actor, input: Faculty, isNew = false)
     email: str(input.email, 200).trim(), phone: str(input.phone, 20), joiningDate: str(input.joiningDate, 10), orcid: str(input.orcid, 19), scopusId: str(input.scopusId, 20), active: input.active !== false,
   };
   requireOffice(actor);
+  // Former faculty: why and when they left. Restoring someone as active clears both.
+  if (f.active) { f.exitReason = ''; f.exitDate = ''; } else {
+    f.exitReason = str(input.exitReason, 40); f.exitDate = str(input.exitDate, 10);
+    if (!EXIT_REASONS.includes(f.exitReason)) throw invalid('Choose why the faculty member left: Retired, Resigned, Transferred or Other.');
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(f.exitDate)) throw invalid('Enter the last working day.');
+    if (f.joiningDate && f.exitDate < f.joiningDate) throw invalid('The last working day cannot be before the joining date.');
+  }
   if (!/^[A-Za-z0-9-]{3,20}$/.test(f.id)) throw invalid('Employee code must be 3-20 letters or digits.');
   if (!f.name) throw invalid('Name is required.');
   if (!db.settings.departments.includes(f.department)) throw invalid('Choose one of the institution’s departments.');

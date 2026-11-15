@@ -151,7 +151,7 @@ export function FacultySearch() {
               {sdgs.map((n) => <Chip key={`s${n}`} label={`SDG ${n}`} onRemove={() => toggleSdg(n)} />)}
               {depts.map((d) => <Chip key={`d${d}`} label={d} onRemove={() => toggle('dept', d)} />)}
               {desigs.map((d) => <Chip key={`g${d}`} label={d} onRemove={() => toggle('desig', d)} />)}
-              {inactive && <Chip label="Including deactivated" onRemove={() => update((p) => p.delete('inactive'))} />}
+              {inactive && <Chip label="Including former faculty" onRemove={() => update((p) => p.delete('inactive'))} />}
             </ul>
           )}
 
@@ -186,8 +186,8 @@ export function FacultySearch() {
           <TopicBrowser entries={entries} onPick={(t) => { setDraft(t); update((p) => { p.set('q', t); p.delete('avail'); }); toResults(); }} />
 
           {isOffice && (
-            <FacetGroup title="Account status" selected={inactive ? 1 : 0} defaultOpen>
-              <FacetOption checked={inactive} onChange={() => update((p) => (inactive ? p.delete('inactive') : p.set('inactive', '1')))} hint="Visible to the Office of Research only">Include deactivated faculty</FacetOption>
+            <FacetGroup title="Former faculty" selected={inactive ? 1 : 0} defaultOpen>
+              <FacetOption checked={inactive} onChange={() => update((p) => (inactive ? p.delete('inactive') : p.set('inactive', '1')))} count={db.faculty.filter((f) => !f.active).length} hint="Retired, resigned or transferred. Office of Research only">Include former faculty</FacetOption>
             </FacetGroup>
           )}
         </aside>
@@ -237,7 +237,7 @@ function PersonCard({ e, tab }: { e: Entry; tab: string }) {
       <Link to={href} tabIndex={-1} aria-hidden><Avatar name={e.f.name} photo={e.b?.photo} size={70} /></Link>
       <div className="person-info">
         <Link className="person-name" to={href}>{e.f.title} {e.f.name}</Link>
-        {!e.f.active && <span className="badge Draft" style={{ alignSelf: 'flex-start' }}>Deactivated</span>}
+        {!e.f.active && <span className="badge Draft" style={{ alignSelf: 'flex-start' }} title={e.f.exitDate ? `Last working day ${e.f.exitDate.split('-').reverse().join('/')}` : undefined}>Former · {e.f.exitReason || 'left'}</span>}
         <a className="person-email" href={`mailto:${e.f.email}`}>{e.f.email}</a>
         <div className="person-role"><span className="person-dept">{e.f.department}</span> – {e.f.designation}</div>
         {expertise.length > 0 && <div className="person-expertise">{expertise.join(' · ')}</div>}

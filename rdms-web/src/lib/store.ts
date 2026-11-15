@@ -25,9 +25,18 @@ export const getUser = () => snapshot.user;
 
 export class ApiError extends Error { constructor(public status: number, message: string) { super(message); } }
 
+/**
+ * Where the API is. Empty (the default): the same site that serves the pages, as with the prototype server or a proxy.
+ * Set VITE_API_BASE at build time when the API has its own address, e.g. https://api.dev-unirise.mentoredge.co.in for
+ * the Java API (unirise-api) with the pages on Hostinger (BACKEND_PLAN D4). The session cookie is then sent with
+ * credentials: 'include'; it is SameSite=Strict, so it only goes to the same site (mentoredge.co.in).
+ */
+export const API_BASE = ((import.meta as { env?: Record<string, string | undefined> }).env?.VITE_API_BASE ?? '').replace(/\/$/, '');
+const CREDENTIALS: RequestCredentials = API_BASE ? 'include' : 'same-origin';
+
 async function api<T = unknown>(method: string, path: string, body?: unknown): Promise<T> {
-  const res = await fetch(`/api${path}`, {
-    method, credentials: 'same-origin',
+  const res = await fetch(`${API_BASE}/api${path}`, {
+    method, credentials: CREDENTIALS,
     headers: { 'X-RDMS': '1', ...(body !== undefined ? { 'Content-Type': 'application/json' } : {}) },
     body: body !== undefined ? JSON.stringify(body) : undefined,
   });
@@ -68,7 +77,7 @@ async function refreshQuietly(minGapMs: number) {
   if (!snapshot.user || document.visibilityState !== 'visible' || Date.now() - lastRefresh < minGapMs) return;
   lastRefresh = Date.now();
   try {
-    const res = await fetch('/api/data', { credentials: 'same-origin', headers: { 'X-RDMS': '1' } });
+    const res = await fetch(`${API_BASE}/api/data`, { credentials: CREDENTIALS, headers: { 'X-RDMS': '1' } });
     if (res.status === 401) { set({ user: null, institution: null, db: EMPTY }); return; }
     if (!res.ok) return;
     const text = await res.text();

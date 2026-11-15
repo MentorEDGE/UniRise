@@ -434,6 +434,32 @@ export function createSeed(opts: SeedOptions = DEFAULT_SEED): DB {
   }
   ipr.sort((a, z) => a.filingDate.localeCompare(z.filingDate));
 
+  // Former faculty: kept for the Office of Research's records, left out of everything current. Nothing of theirs is
+  // dated after their last working day, and on colleagues' later work they appear as Ex-Faculty co-authors.
+  const FORMER: Record<string, [string, string]> = { EMP1009: ['Retired', '2026-05-31'], EMP1019: ['Resigned', '2025-12-31'], EMP1033: ['Transferred', '2026-03-31'] };
+  const lists = { publications, grants, seedMoney, fdps, conferences, awards, ipr } as Record<string, (Publication | Grant | SeedMoney | Fdp | Conference | Honour | IntellectualProperty)[]>;
+  for (const f of faculty) {
+    const exit = FORMER[f.id];
+    if (!exit || opts.departments !== DEFAULT_DEPARTMENTS) continue;
+    Object.assign(f, { active: false, exitReason: exit[0], exitDate: exit[1] });
+    for (const [k, xs] of Object.entries(lists)) {
+      // Their own entries after leaving, or still unfinished when they left, are not part of the record.
+      lists[k] = xs.filter((r) => r.facultyId !== f.id || (r.createdAt.slice(0, 10) <= exit[1] && (r.status === 'Approved' || r.status === 'Rejected')));
+      for (const r of lists[k]) {
+        if (r.createdAt.slice(0, 10) <= exit[1]) continue;
+        for (const a of ((r as Publication).authors ?? [])) if (a.kind === 'Faculty' && a.code === f.id) a.kind = 'Ex-Faculty';
+        for (const i of ((r as Grant).investigators ?? [])) if (i.kind === 'Faculty' && i.code === f.id) i.kind = 'Ex-Faculty';
+      }
+    }
+  }
+  publications.splice(0, publications.length, ...(lists.publications as Publication[]));
+  grants.splice(0, grants.length, ...(lists.grants as Grant[]));
+  seedMoney.splice(0, seedMoney.length, ...(lists.seedMoney as SeedMoney[]));
+  fdps.splice(0, fdps.length, ...(lists.fdps as Fdp[]));
+  conferences.splice(0, conferences.length, ...(lists.conferences as Conference[]));
+  awards.splice(0, awards.length, ...(lists.awards as Honour[]));
+  ipr.splice(0, ipr.length, ...(lists.ipr as IntellectualProperty[]));
+
   // Expert-finder profile fields, filled last so every record above keeps its values. No links are invented.
   fillSampleExpertProfiles({ faculty, biodata, publications, grants, ipr }, rnd);
 

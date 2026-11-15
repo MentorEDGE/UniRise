@@ -25,6 +25,16 @@ institution come from the account. There is no public sign-up.
 | `director@abc.edu.in`, `dean@abc.edu.in`, `vc@xyz.ac.in`, `registrar@xyz.ac.in` (Top-Level Management) | `Admin@1234` |
 | any faculty email, e.g. `faculty.a@abc.edu.in` | `Faculty@123` |
 
+## Running against the Java API (unirise-api)
+The Java backend in `../unirise-api` answers the same requests as the server in `server/`, so the pages work against
+either one (BACKEND_PLAN phase 6).
+- `VITE_API_BASE` (build time): the API's address, for example `https://api.dev-unirise.mentoredge.co.in` when the pages
+  are hosted separately. Empty (the default) means the same origin that serves the pages.
+- `node scripts/api-proxy.mjs` (after `npm run build`): serves `dist/` and forwards `/api` to `API` (default
+  `http://127.0.0.1:8181`) on one origin, for local testing.
+- `npx tsx scripts/export-demo.ts [--small] > demo.json`: the sample institutions and demo accounts, for the API's
+  `POST /api/platform/tenants/{slug}/demo-data`.
+
 ## Onboarding a new institution
 1. The institution fills in **Talk to Our Team** (`/#/talk-to-our-team`). The enquiry is stored and emailed to corporate@mentoredge.co.in.
 2. The UniRise team provisions it on the server:

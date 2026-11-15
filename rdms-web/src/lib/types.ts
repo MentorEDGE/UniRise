@@ -51,6 +51,9 @@ export interface Institution {
   createdAt: string;
 }
 
+/** Why a faculty member is no longer with the institution. */
+export const EXIT_REASONS = ['Retired', 'Resigned', 'Transferred', 'Other'];
+
 export interface Faculty {
   id: string; // employee code, e.g. EMP1001
   title: string; // Dr, Prof, Mr, Ms
@@ -62,7 +65,9 @@ export interface Faculty {
   joiningDate: string; // yyyy-mm-dd
   orcid: string;
   scopusId: string;
-  active: boolean;
+  active: boolean; // false = former faculty: kept for the Office of Research's records, left out of everything current
+  exitReason?: string; // EXIT_REASONS, when no longer active
+  exitDate?: string; // last working day, yyyy-mm-dd
 }
 
 export interface Qualification { degree: string; specialization: string; institution: string; year: string }

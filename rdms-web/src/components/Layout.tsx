@@ -71,6 +71,7 @@ export function menusFor(role: Role, pending: number): MenuDef[] {
   }
   // Top-Level Management: read-only research intelligence for the institution.
   return [
+    { label: 'Dashboard', icon: 'home', to: '/' },
     { label: 'Faculty', icon: 'faculty', items: [{ label: 'Find Profiles', to: '/faculty' }, { label: 'Faculty Performance', to: '/analytics/faculty' }] },
     ...RECORD_MENUS,
     { label: 'Research Networks', icon: 'network', to: '/networks' },

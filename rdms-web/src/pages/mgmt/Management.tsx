@@ -43,7 +43,7 @@ export function Faculty360({ facultyId: given }: { facultyId?: string }) {
       <Panel size="wide">
         <div style={{ display: 'flex', justifyContent: 'space-between', gap: 10, flexWrap: 'wrap' }}>
           <div>
-            <div style={{ fontSize: 18, fontWeight: 700 }}>{f.title} {f.name} {!f.active && <span className="badge Draft">Inactive</span>}</div>
+            <div style={{ fontSize: 18, fontWeight: 700 }}>{f.title} {f.name} {!f.active && <span className="badge Draft">Former faculty · {f.exitReason || 'left'}</span>}</div>
             <div>{f.designation}, {f.department}</div>
             <div className="muted">{f.id} · {f.email}{f.orcid && <> · ORCID <a href={`https://orcid.org/${f.orcid}`} target="_blank" rel="noreferrer">{f.orcid}</a></>}{f.scopusId && ` · Scopus ${f.scopusId}`} · joined {fmtDate(f.joiningDate)}</div>
           </div>

@@ -278,7 +278,9 @@ describe('analytics', () => {
 
   it('only approved entries count, and scores follow the weights', () => {
     const stats = facultyStats(db, { from: '', to: '', department: '' });
-    const hours = db.fdps.filter((x) => x.status === 'Approved').reduce((a, x) => a + x.hours, 0);
+    // Current faculty only: FDPs of former faculty stay on record but are not part of current performance.
+    const current = new Set(db.faculty.filter((f) => f.active).map((f) => f.id));
+    const hours = db.fdps.filter((x) => x.status === 'Approved' && current.has(x.facultyId)).reduce((a, x) => a + x.hours, 0);
     expect(stats.reduce((a, s) => a + s.fdpHours, 0)).toBe(hours);
     const w = db.settings.weights;
     expect(scoreRecord('fdps', { ...(fdp() as unknown as Fdp), role: 'Organised' }, w)).toBe(w.fdpOrganised);

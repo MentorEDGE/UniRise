@@ -42,7 +42,7 @@ export const DEMO_INSTITUTIONS: DemoInstitution[] = [
 export function seedDemo(store: Storage, opts: { small?: boolean } = {}) {
   const now = new Date().toISOString();
   const insert = store.platform.prepare(`INSERT INTO accounts (id, email, password_hash, role, institution_id, faculty_id, status, name, title, designation, department, employee_code, request_note, requested_at, reviewed_by, reviewed_at, affiliation_verified)
-    VALUES (@id, @email, @hash, @role, @inst, @fac, 'active', @name, @title, @designation, @department, @code, '', @at, @by, @at, 1)`);
+    VALUES (@id, @email, @hash, @role, @inst, @fac, @status, @name, @title, @designation, @department, @code, '', @at, @by, @at, 1)`);
   const id = () => `acc_${crypto.randomBytes(8).toString('hex')}`;
   // Hash each demo password once: the demo accounts share passwords anyway, and this keeps seeding quick.
   const mgmtHash = hashPassword(DEMO_PASSWORDS.management);
@@ -53,12 +53,12 @@ export function seedDemo(store: Storage, opts: { small?: boolean } = {}) {
     const seed = opts.small ? { ...d.seed, sizes: d.seed.sizes.map(() => 2) } : d.seed;
     const data = createSeed(seed);
     store.createInstitution({ ...d.inst, status: 'active', createdAt: now }, data);
-    insert.run({ id: id(), email: d.office.email, hash: officeHash, role: 'office', inst: d.inst.id, fac: null, name: d.office.name, title: '', designation: 'Office of Research', department: '', code: '', at: now, by: 'UniRise provisioning' });
+    insert.run({ status: 'active', id: id(), email: d.office.email, hash: officeHash, role: 'office', inst: d.inst.id, fac: null, name: d.office.name, title: '', designation: 'Office of Research', department: '', code: '', at: now, by: 'UniRise provisioning' });
     for (const m of d.management) {
-      insert.run({ id: id(), email: m.email, hash: mgmtHash, role: 'management', inst: d.inst.id, fac: null, name: m.name, title: '', designation: m.designation, department: '', code: '', at: now, by: d.office.name });
+      insert.run({ status: 'active', id: id(), email: m.email, hash: mgmtHash, role: 'management', inst: d.inst.id, fac: null, name: m.name, title: '', designation: m.designation, department: '', code: '', at: now, by: d.office.name });
     }
     for (const f of data.faculty) {
-      insert.run({ id: id(), email: f.email, hash: facHash, role: 'faculty', inst: d.inst.id, fac: f.id, name: f.name, title: f.title, designation: f.designation, department: f.department, code: f.id, at: now, by: d.office.name });
+      insert.run({ status: f.active ? 'active' : 'deactivated', id: id(), email: f.email, hash: facHash, role: 'faculty', inst: d.inst.id, fac: f.id, name: f.name, title: f.title, designation: f.designation, department: f.department, code: f.id, at: now, by: d.office.name });
     }
   }
   store.audit({ actorName: 'UniRise provisioning', action: 'Demo platform created', detail: DEMO_INSTITUTIONS.map((d) => d.inst.name).join(', ') });

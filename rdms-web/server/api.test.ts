@@ -240,7 +240,8 @@ describe('Office of Research (one per institution)', () => {
     const m = await signedIn('director@abc.edu.in', DEMO_PASSWORDS.management);
     expect((await m.call('PUT', `/api/faculty/${f.id}`, { ...f, active: false })).status).toBe(403);
     const a = await signedIn(ADMIN.email, ADMIN.password);
-    expect((await a.call('PUT', `/api/faculty/${f.id}`, { ...f, active: false })).status).toBe(200);
+    expect((await a.call('PUT', `/api/faculty/${f.id}`, { ...f, active: false })).status).toBe(400); // why and when they left are required
+    expect((await a.call('PUT', `/api/faculty/${f.id}`, { ...f, active: false, exitReason: 'Resigned', exitDate: '2026-10-31' })).status).toBe(200);
     expect((await client().post('/api/login', { email: f.email, password: DEMO_PASSWORDS.faculty })).status).toBe(403);
     expect((await m.get('/api/data')).body.faculty.some((x) => x.id === f.id)).toBe(false);
     expect((await a.call('PUT', `/api/faculty/${f.id}`, { ...f, active: true })).status).toBe(200);

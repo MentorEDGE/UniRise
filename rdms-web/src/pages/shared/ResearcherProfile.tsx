@@ -8,7 +8,7 @@ import { SHOW_FULL_PHONE_NUMBERS, displayPhone, fmtDate, inr, isSanctioned } fro
 import { creditedFaculty } from '../../lib/domain';
 import { saveFaculty, useStore } from '../../lib/store';
 import type { EntityKind, Faculty, Grant, Honour, IntellectualProperty, Publication, SeedMoney } from '../../lib/types';
-import { EMPTY_SCHOLAR, ENGAGEMENT_TYPES, SDGS, ipTypeLabel } from '../../lib/types';
+import { EMPTY_SCHOLAR, ENGAGEMENT_TYPES, EXIT_REASONS, SDGS, ipTypeLabel } from '../../lib/types';
 import { RecordDetail } from './RecordDetail';
 import { NetworkGraph, outputsOf } from '../../components/network';
 
@@ -99,6 +99,7 @@ export function ResearcherProfile({ facultyId }: { facultyId: string }) {
           <div className="rp-photo"><Avatar name={f.name} photo={b?.photo} size={150} /></div>
           <div className="rp-id">
             <h1 className="rp-name">{f.title} {f.name}</h1>
+            {!f.active && <p className="former-note"><b>Former faculty</b> · {f.exitReason || 'Left'}{f.exitDate ? ` on ${fmtDate(f.exitDate)}` : ''}. Kept for the institution’s records; not shown to Top-Level Management or counted in current figures.</p>}
             <p className="rp-role">{f.designation}, {isMgmt ? <Link to={`/faculty?dept=${encodeURIComponent(f.department)}`}>{f.department}</Link> : f.department}</p>
             <p className="rp-inst">{db.settings.institutionName}</p>
             {!!quals.length && <p className="rp-quals">{quals.join(' · ')}</p>}
@@ -112,7 +113,7 @@ export function ResearcherProfile({ facultyId }: { facultyId: string }) {
                 <ul className="rp-tagcloud">{tags.slice(0, 10).map((t) => <li key={t}>{tagLink(t)}</li>)}</ul>
               </div>
             )}
-            {(b?.availableToSupervise || b?.availableForMedia) && (
+            {f.active && (b?.availableToSupervise || b?.availableForMedia) && (
               <p className="rp-avail">
                 {b?.availableToSupervise && <span className="avail sup">Available to supervise</span>}
                 {b?.availableForMedia && <span className="avail media">Available for media comment</span>}
@@ -416,12 +417,17 @@ export function ResearcherProfile({ facultyId }: { facultyId: string }) {
   );
 }
 
-/** Office of Research: official details of a faculty member, and deactivating (removing from the directory) or restoring them. */
+/**
+ * Office of Research: official details of a faculty member, and recording that they have left (retired, resigned,
+ * transferred) or restoring them. Former faculty stay on record; they leave every current figure and management's view.
+ */
 function OfficialDetails({ f, onClose }: { f: Faculty; onClose: () => void }) {
   const { db } = useStore();
   const toast = useToast();
   const [x, setX] = useState<Faculty>({ ...f });
   const [error, setError] = useState('');
+  const [leaving, setLeaving] = useState(false);
+  const [exit, setExit] = useState({ reason: 'Retired', date: new Date().toISOString().slice(0, 10) });
   const save = async (next: Faculty, msg: string) => {
     try { await saveFaculty(next); toast(msg); onClose(); } catch (e) { setError((e as Error).message); }
   };
@@ -434,10 +440,24 @@ function OfficialDetails({ f, onClose }: { f: Faculty; onClose: () => void }) {
         <Field label="Designation"><Select value={x.designation} onChange={(v) => setX({ ...x, designation: v })} options={['Professor', 'Associate Professor', 'Assistant Professor', 'Professor of Practice', 'Adjunct Faculty']} /></Field>
         <Field label="Department"><Select value={x.department} onChange={(v) => setX({ ...x, department: v })} options={db.settings.departments} /></Field>
       </div>
+      {leaving && (
+        <fieldset className="weight-group">
+          <legend>Mark as former faculty</legend>
+          <p className="note" style={{ marginTop: 0 }}>Their profile and records stay with the Office of Research for the institution’s history. They can no longer sign in, and they are left out of Top-Level Management’s view, the active faculty count and every current figure, dashboard and report.</p>
+          <div className="grid g2">
+            <Field label="Reason"><Select value={exit.reason} onChange={(v) => setExit({ ...exit, reason: v })} options={EXIT_REASONS} /></Field>
+            <Field label="Last working day"><input type="date" value={exit.date} onChange={(e) => setExit({ ...exit, date: e.target.value })} /></Field>
+          </div>
+          <div className="btn-row left">
+            <button className="btn danger" onClick={() => save({ ...x, active: false, exitReason: exit.reason, exitDate: exit.date }, `${f.name} marked as former faculty (${exit.reason.toLowerCase()}).`)}>Confirm: {f.title} {f.name} has left</button>
+            <button className="btn secondary" onClick={() => setLeaving(false)}>Cancel</button>
+          </div>
+        </fieldset>
+      )}
       <div className="btn-row">
         {f.active
-          ? <button className="btn danger" onClick={() => confirm(`Deactivate ${f.name}? They can no longer sign in and are removed from the directory and statistics. Their records are kept.`) && save({ ...x, active: false }, `${f.name} deactivated.`)}>Deactivate faculty</button>
-          : <button className="btn ok" onClick={() => save({ ...x, active: true }, `${f.name} reactivated.`)}>Reactivate faculty</button>}
+          ? !leaving && <button className="btn danger" onClick={() => setLeaving(true)}>Mark as former faculty…</button>
+          : <button className="btn ok" onClick={() => save({ ...x, active: true }, `${f.name} restored as current faculty.`)}>Restore as current faculty</button>}
         <button className="btn secondary" onClick={onClose}>Cancel</button>
         <button className="btn ok" onClick={() => save(x, 'Official details saved.')}>Save</button>
       </div>

@@ -128,14 +128,19 @@ describe('totals reconcile wherever they are shown', () => {
       expect(s.awards).toBe(mine('awards').length);
       expect(s.ipr).toBe(mine('ipr').length);
     }
+    // Each sanctioned grant's amount = the shares of its current faculty + the shares of anyone no longer here.
+    const current = new Set(db.faculty.filter((f) => f.active).map((f) => f.id));
+    const formerShares = uniqueCounts(db, ALL).sanctioned.reduce((a, g) => a + g.investigators.filter((i) => !current.has(i.code)).reduce((x, i) => x + (g.sanctionedAmount * i.sharePct) / 100, 0), 0);
     const shares = stats.reduce((a, s) => a + s.sanctionedAmount, 0);
-    expect(Math.round(shares)).toBe(uniqueCounts(db, ALL).sanctionedAmount);
+    expect(Math.round(shares + formerShares)).toBe(uniqueCounts(db, ALL).sanctionedAmount);
   });
   it('a co-authored paper counts once for the institution and once for each author', () => {
-    const coauthored = (db.publications as Publication[]).filter((p) => p.status === 'Approved' && rules.creditedFaculty('publications', p).length > 1);
+    const current = new Set(db.faculty.filter((f) => f.active).map((f) => f.id));
+    const credits = (p: Publication) => rules.creditedFaculty('publications', p).filter((id) => current.has(id)).length;
+    const coauthored = (db.publications as Publication[]).filter((p) => p.status === 'Approved' && credits(p) > 1);
     expect(coauthored.length).toBeGreaterThan(0);
     const perPerson = facultyStats(db, ALL).reduce((a, s) => a + s.publications, 0);
-    const extraCredits = coauthored.reduce((a, p) => a + rules.creditedFaculty('publications', p).length - 1, 0);
+    const extraCredits = coauthored.reduce((a, p) => a + credits(p) - 1, 0);
     expect(perPerson).toBe(uniqueCounts(db, ALL).pubs.length + extraCredits);
   });
 });
@@ -236,5 +241,42 @@ describe('Follow me links', () => {
     expect(d.biodata.find((x) => x.facultyId === f.id)!.links.twitter ?? '').toBe(''); // not live yet
     rules.reviewProfileChange(d, { userId: 'o', name: 'Office of Research', role: 'office' }, id, 'Approved', '');
     expect(d.biodata.find((x) => x.facultyId === f.id)!.links).toMatchObject({ linkedin: 'https://www.linkedin.com/in/someone', twitter: 'https://x.com/someone', website: 'https://example.org' });
+  });
+});
+
+describe('former faculty (retired, resigned, transferred)', () => {
+  it('stay with the Office of Research, but nothing current counts them or shows them to management', () => {
+    const former = db.faculty.filter((f) => !f.active);
+    expect(former.map((f) => f.exitReason).sort()).toEqual(['Resigned', 'Retired', 'Transferred']);
+    for (const f of former) {
+      // Their history is kept: approved records up to the last working day, none after it.
+      const own = KINDS.flatMap((k) => (db[k] as AnyRecord[]).filter((r) => r.facultyId === f.id));
+      expect(own.length).toBeGreaterThan(0);
+      expect(own.every((r) => r.createdAt.slice(0, 10) <= f.exitDate!)).toBe(true);
+      expect(own.every((r) => r.status === 'Approved' || r.status === 'Rejected')).toBe(true);
+    }
+    const ids = new Set(former.map((f) => f.id));
+    const seen = rules.scopeFor(db, mgmt);
+    expect(seen.faculty.some((f) => ids.has(f.id))).toBe(false);
+    expect(seen.biodata.some((b) => ids.has(b.facultyId))).toBe(false);
+    // Management only gets records that credit at least one current faculty member.
+    for (const { k, r } of records(seen)) expect(rules.creditedFaculty(k, r).some((id) => !ids.has(id) && seen.faculty.some((f) => f.id === id))).toBe(true);
+    // Current figures: active faculty only, and the same whether computed from all data or from management's view.
+    expect(facultyStats(db, ALL).some((s) => ids.has(s.faculty.id))).toBe(false);
+    const soleFormer = db.publications.filter((p) => p.status === 'Approved' && rules.creditedFaculty('publications', p).every((id) => ids.has(id)));
+    expect(soleFormer.length).toBeGreaterThan(0);
+    expect(uniqueCounts(db, ALL).pubs.some((p) => soleFormer.includes(p))).toBe(false);
+    expect(uniqueCounts(seen, ALL).pubs.length).toBe(uniqueCounts(db, ALL).pubs.length);
+  });
+  it('need a reason and a last working day; restoring clears them', () => {
+    const d = createSeed();
+    const f = { ...d.faculty.find((x) => x.active)! };
+    expect(() => rules.saveFaculty(d, office, { ...f, active: false })).toThrow(/why the faculty member left/);
+    expect(() => rules.saveFaculty(d, office, { ...f, active: false, exitReason: 'Retired', exitDate: '1990-01-01' })).toThrow(/joining date/);
+    rules.saveFaculty(d, office, { ...f, active: false, exitReason: 'Retired', exitDate: '2026-10-31' });
+    expect(d.faculty.find((x) => x.id === f.id)).toMatchObject({ active: false, exitReason: 'Retired', exitDate: '2026-10-31' });
+    expect(() => rules.saveFaculty(d, mgmt, { ...f, active: true })).toThrow(/Office of Research/);
+    rules.saveFaculty(d, office, { ...f, active: true });
+    expect(d.faculty.find((x) => x.id === f.id)).toMatchObject({ active: true, exitReason: '', exitDate: '' });
   });
 });

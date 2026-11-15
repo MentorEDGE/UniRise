@@ -1,4 +1,5 @@
 import { Component, useEffect, useLayoutEffect } from 'react';
+import { ManagementDashboard } from './pages/mgmt/Dashboard';
 import type { ReactNode } from 'react';
 import { HashRouter, Navigate, Route, Routes, useLocation, useParams } from 'react-router-dom';
 import { Layout } from './components/Layout';
@@ -74,11 +75,11 @@ const ALL: Role[] = ['management', 'faculty', 'office'];
 /** Institution-wide viewing: Top-Level Management (read-only) and the Office of Research. */
 const VIEWERS: Role[] = ['management', 'office'];
 
-/** After sign-in everyone lands on "/": the faculty workspace, Faculty Search for management, Approval for the Office of Research. */
+/** After sign-in everyone lands on "/": the faculty workspace, the Dashboard for management, Approval for the Office of Research. */
 function Home() {
   const { user } = useStore();
   if (user?.role === 'office') return <AdminApprovals />;
-  return user?.role === 'management' ? <FacultySearch /> : <FacultyHome />;
+  return user?.role === 'management' ? <ManagementDashboard /> : <FacultyHome />;
 }
 
 function SeedMoneyHome() {
