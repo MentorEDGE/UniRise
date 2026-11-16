@@ -34,19 +34,28 @@ export class ApiError extends Error { constructor(public status: number, message
 export const API_BASE = ((import.meta as { env?: Record<string, string | undefined> }).env?.VITE_API_BASE ?? '').replace(/\/$/, '');
 const CREDENTIALS: RequestCredentials = API_BASE ? 'include' : 'same-origin';
 
+const UNREACHABLE = 'UniRise can’t be reached right now. Check your internet connection, or try again in a few minutes.';
+
 async function api<T = unknown>(method: string, path: string, body?: unknown): Promise<T> {
-  const res = await fetch(`${API_BASE}/api${path}`, {
-    method, credentials: CREDENTIALS,
-    headers: { 'X-RDMS': '1', ...(body !== undefined ? { 'Content-Type': 'application/json' } : {}) },
-    body: body !== undefined ? JSON.stringify(body) : undefined,
-  });
-  const data = await res.json().catch(() => ({}));
+  let res: Response;
+  try {
+    res = await fetch(`${API_BASE}/api${path}`, {
+      method, credentials: CREDENTIALS,
+      headers: { 'X-RDMS': '1', ...(body !== undefined ? { 'Content-Type': 'application/json' } : {}) },
+      body: body !== undefined ? JSON.stringify(body) : undefined,
+    });
+  } catch {
+    throw new ApiError(0, UNREACHABLE); // offline, or the server did not answer at all
+  }
+  const data = await res.json().catch(() => null);
   if (!res.ok) {
     // A session that expired or was ended by the Office of Research sends the user back to sign in.
     if (res.status === 401 && snapshot.user) set({ user: null, institution: null, db: EMPTY });
-    throw new ApiError(res.status, (data as { error?: string }).error ?? 'Something went wrong. Try again.');
+    const message = (data as { error?: string } | null)?.error;
+    // No JSON error from UniRise: the request never reached it (a hosting error page, or the server is down or restarting).
+    throw new ApiError(res.status, message ?? (data === null || res.status >= 502 ? UNREACHABLE : 'Something went wrong. Try again.'));
   }
-  return data as T;
+  return (data ?? {}) as T;
 }
 export const adminApi = api;
 

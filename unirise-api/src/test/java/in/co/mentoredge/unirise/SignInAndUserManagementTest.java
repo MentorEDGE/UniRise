@@ -50,6 +50,23 @@ class SignInAndUserManagementTest {
 		api.create("/api/org-units", xoffice, "{\"type\":\"department\",\"name\":\"Physics\"}");
 	}
 
+	/** The health page tests the control-plane database (A8): it said UP for 11 days while the dev database was unusable. */
+	@Test
+	void healthChecksTheDatabaseAndSaysDownWhenItCannotBeReached() throws Exception {
+		api = new TestApi(port);
+		for (String p : new String[] { "/actuator/health", "/actuator/health/readiness", "/actuator/health/liveness" }) {
+			var r = api.call("GET", p, Caller.NOBODY, null);
+			assertEquals(200, r.statusCode(), p);
+			assertTrue(r.body().contains("\"status\":\"UP\""), p + " " + r.body());
+			assertFalse(r.body().contains("jdbc") || r.body().contains(PG.getUsername()), "no connection details on a public page: " + r.body());
+		}
+		var unreachable = new org.springframework.jdbc.datasource.DriverManagerDataSource("jdbc:postgresql://127.0.0.1:1/none?connectTimeout=2", "x", "x");
+		var down = new in.co.mentoredge.unirise.tenancy.ControlDatabaseHealth(JdbcClient.create(unreachable)).health();
+		assertEquals("DOWN", down.getStatus().getCode());
+		assertTrue(down.getDetails().isEmpty(), "no error details: " + down.getDetails());
+		assertEquals("UP", new in.co.mentoredge.unirise.tenancy.ControlDatabaseHealth(control).health().getStatus().getCode());
+	}
+
 	@Test
 	void provisioningCreatesTheFirstOfficeAccountAndSignInFindsTheInstitution() throws Exception {
 		setup();
