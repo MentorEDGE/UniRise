@@ -51,7 +51,7 @@ public class SeedMoneyController {
 		Actor a = access.actor(req);
 		size = Math.max(1, Math.min(size, 200));
 		page = Math.max(0, page);
-		String where = " WHERE true" + flow.scope(a, "owner_id") + (status == null ? "" : " AND status = :status");
+		String where = " WHERE true" + flow.scope(a, "owner_id") + flow.approvedOnly(a, "status") + (status == null ? "" : " AND status = :status");
 		var count = flow.bindScope(db.sql("SELECT count(*) FROM seed_proposal" + where), a);
 		var rows = flow.bindScope(db.sql(COLS + where + " ORDER BY id DESC LIMIT :size OFFSET :off"), a).param("size", size).param("off", (long) page * size);
 		if (status != null) { count = count.param("status", status); rows = rows.param("status", status); }

@@ -15,20 +15,21 @@ import org.springframework.web.cors.UrlBasedCorsConfigurationSource;
 
 @Configuration
 public class SecurityConfig {
-	/** Stateless key auth is done by ApiKeyFilter (fails closed for /api/**); Spring Security supplies headers and no session. */
+	/** ApiKeyFilter authenticates (API key, operator key or the session cookie) and fails closed for /api/**; Spring Security supplies headers and no HTTP session. */
 	@Bean
-	SecurityFilterChain chain(HttpSecurity http, TenantDirectory directory, AppProperties props) throws Exception {
+	SecurityFilterChain chain(HttpSecurity http, TenantDirectory directory, Sessions sessions, AppProperties props) throws Exception {
 		var cors = new CorsConfiguration();
 		cors.setAllowedOrigins(List.of("https://dev-unirise.mentoredge.co.in"));
 		cors.setAllowedMethods(List.of("GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"));
-		cors.setAllowedHeaders(List.of("Authorization", "Content-Type", "X-API-Key", "X-Admin-Key"));
+		cors.setAllowedHeaders(List.of("Content-Type", "X-API-Key", "X-Admin-Key", "X-RDMS"));
+		cors.setAllowCredentials(true); // the session cookie: the frontend (dev-unirise) and the API (api.dev-unirise) are the same site
 		var source = new UrlBasedCorsConfigurationSource();
 		source.registerCorsConfiguration("/api/**", cors);
 		http.cors(c -> c.configurationSource(source))
 			.csrf(c -> c.disable())
 			.sessionManagement(s -> s.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
 			.authorizeHttpRequests(a -> a.anyRequest().permitAll())
-			.addFilterBefore(new ApiKeyFilter(directory, props.adminKey()), UsernamePasswordAuthenticationFilter.class);
+			.addFilterBefore(new ApiKeyFilter(directory, sessions, props.adminKey()), UsernamePasswordAuthenticationFilter.class);
 		return http.build();
 	}
 

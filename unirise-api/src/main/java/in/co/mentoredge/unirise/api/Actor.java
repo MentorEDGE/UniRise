@@ -1,17 +1,19 @@
 package in.co.mentoredge.unirise.api;
 
-import java.util.List;
+/**
+ * Who is asking: the institution's service key, or a signed-in user with one of the three roles (BACKEND_PLAN G1).
+ * office = the Office of Research (administers the institution and is the only reviewer); management = Top-Level
+ * Management (read-only, approved data only); faculty = a faculty member (their own records only).
+ */
+public record Actor(Long userId, Long researcherId, boolean service, String role, String name) {
+	public static final String OFFICE = "office", MANAGEMENT = "management", FACULTY = "faculty";
 
-/** Who is asking: a tenant service key (full tenant admin) or a signed-in user with their current grants. */
-public record Actor(Long userId, Long researcherId, boolean service, List<Grant> grants) {
-	public record Grant(String role, Long scopeUnitId) {}
+	static Actor serviceActor() { return new Actor(null, null, true, OFFICE, "Service key"); }
 
-	static Actor serviceActor() { return new Actor(null, null, true, List.of()); }
+	/** The Office of Research, or the institution's service key acting for it. */
+	boolean isAdmin() { return service || OFFICE.equals(role); }
 
-	boolean isAdmin() { return service || grants.stream().anyMatch(g -> g.role().equals("RESEARCH_ADMIN") && g.scopeUnitId() == null); }
+	boolean isManagement() { return !service && MANAGEMENT.equals(role); }
 
-	boolean hasRole(String... roles) {
-		for (Grant g : grants) for (String r : roles) if (g.role().equals(r)) return true;
-		return false;
-	}
+	boolean isFaculty() { return !service && FACULTY.equals(role); }
 }

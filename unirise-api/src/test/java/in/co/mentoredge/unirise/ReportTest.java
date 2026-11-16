@@ -38,7 +38,7 @@ class ReportTest {
 		var b = HttpRequest.newBuilder(URI.create("http://localhost:" + port + path))
 			.method(method, body == null ? HttpRequest.BodyPublishers.noBody() : HttpRequest.BodyPublishers.ofString(body)).header("Content-Type", "application/json");
 		if (token != null) {
-			if (token.equals(service)) b.header("X-API-Key", token); else b.header("Authorization", "Bearer " + token);
+			if (token.equals(service)) b.header("X-API-Key", token); else b.header("Cookie", token).header("X-RDMS", "1"); // a signed-in browser
 		}
 		return HTTP.send(b.build(), HttpResponse.BodyHandlers.ofString());
 	}
@@ -55,9 +55,10 @@ class ReportTest {
 		return Long.parseLong(field(r.body(), "id"));
 	}
 
-	String login(String email, long researcher) throws Exception {
-		var inv = call("POST", "/api/auth/invitations", service, "{\"email\":\"" + email + "\",\"researcherId\":" + researcher + "}");
-		return field(call("POST", "/api/auth/redeem", null, "{\"token\":\"" + field(inv.body(), "token") + "\"}").body(), "token");
+	/** A faculty account for the researcher with this employee code, signed in; returns the session cookie. */
+	String login(String email, String employeeCode, String department) throws Exception {
+		var api = new TestApi(port);
+		return api.faculty(new TestApi.Caller(service, null), email, email, employeeCode, department).cookie();
 	}
 
 	String paper(String owner, long ownerId, String doi, int year, String venue, String extraAuthors) throws Exception {
@@ -77,15 +78,15 @@ class ReportTest {
 		campus = create("/api/org-units", service, "{\"type\":\"campus\",\"name\":\"Zeta Campus\"}");
 		d1 = create("/api/org-units", service, "{\"parentId\":" + campus + ",\"type\":\"department\",\"name\":\"Physics\"}");
 		long d2 = create("/api/org-units", service, "{\"parentId\":" + campus + ",\"type\":\"department\",\"name\":\"Chemistry\"}");
-		rA = create("/api/researchers", service, "{\"name\":\"Asha\",\"employeeId\":\"E1\",\"orcid\":\"0000-0001\",\"scopusId\":\"S1\"}");
-		rB = create("/api/researchers", service, "{\"name\":\"Bala\",\"employeeId\":\"E2\"}");
-		rX = create("/api/researchers", service, "{\"name\":\"Xena\",\"employeeId\":\"E3\"}");
+		rA = create("/api/researchers", service, "{\"name\":\"Asha\",\"employeeId\":\"EMP01\",\"orcid\":\"0000-0001\",\"scopusId\":\"S1\"}");
+		rB = create("/api/researchers", service, "{\"name\":\"Bala\",\"employeeId\":\"EMP02\"}");
+		rX = create("/api/researchers", service, "{\"name\":\"Xena\",\"employeeId\":\"EMP03\"}");
 		create("/api/appointments", service, "{\"researcherId\":" + rA + ",\"orgUnitId\":" + d1 + ",\"validFrom\":\"2020-01-01\"}");
 		create("/api/appointments", service, "{\"researcherId\":" + rB + ",\"orgUnitId\":" + d1 + ",\"validFrom\":\"2020-01-01\"}");
 		create("/api/appointments", service, "{\"researcherId\":" + rX + ",\"orgUnitId\":" + d2 + ",\"validFrom\":\"2020-01-01\"}");
-		tokA = login("a@z.example", rA);
-		tokB = login("b@z.example", rB);
-		tokX = login("x@z.example", rX);
+		tokA = login("a@z.example", "EMP01", "Physics");
+		tokB = login("b@z.example", "EMP02", "Physics");
+		tokX = login("x@z.example", "EMP03", "Chemistry");
 		paper(tokA, rA, "10.1000/p1", 2024, "J1", ",{\"kind\":\"external\",\"name\":\"Ext\",\"institution\":\"MIT\",\"continent\":\"North America\"}");
 		paper(tokB, rB, "10.1000/p2", 2025, "J1", ",{\"researcherId\":" + rA + ",\"kind\":\"internal-faculty\",\"name\":\"Asha\"}");
 		paper(tokX, rX, "10.1000/p3", 2025, "=SUM(1)", "");
@@ -105,7 +106,7 @@ class ReportTest {
 		assertTrue(byYear.contains("[2024,1]") && (byYear.contains("[2025,2]") || byYear.contains("[2025,3]")), byYear);
 		String dept = call("GET", "/api/reports/pub-institute-department", service, null).body();
 		assertTrue(dept.contains("[\"Zeta Campus\",\"Chemistry\",1]") && (dept.contains("[\"Zeta Campus\",\"Physics\",2]") || dept.contains("[\"Zeta Campus\",\"Physics\",3]")), dept); // p2 has two Physics authors but counts once
-		assertTrue(call("GET", "/api/reports/pub-employee-count", service, null).body().contains("[\"E1\",\"Asha\",2]"));
+		assertTrue(call("GET", "/api/reports/pub-employee-count", service, null).body().contains("[\"EMP01\",\"Asha\",2]"));
 		assertTrue(call("GET", "/api/reports/pub-inter-institution", service, null).body().contains("[\"MIT\",1]"));
 		assertTrue(call("GET", "/api/reports/pub-continent", service, null).body().contains("[\"North America\",1]"));
 		assertTrue(call("GET", "/api/reports/pub-university?from=2025-01-01&to=2025-12-31", service, null).body().contains("[2025,"));
@@ -124,14 +125,14 @@ class ReportTest {
 	void personReportsDoNotNameCoAuthorsOutsideTheCallersSlice() throws Exception {
 		setup();
 		String forB = call("GET", "/api/reports/pub-employee", tokB, null).body();
-		assertTrue(forB.contains("E2") && !forB.contains("E1") && !forB.contains("Asha"), forB);   // p2 is co-authored by Asha, who Bala cannot see
-		assertFalse(call("GET", "/api/reports/grant-employee", tokB, null).body().contains("E1"));
-		// a user with only an IT_ADMIN grant has no research scope at all
-		var inv = call("POST", "/api/auth/invitations", service, "{\"email\":\"it@z.example\"}");
-		create("/api/role-grants", service, "{\"userId\":" + field(inv.body(), "userId") + ",\"role\":\"IT_ADMIN\"}");
-		String it = field(call("POST", "/api/auth/redeem", null, "{\"token\":\"" + field(inv.body(), "token") + "\"}").body(), "token");
-		assertEquals("[]", call("GET", "/api/org-units", it, null).body());
-		assertEquals("[]", call("GET", "/api/researchers", it, null).body());
+		assertTrue(forB.contains("EMP02") && !forB.contains("EMP01") && !forB.contains("Asha"), forB);   // p2 is co-authored by Asha, who Bala cannot see
+		assertFalse(call("GET", "/api/reports/grant-employee", tokB, null).body().contains("EMP01"));
+		// Top-Level Management reads the whole institution's approved work, and only that
+		String dean = new TestApi(port).management(new TestApi.Caller(service, null), "Dean", "dean@z.example").cookie();
+		String all = call("GET", "/api/reports/pub-employee", dean, null).body();
+		assertTrue(all.contains("EMP01") && all.contains("EMP02") && all.contains("EMP03"), all);
+		String grants = call("GET", "/api/reports/grant-sharing", dean, null).body();
+		assertTrue(grants.contains("G1") && !grants.contains("Draft only"), grants);
 	}
 
 	@Test
@@ -160,16 +161,17 @@ class ReportTest {
 	@Test
 	void lookupFindsPeopleOnlyInsideTheCallersSlice() throws Exception {
 		setup();
-		var ok = call("GET", "/api/researchers/lookup?kind=employee&value=E1", service, null);
+		var ok = call("GET", "/api/researchers/lookup?kind=employee&value=EMP01", service, null);
 		assertEquals(200, ok.statusCode());
 		assertTrue(ok.body().contains("Zeta Campus") && ok.body().contains("Physics") && ok.body().contains("\"grants\":1"), ok.body());
 		assertEquals(200, call("GET", "/api/researchers/lookup?kind=orcid&value=0000-0001", service, null).statusCode());
 		assertEquals(200, call("GET", "/api/researchers/lookup?kind=scopus&value=S1", service, null).statusCode());
-		assertEquals(404, call("GET", "/api/researchers/lookup?kind=employee&value=E1", tokX, null).statusCode());   // another department's researcher
+		assertEquals(404, call("GET", "/api/researchers/lookup?kind=employee&value=EMP01", tokX, null).statusCode());   // another department's researcher
 		assertEquals(404, call("GET", "/api/researchers/lookup?kind=employee&value=NOPE", service, null).statusCode());
 		assertEquals(400, call("GET", "/api/researchers/lookup?kind=ssn&value=1", service, null).statusCode());
 	}
 
+	@org.junit.jupiter.api.Disabled("Periods are parked by decision D3 (2026-11-14): the endpoints are not exposed.")
 	@Test
 	void closingAPeriodFreezesTheNumbers() throws Exception {
 		setup();

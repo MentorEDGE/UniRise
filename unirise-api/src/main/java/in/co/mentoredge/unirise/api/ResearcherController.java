@@ -41,14 +41,13 @@ public class ResearcherController {
 		String col = switch (kind) { case "employee" -> "employee_id"; case "orcid" -> "orcid"; case "scopus" -> "scopus_id"; default -> throw new ResponseStatusException(HttpStatus.BAD_REQUEST); };
 		Researcher r = db.sql(COLS + " WHERE " + col + " = :v").param("v", value.trim()).query(Researcher.class).optional().orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND));
 		if (!access.visible(a).allows(r.id())) throw new ResponseStatusException(HttpStatus.NOT_FOUND);
-		access.logDrillDown(a, r.id());
 		var unit = db.sql("""
 			SELECT ou.name AS department, (SELECT cu.name FROM org_unit_closure c JOIN org_unit cu ON cu.id = c.ancestor_id WHERE c.descendant_id = ou.id AND cu.type = 'campus' ORDER BY c.depth DESC LIMIT 1) AS institute
 			FROM appointment ap JOIN org_unit ou ON ou.id = ap.org_unit_id WHERE ap.researcher_id = :r AND ap.valid_from <= current_date AND (ap.valid_to IS NULL OR ap.valid_to >= current_date) ORDER BY ap.id LIMIT 1""")
 			.param("r", r.id()).query((rs, n) -> new String[] { rs.getString("institute"), rs.getString("department") }).optional().orElse(new String[] { null, null });
 		var pubs = db.sql("SELECT p.id, p.title, p.venue, p.pub_year AS year, p.doi, p.type FROM publication p JOIN publication_author a ON a.publication_id = p.id WHERE a.researcher_id = :r AND p.entry_status = 'approved' ORDER BY p.pub_year DESC")
 			.param("r", r.id()).query().listOfRows();
-		long grants = db.sql("SELECT count(DISTINCT grant_id) FROM grant_investigator gi JOIN research_grant g ON g.id = gi.grant_id WHERE gi.researcher_id = :r AND g.status IN ('submitted','sanctioned')").param("r", r.id()).query(Long.class).single();
+		long grants = db.sql("SELECT count(DISTINCT grant_id) FROM grant_investigator gi JOIN research_grant g ON g.id = gi.grant_id WHERE gi.researcher_id = :r AND g.status IN (" + (a.isAdmin() ? "'submitted','sanctioned'" : "'sanctioned'") + ")").param("r", r.id()).query(Long.class).single(); // management and faculty: approved only
 		return new Lookup(r, unit[0], unit[1], pubs, grants);
 	}
 
@@ -59,7 +58,6 @@ public class ResearcherController {
 		if (!access.visible(a).allows(id)) throw new ResponseStatusException(HttpStatus.NOT_FOUND);
 		Researcher r = db.sql(COLS + " WHERE id = :id").param("id", id).query(Researcher.class).optional()
 			.orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND));
-		access.logDrillDown(a, id);
 		return r;
 	}
 

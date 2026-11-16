@@ -94,16 +94,37 @@ Effective-dated; supports joint appointments.
 ## 3. Access
 
 ### app_user
-Login identity only. What a user may do comes from `role_grant` and relationships.
+An account of this institution and its role (V6, phase 2). Its email and password hash are in the control plane
+(`account_login`), so a sign-in finds the institution from the credential.
 
 | Column | Type | Notes |
 |---|---|---|
 | id | BIGSERIAL PK | |
 | email | TEXT | Unique |
-| researcher_id | BIGINT FK → researcher | Optional |
-| active | BOOLEAN | Default true |
+| researcher_id | BIGINT FK → researcher | The faculty profile. Required when `role` is `faculty`; at most one live account per profile |
+| role | TEXT | `office` (Office of Research), `management` (Top-Level Management, read-only), `faculty` |
+| status | TEXT | `active`, `suspended`, `deactivated`. Only `active` accounts can sign in |
+| status_reason | TEXT | Why the account was suspended or deactivated |
+| name, title, designation, department | TEXT | As shown in User Management |
+| created_at | TIMESTAMPTZ | |
+| created_by | TEXT | The Office account, the service key or `UniRise provisioning` |
+
+### admin_log
+What the Office of Research changed, and sign-ins to Office accounts (V6, G23). Changes only, not reads (decision D7).
+
+| Column | Type | Notes |
+|---|---|---|
+| id | BIGSERIAL PK | |
+| at | TIMESTAMPTZ | |
+| actor_user_id | BIGINT | Null for the service key or UniRise |
+| actor_name | TEXT | |
+| action | TEXT | For example `Account created`, `Account suspended`, `Role changed to management`, `Password reset` |
+| target | TEXT | Usually the account's email |
+| detail | TEXT | Reason, role or linked profile |
 
 ### role_grant
+**Parked (decision D3, 2026-11-14).** Kept for the old data; the three roles on `app_user` replace it, and the endpoint is not exposed.
+
 | Column | Type | Notes |
 |---|---|---|
 | id | BIGSERIAL PK | |
@@ -116,6 +137,8 @@ Login identity only. What a user may do comes from `role_grant` and relationship
 Supervisor and researcher access is not a grant: it comes from the linked researcher and from `relationship`.
 
 ### relationship
+**Parked (decision D3).** Supervision relationships no longer grant access.
+
 | Column | Type | Notes |
 |---|---|---|
 | id | BIGSERIAL PK | |
@@ -125,7 +148,7 @@ Supervisor and researcher access is not a grant: it comes from the linked resear
 | valid_from / valid_to | DATE | |
 
 ### access_log
-Named drill-downs by a Dean or Executive.
+Named drill-downs by a Dean or Executive. **No longer written:** those roles are gone; `admin_log` records Office changes.
 
 | Column | Type | Notes |
 |---|---|---|
@@ -309,3 +332,62 @@ Figures frozen when a period closes, so reported numbers stop moving.
 - **Optimistic locking:** `version` on publications, grants and seed proposals; an update against an old version returns 409.
 - **Visibility is not in the schema.** It is enforced in the service layer from role grants, scope and relationships (ACCESS_AND_VISIBILITY_MODEL.md), and checked on every read and write.
 - **Not yet in the schema:** attachments (PDF uploads), classification schemes, authorship claims and duplicate handling, webhooks and harvest runs.
+
+## Records, profiles and settings (V7, phases 3 to 5)
+
+The UI's data model (`rdms-web/src/lib/types.ts`) stored as it is. Decision D2 keeps reports and analytics in the
+browser, so each record's fields are one JSON document, and only what the server checks or queries has its own column.
+The older `publication`, `research_grant` and `seed_proposal` tables are superseded by `record` (no screen uses them).
+
+### researcher (added columns)
+| Column | Type | Notes |
+|---|---|---|
+| title, designation, department, phone, joining_date | TEXT | Official details kept by the Office of Research |
+| active | BOOLEAN | False = former faculty: kept for the record, left out of management's view and every current figure |
+| exit_reason | TEXT | `Retired`, `Resigned`, `Transferred`, `Other` (when not active) |
+| exit_date | TEXT | Last working day, yyyy-mm-dd |
+
+The employee code (`employee_id`) is the faculty id used everywhere in the UI and in `record.owner`.
+
+### record
+| Column | Type | Notes |
+|---|---|---|
+| id | TEXT PK | Display id: `PUB`, `GRT`, `SM`, `FDP`, `CNF`, `AWD`, `IPR` + a number from `display_seq` (one counter per institution) |
+| kind | TEXT | `publications`, `grants`, `seedMoney`, `fdps`, `conferences`, `awards`, `ipr` |
+| owner | TEXT | Employee code of the faculty member who entered it |
+| status | TEXT | `Draft`, `Submitted`, `UnderReview`, `Rework` (Changes Requested), `Approved`, `Rejected` |
+| data | JSONB | The kind's fields as in types.ts; never workflow fields. Unique DOI and IP application number are enforced by partial indexes |
+| custom | JSONB | Institution-defined custom fields (G29) |
+| created_at, updated_at | TIMESTAMPTZ | |
+| version | INT | Incremented on every edit |
+
+### record_credit
+Faculty credited on a record: the owner plus internal faculty co-authors and co-investigators (G15). Used for visibility
+and for counting a record once per person.
+
+### record_event
+The history of a record or profile update: `Created`, `Edited`, `Submitted`, `Review started`, `Returned for correction`,
+`Resubmitted`, `Approved`, `Rejected`, `Outcome set to …`, with the Office's comments and the faculty member's replies in
+`remark`. Management receives only `Created`, the final `Approved` and outcomes, never a remark.
+
+### profile_change
+A faculty member's proposed profile update (`biodata`, `contact`, `changed` as JSON), with the same statuses as records.
+One open request per person; it replaces the live profile only when the Office approves it.
+
+### biodata
+One JSON document per faculty member (`faculty` = employee code): biography, qualifications, expertise, SDGs, Google
+Scholar metrics, teaching, supervision (Ph.D. counts follow the list), engagement, media, Follow me links and more.
+
+### notice
+Notices from the Office of Research to faculty: `id`, `at`, `title`, `body`.
+
+### settings
+One row, one JSON document: institution name and tagline, departments (mirrored to `org_unit` rows of type
+`department`), academic-year start month, seed-money window, targets, score weights, and `features` (record kinds on or
+off, G28), `customFields` (G29), `lists` (G30) and `limits` such as the seed-money ceiling and whether a PDF is required
+(G31).
+
+## Control plane (phase 2 and 5)
+`account_login` (email → institution, tenant user, password hash), `sign_in_failure` (lockout and enquiry rate limits),
+`user_token` sessions with `last_seen_at` and `idle_seconds`, and `enquiry` (Talk to Our Team enquiries, with whether
+the email went out).

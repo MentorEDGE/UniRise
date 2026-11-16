@@ -2,7 +2,6 @@ package in.co.mentoredge.unirise.api;
 
 import jakarta.servlet.http.HttpServletRequest;
 import java.util.HashSet;
-import java.util.List;
 import java.util.Set;
 import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.http.HttpStatus;
@@ -10,7 +9,13 @@ import org.springframework.jdbc.core.simple.JdbcClient;
 import org.springframework.stereotype.Service;
 import org.springframework.web.server.ResponseStatusException;
 
-/** Role + scope rules (ACCESS_AND_VISIBILITY_MODEL.md §3, TRD §3). Every read and write of people data goes through here. */
+/**
+ * The three-role access model (BACKEND_PLAN G1, ACCESS_AND_VISIBILITY_MODEL.md). Every read and write of people data goes
+ * through here:
+ * - Office of Research: the whole institution, every status; administers accounts and settings; the only reviewer.
+ * - Top-Level Management: the whole institution, read-only, approved records only (enforced in EntryWorkflow).
+ * - Faculty: their own profile and the records they are credited on.
+ */
 @Service
 public class AccessService {
 	/** all = no restriction; otherwise only these researcher ids. */
@@ -18,76 +23,44 @@ public class AccessService {
 		boolean allows(long id) { return all || ids.contains(id); }
 	}
 
-	private static final List<String> SCOPE_ROLES = List.of("RESEARCH_ADMIN", "EXECUTIVE", "DEAN", "HOD", "VIEWER");
-	/** The one definition of an active relationship, used by every check so they cannot drift apart. */
-	private static final String CURRENT = " valid_from <= current_date AND (valid_to IS NULL OR valid_to >= current_date)";
 	private final JdbcClient db;
 
 	public AccessService(@Qualifier("tenantJdbc") JdbcClient db) { this.db = db; }
 
+	/** The caller, read fresh on every request so a suspended account or a changed role takes effect at once. */
 	public Actor actor(HttpServletRequest req) {
 		if (req.getAttribute("service") != null) return Actor.serviceActor();
 		Long uid = (Long) req.getAttribute("userId");
 		if (uid == null) throw new ResponseStatusException(HttpStatus.UNAUTHORIZED);
-		var users = db.sql("SELECT researcher_id FROM app_user WHERE id = :u AND active").param("u", uid)
-			.query((r, n) -> java.util.Optional.ofNullable((Long) r.getObject("researcher_id"))).list();
-		if (users.isEmpty()) throw new ResponseStatusException(HttpStatus.UNAUTHORIZED); // deactivated or unknown user
-		Long researcher = users.get(0).orElse(null);
-		List<Actor.Grant> grants = db.sql("""
-			SELECT role, scope_unit_id FROM role_grant WHERE app_user_id = :u
-			AND valid_from <= current_date AND (valid_to IS NULL OR valid_to >= current_date)""")
-			.param("u", uid).query((r, n) -> new Actor.Grant(r.getString("role"), (Long) r.getObject("scope_unit_id"))).list();
-		return new Actor(uid, researcher, false, grants);
+		// A faculty account whose profile is marked as former faculty (G35) can no longer act, even with a live session.
+		return db.sql("""
+			SELECT u.researcher_id, u.role, u.name FROM app_user u LEFT JOIN researcher r ON r.id = u.researcher_id
+			WHERE u.id = :u AND u.status = 'active' AND (u.role <> 'faculty' OR r.active)""").param("u", uid)
+			.query((r, n) -> new Actor(uid, (Long) r.getObject("researcher_id"), false, r.getString("role"), r.getString("name"))).optional()
+			.orElseThrow(() -> new ResponseStatusException(HttpStatus.UNAUTHORIZED)); // suspended, deactivated or unknown
 	}
 
+	/** Office of Research only (or the service key). */
 	public void requireAdmin(Actor a) {
 		if (!a.isAdmin()) throw new ResponseStatusException(HttpStatus.FORBIDDEN);
 	}
 
+	/** Whose people data the caller may see. Faculty: themselves only. */
 	public Visible visible(Actor a) {
-		boolean whole = a.isAdmin() || a.grants().stream().anyMatch(g -> g.scopeUnitId() == null && SCOPE_ROLES.contains(g.role()));
-		if (whole) return new Visible(true, Set.of());
+		if (a.isAdmin() || a.isManagement()) return new Visible(true, Set.of());
 		Set<Long> ids = new HashSet<>();
-		if (a.researcherId() != null) {
-			ids.add(a.researcherId());
-			ids.addAll(db.sql("""
-				SELECT mentee_id FROM relationship WHERE mentor_id = :m AND""" + CURRENT)
-				.param("m", a.researcherId()).query(Long.class).list());
-		}
-		List<Long> units = a.grants().stream().filter(g -> g.scopeUnitId() != null && SCOPE_ROLES.contains(g.role())).map(Actor.Grant::scopeUnitId).toList();
-		if (!units.isEmpty()) {
-			ids.addAll(db.sql("""
-				SELECT DISTINCT a.researcher_id FROM appointment a JOIN org_unit_closure c ON c.descendant_id = a.org_unit_id
-				WHERE c.ancestor_id IN (:units) AND a.valid_from <= current_date AND (a.valid_to IS NULL OR a.valid_to >= current_date)""")
-				.param("units", units).query(Long.class).list());
-		}
+		if (a.researcherId() != null) ids.add(a.researcherId());
 		return new Visible(false, ids);
 	}
 
-	/** Executive or Dean reading a named person they only see through their scope is logged. */
-	public void logDrillDown(Actor a, long researcherId) {
-		if (a.userId() == null || !a.hasRole("EXECUTIVE", "DEAN")) return;
-		boolean own = a.researcherId() != null && a.researcherId() == researcherId;
-		boolean mentee = a.researcherId() != null && db.sql("SELECT count(*) FROM relationship WHERE mentor_id = :m AND mentee_id = :t AND" + CURRENT)
-			.param("m", a.researcherId()).param("t", researcherId).query(Long.class).single() > 0;
-		if (!own && !mentee) {
-			db.sql("INSERT INTO access_log(actor_user_id, action, target_researcher_id) VALUES (:u, 'view.person', :t)").param("u", a.userId()).param("t", researcherId).update();
-		}
-	}
+	/** Parked with the progress module (decision D3): supervision relationships no longer grant anything. */
+	public boolean isActiveMentor(Long mentorId, long scholarId) { return false; }
 
-	/** True when the researcher is currently a supervisor of the scholar (any relationship type). */
-	public boolean isActiveMentor(Long mentorId, long scholarId) {
-		return mentorId != null && db.sql("SELECT count(*) FROM relationship WHERE mentor_id = :m AND mentee_id = :s AND" + CURRENT)
-			.param("m", mentorId).param("s", scholarId).query(Long.class).single() > 0;
-	}
-
-	/** Org units the caller may see: null means all; otherwise the subtrees they hold a scope for plus the units they are appointed to. */
+	/** Org units the caller may see: null means all; a faculty member sees the units they are appointed to. */
 	public Set<Long> visibleUnitIds(Actor a) {
-		if (a.isAdmin() || a.grants().stream().anyMatch(g -> g.scopeUnitId() == null && SCOPE_ROLES.contains(g.role()))) return null; // IT_ADMIN and the like have no research scope
+		if (a.isAdmin() || a.isManagement()) return null;
 		return new HashSet<>(db.sql("""
-			SELECT c.descendant_id FROM org_unit_closure c JOIN role_grant g ON g.scope_unit_id = c.ancestor_id
-			WHERE g.app_user_id = :u AND g.role IN ('RESEARCH_ADMIN','EXECUTIVE','DEAN','HOD','VIEWER') AND g.valid_from <= current_date AND (g.valid_to IS NULL OR g.valid_to >= current_date)
-			UNION SELECT org_unit_id FROM appointment WHERE researcher_id = :r AND valid_from <= current_date AND (valid_to IS NULL OR valid_to >= current_date)""")
-			.param("u", a.userId()).param("r", a.researcherId() == null ? -1L : a.researcherId()).query(Long.class).list());
+			SELECT org_unit_id FROM appointment WHERE researcher_id = :r AND valid_from <= current_date AND (valid_to IS NULL OR valid_to >= current_date)""")
+			.param("r", a.researcherId() == null ? -1L : a.researcherId()).query(Long.class).list());
 	}
 }

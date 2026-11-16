@@ -4,10 +4,11 @@ Date: 2026-11-14. Branch `dev` at 649ee73. Sources: `unirise-api/` (code and mig
 
 ## 1. Where we stand
 
-- `unirise-api` is built and deployed to AWS dev. Its health page returned `UP` on 2026-11-14, but that page does not test the database (`management.health.db.enabled=false`).
-- **Dev database down (found 2026-11-15).** The dev RDS instance was reported in `inaccessible-encryption-credentials` since 2026-11-04. A request with an API key returns 500 after 30 seconds, so the deployed API cannot read or write data. Fix: restore from the snapshot into a new instance, then bring the OpenTofu state in line. The cause is unknown. The RDS status, dates and snapshots were reported by a teammate and not checked from this repo.
-- `rdms-web` is the product frontend (decided 2026-11-06). It still runs on its own Node/SQLite server. **No screen calls `unirise-api` yet.**
-- The backend was built for the older model (researcher, scholar, supervisor, HoD, Dean, Executive). The UI uses the final model (Faculty, Top-Level Management, Office of Research). Most of the work below comes from that difference.
+- `unirise-api` is built and deployed to AWS dev, but the deployed image (`9717fb9`, 2026-11-04) is the old model. Its health page returned `UP` on 2026-11-14, but that page does not test the database (`management.health.db.enabled=false`).
+- **Dev database down (found 2026-11-15).** The dev RDS instance is in `inaccessible-encryption-credentials` since 2026-11-04. A request with an API key returns 500 after 30 seconds, so the deployed API cannot read or write data. Fix: restore from the snapshot into a new instance, then bring the OpenTofu state in line. The cause is unknown. Checked live on 2026-11-15 with the AWS CLI: RDS events show KMS access lost at 2026-11-04 17:08 UTC, the instance stopped at 19:03 UTC and moved to the terminal state on 2026-11-11 (RDS took a final snapshot then); the key `alias/aws/rds` is enabled, and CloudTrail shows no change by anyone that explains it. It is the only RDS instance in the account.
+- `rdms-web` is the product frontend (decided 2026-11-06). The shared demo still runs on its own Node/SQLite server. Phases 2 to 6 (below) are on `dev`: the Java API now answers the same requests as that server (`/api/login`, `/api/data`, records, approvals, profiles, settings, demo data), and the UI switches to it with `VITE_API_BASE`. Not deployed yet: that is phase 7, after the database restore.
+- The backend was first built for the older model (researcher, scholar, supervisor, HoD, Dean, Executive). Phases 2 to 6 moved it to the final model (Faculty, Top-Level Management, Office of Research); the old-model tables stay, and their endpoints are parked (D3).
+- **Open, waiting for the team:** approved records credited only to former faculty are left out of Top-Level Management's view and totals, including past years. Accreditation reports usually count work done while the person was employed, so this may change to "leave out of current figures, keep in past years". Do not build further on it until decided.
 - The UI has kept moving since the last feature snapshot: it now has 7 record types and 54 reports. `RDMS_WEB_FEATURES.md` still says 6 and 46.
 
 ## 2. Agreed tech stack
@@ -19,8 +20,8 @@ Date: 2026-11-14. Branch `dev` at 649ee73. Sources: `unirise-api/` (code and mig
 | Database | PostgreSQL 16. One control-plane database plus one database per institution (ADR 11) | Built |
 | Data access | Routing `DataSource` with `JdbcClient`, LRU connection pools per tenant. No JPA or Hibernate | Built |
 | Migrations | Flyway, run in code: control plane at start, tenants by the migrator | Built (control V1-V4, tenant V1-V5) |
-| Access rules | One `AccessService` checked on the server for every read and write | Built for the old roles, needs rework |
-| Sign-in | Tenant API key, operator key, invitation token to bearer session. Target: OIDC, design deferred | Does not match the UI |
+| Access rules | One `AccessService` checked on the server for every read and write | Built for the three roles (phase 2, 2026-11-14) |
+| Sign-in | Email and password with a cookie session (phase 2), tenant API key for integrations, operator key. Target: OIDC in phase 8 | Built (phase 2, 2026-11-14) |
 | Tests | JUnit with Testcontainers (real PostgreSQL 16). 36 tests on 2026-11-04 | Built |
 | Packaging | Docker image, ARM64, non-root user | Built |
 | CI | GitHub Actions: `mvnw verify` and image build. No deploy step | Built |
@@ -55,8 +56,8 @@ Status: **Missing** = nothing in the API. **Partial** = exists but the contract 
 
 | # | UI behaviour | Backend today | Work |
 |---|---|---|---|
-| G1 | Three roles: `office`, `management`, `faculty`. Only `office` reviews. Management sees approved data only | `RESEARCH_ADMIN`, `EXECUTIVE`, `DEAN`, `HOD`, `VIEWER`, scoped grants, mentor relationships. HoD/Dean/Executive review | Rework `AccessService` and review authority to the three roles. Partial |
-| G2 | Email and password, HttpOnly SameSite=Strict cookie, `X-RDMS` CSRF header, 5 failures lock 15 minutes, idle timeout 8 hours (30 minutes for Office), change password, temporary passwords | API key and invitation bearer token | Missing. Needs the pilot sign-in decision (D1) |
+| G1 | Three roles: `office`, `management`, `faculty`. Only `office` reviews. Management sees approved data only | **Done 2026-11-14 (phase 2).** Roles on `app_user`; only the Office reviews; management reads approved entries only | Done |
+| G2 | Email and password, HttpOnly SameSite=Strict cookie, `X-RDMS` CSRF header, 5 failures lock 15 minutes, idle timeout 8 hours (30 minutes for Office), change password, temporary passwords | **Done 2026-11-14 (phase 2).** Same endpoints and responses as the prototype; lockout and sessions in the control-plane database | Done |
 | G3 | One call, `GET /api/data`, returns the whole institution slice for the role. Analytics, reports, networks, maps and Find Profiles are computed in the browser | Per-resource REST, numeric ids, snake-case fields | Contract decision (D2). The only client seam is `rdms-web/src/lib/store.ts` (110 lines) |
 | G4 | Status flow Draft, Submitted, Under Review, Changes Requested, Resubmitted, Approved, Rejected. Opening a submission starts the review | `draft, submitted, approved, rework, revision_required, rejected`. Grants use `sanctioned` as the approved state. No "start review" | Partial. Add `under_review`, separate grant outcome from entry status |
 | G5 | Display ids `PUB`, `GRT`, `SM`, `FDP`, `CNF`, `AWD` and IP from one counter per institution. Faculty id is the employee code | `BIGSERIAL` ids | Missing. Add a display code column and per-tenant counter |
@@ -83,11 +84,11 @@ Status: **Missing** = nothing in the API. **Partial** = exists but the contract 
 | G16 | Biodata and researcher profile: qualifications, experience, memberships, expertise, keywords, SDGs, photo, Google Scholar metrics, highlights, teaching, supervision, engagement, media, links, availability flags | `researcher` has name, email, title, ORCID | Missing. One `biodata` table with JSONB sections is enough |
 | G17 | Profile changes wait for Office approval (`POST /api/profile-changes`, start, review). One open request per person | None | Missing. Reuse the entry workflow |
 | G18 | Approvals queue across all kinds plus profile updates: views awaiting, review, returned, approved, rejected; counts | Review per record only | Missing: `GET /api/office/approvals`, `/count`, `/start` |
-| G19 | User management: list, create faculty or management account, activate, suspend, deactivate with reason, change role, reset password. Sessions end on suspend or role change | Invitations, role grants, create researcher | Partial |
+| G19 | User management: list, create faculty or management account, activate, suspend, deactivate with reason, change role, reset password. Sessions end on suspend or role change | **Done 2026-11-14 (phase 2).** `/api/office/users`; provisioning creates the first Office account | Done |
 | G20 | Office edits official faculty details and deactivates faculty | `POST /api/researchers` only | Partial. Add update and deactivate |
 | G21 | Settings: institution name and tagline, departments (cannot remove one with faculty), academic-year start month, targets, score weights | `tenant_settings` (currency, locale, fiscal year), org tree | Partial. Departments map to `org_unit` rows of type department |
 | G22 | Notices: post, delete, shown to faculty | None | Missing |
-| G23 | Audit log of every Office action, per institution, readable by the Office | `access_log` for drill-downs, `platform_access_log` | Partial. Add an admin action log |
+| G23 | Audit log of every Office action, per institution, readable by the Office | **Done 2026-11-14 (phase 2) for accounts and sign-ins.** `admin_log` in each institution's database, `GET /api/office/audit`. Entry decisions are added in phase 4 | Partial |
 | G24 | Talk to Our Team enquiry: stored, emailed to corporate, rate-limited, honeypot | None | Missing. Control-plane table plus SES |
 | G25 | File uploads: only file names are stored today (PDF, certificates, IP documents, photo as a data URL) | None. S3 uploads bucket exists | Missing. Presigned upload and download |
 | G26 | Reports: 54 definitions in 6 groups, list and group modes, CSV and print | 19 SQL reports for publications and grants | See D2. If reports stay in the browser, no port is needed for the pilot |
@@ -132,7 +133,18 @@ Custom fields and configurable lists cover most requests in practice, because th
 
 **What the current design already gives:** each institution's database has a settings table, and the UI already reads departments, targets and weights from it. G28 to G30 go into the schema phase so they exist from the start.
 
-### 4.5 Backend features with no screen
+### 4.5 Added to the UI after this plan was written (2026-11-11 to 2026-11-14)
+
+| # | UI behaviour | Backend work | Phase |
+|---|---|---|---|
+| G35 | Former faculty: the Office records why someone left (Retired, Resigned, Transferred, Other) and the last working day. Their profile and records stay with the Office; management gets current faculty only, and only records that credit at least one of them. Every current figure counts active faculty only | `exit_reason`, `exit_date` on the faculty profile; the management scope rule above | 3 and 5 |
+| G36 | Follow me links on the profile: LinkedIn, X, ResearchGate, GitHub, YouTube, SSRN, website, each checked against its own site | Part of the biodata (G16), validated on the server | 5 |
+| G37 | Ph.D. guided and ongoing are counted from the supervision list when scholars are listed | Server-side rule on profile updates (G17) | 4 and 5 |
+| G38 | Open pages refresh their data by themselves (on navigation, at most every 5 seconds, and every minute) | `GET /api/data` should answer `304 Not Modified` to an unchanged `ETag`, or the full slice is re-sent each time | 6 |
+| G39 | Review details: start review on opening, views and counts per stage, faculty reply on resubmission, review comments removed from management's data | Part of G4, G6 and G18 | 4 |
+| G40 | Top-Level Management dashboard | None: computed in the browser from the data slice (D2) | — |
+
+### 4.6 Backend features with no screen
 
 Milestones, meeting logs, reminders, restricted projects, mentor relationships, scoped role grants, period close with snapshots, CSV import. The roles they were built for no longer exist. They need a keep, park or remove decision (D3).
 
@@ -142,36 +154,36 @@ Milestones, meeting logs, reminders, restricted projects, mentor relationships, 
 |---|---|---|
 | Multi-institution isolation (database per institution) | Built (SQLite) | Built |
 | Institution provision, suspend, export, delete, usage | CLI | Built |
-| Email and password sign-in, lockout, CSRF, idle timeouts | Built | Missing |
+| Email and password sign-in, lockout, CSRF, idle timeouts | Built | Built (phase 2) |
 | OIDC sign-in | Not built | Not built (target) |
-| Three-role access model | Built | Needs rework |
-| Publications | Built | Partial |
-| Grants and outcomes | Built | Partial |
-| Seed money | Built | Partial |
-| FDPs | Built | Missing |
-| Conferences | Built | Missing |
-| Honours and Awards | Built | Missing |
-| Intellectual Property | Built | Missing |
-| Review workflow with Under Review and Resubmitted | Built | Partial |
-| Approvals queue and counts | Built | Missing |
-| Biodata, CV, researcher profile | Built | Missing |
-| Profile update approval | Built | Missing |
+| Three-role access model | Built | Built (phase 2) |
+| Publications | Built | Built (phases 3-4) |
+| Grants and outcomes | Built | Built (phases 3-4) |
+| Seed money | Built | Built (phases 3-4; window is a switch in settings) |
+| FDPs | Built | Built (phases 3-4) |
+| Conferences | Built | Built (phases 3-4) |
+| Honours and Awards | Built | Built (phases 3-4) |
+| Intellectual Property | Built | Built (phases 3-4) |
+| Review workflow with Under Review and Resubmitted | Built | Built (phase 4) |
+| Approvals queue and counts | Built | Built (phase 4) |
+| Biodata, CV, researcher profile | Built | Built (phase 5; CV is rendered in the browser) |
+| Profile update approval | Built | Built (phase 4) |
 | Faculty directory, Find Profiles, SDG filters | Built | Partial (researcher list) |
 | Research Networks, collaboration map, conference map | Built | Data only |
 | Dashboards, analytics, scores, targets | Built | Missing (data only if D2 is "browser") |
 | Reports (54) with CSV and print | Built | 19 of a different catalogue |
 | Annual report | Built | Missing |
-| User management | Built | Partial |
-| Institution, departments, targets, weights settings | Built | Partial |
-| Notices | Built | Missing |
-| Office audit log | Built | Partial |
-| Enquiry form with email | Built (SMTP) | Missing |
+| User management | Built | Built (phase 2) |
+| Institution, departments, targets, weights settings | Built | Built (phase 5) |
+| Notices | Built | Built (phase 5) |
+| Office audit log | Built | Partial (accounts and sign-ins; entry decisions in phase 4) |
+| Enquiry form with email | Built (SMTP) | Stored (phase 5); email in phase 7 |
 | File uploads | Names only | Missing |
 | Email to users (invites, reset) | Not built | Not built |
 | Landing page, dark mode, branding, print | Built | Not applicable |
-| Feature switches per institution | Not built | Missing |
-| Custom fields per record type | Not built | Missing |
-| Configurable option lists | Constants in code | Missing |
+| Feature switches per institution | Not built | Built in the API (settings.features); no screen yet |
+| Custom fields per record type | Not built | Storage built (settings.customFields, record.custom); no screen or validation yet |
+| Configurable option lists | Constants in code | Storage built (settings.lists); the UI still uses its constants |
 | Milestones, meeting logs, projects, periods, CSV import | No screen | Built |
 | Backups and restore drill | Not built | Built (manual job) |
 
@@ -223,15 +235,15 @@ Each phase ends with tests passing and the docs updated. Order matters: phases 2
 
 **Phase 1. Decisions.** D1 to D4 were decided on 2026-11-14 (section 8). D5 to D8 follow the recommendations unless changed.
 
-**Phase 2. Roles and sign-in (G1, G2, G19, G23).** Three roles in `AccessService`. Accounts with password hashes, cookie session, CSRF header, lockout and idle timeouts kept in the database so they survive a restart. User management endpoints. Admin action log. Provisioning creates the first Office account.
+**Phase 2. Roles and sign-in (G1, G2, G19, G23). Done 2026-11-14.** 42 backend tests (37 run, 5 parked by D3), including `SignInAndUserManagementTest`. Three roles in `AccessService`. Accounts with password hashes, cookie session, CSRF header, lockout and idle timeouts kept in the database so they survive a restart. User management endpoints. Admin action log. Provisioning creates the first Office account.
 
-**Phase 3. Schema (G4, G5, G8 to G14, G16, G21, G22).** Tenant migrations V6 onward: `fdp`, `conference`, `honour`, `intellectual_property`, `biodata`, `profile_change`, `notice`; publication and grant columns; `under_review` status; display codes; targets and weights in settings; enabled features, custom field definitions and configurable lists in settings, plus a `custom` JSONB column on every record table (G28 to G30). Rule limits such as the seed-money ceiling and "PDF required" become settings (G31). Update `TENANT_DB_SCHEMA.md`.
+**Phase 3. Schema (G4, G5, G8 to G14, G16, G21, G22). Done 2026-11-14 (tenant V7, control V6).** Decision taken while building it: records are stored as the UI's JSON in one `record` table with typed columns for what the server checks (kind, display id, owner, status, credited faculty, dates, version) instead of one table per kind. Reason: D2 keeps reports and analytics in the browser, G29 needs JSON custom fields anyway, and one table gives every kind the same workflow. The older `publication`, `research_grant` and `seed_proposal` tables and their endpoints still work but are superseded and have no screen; remove them when the team agrees. Original text: Tenant migrations V6 onward: `fdp`, `conference`, `honour`, `intellectual_property`, `biodata`, `profile_change`, `notice`; publication and grant columns; `under_review` status; display codes; targets and weights in settings; enabled features, custom field definitions and configurable lists in settings, plus a `custom` JSONB column on every record table (G28 to G30). Rule limits such as the seed-money ceiling and "PDF required" become settings (G31). Update `TENANT_DB_SCHEMA.md`.
 
-**Phase 4. Entry and approval APIs (G6, G7, G9 to G15, G17, G18).** New kinds on the existing `EntryWorkflow`. Rules ported from `rdms-web/src/lib/domain.ts`. Office approvals queue, counts, start review, grant outcome. Profile change workflow.
+**Phase 4. Entry and approval APIs (G6, G7, G9 to G15, G17, G18). Done 2026-11-14.** `POST/DELETE /api/records/{kind}`, `/api/office/approvals` (views, count, start, review, grant outcome), profile updates. Rules ported from `domain.ts`. New kinds on the existing `EntryWorkflow`. Rules ported from `rdms-web/src/lib/domain.ts`. Office approvals queue, counts, start review, grant outcome. Profile change workflow.
 
-**Phase 5. Profiles, settings, notices (G16, G20 to G22).** Biodata read and write, official faculty details, departments, targets, weights, notices.
+**Phase 5. Profiles, settings, notices (G16, G20 to G22). Done 2026-11-14.** `GET /api/data` (the scoped slice, with ETag/304), `PUT /api/faculty/{id}` (including former faculty), `PUT /api/settings` (with feature switches, custom fields and lists), notices, enquiries (stored; email in phase 7), and an operator-only demo-data loader. Biodata read and write, official faculty details, departments, targets, weights, notices.
 
-**Phase 6. Frontend switch (G3).** Replace `store.ts` calls slice by slice: sign-in, then publications, then the remaining kinds, approvals, profiles, administration. Port `server/api.test.ts` as acceptance tests against the API. Remove the SQLite server last.
+**Phase 6. Frontend switch (G3). Done 2026-11-14, except removing the SQLite server.** The API answers the same requests as the prototype, so the switch is one setting: `VITE_API_BASE` (empty = same origin). The frontend's end-to-end test (298 checks per run, every page and workflow for the three roles) passes against the Java API through `rdms-web/scripts/api-proxy.mjs` with the sample data loaded by `scripts/export-demo.ts`. The prototype server stays until the API is deployed (phase 7), because the shared demo still runs on it. Replace `store.ts` calls slice by slice: sign-in, then publications, then the remaining kinds, approvals, profiles, administration. Port `server/api.test.ts` as acceptance tests against the API. Remove the SQLite server last.
 
 **Phase 7. AWS (A1 to A9).** S3 uploads, SES mail and enquiries (G24, G25), Secrets Manager for tenant credentials, deploy pipeline, scheduled backups, alarms, IAM users and budget. The frontend goes to Hostinger (A6), which also means the UI calls the API cross-origin: the session cookie needs `Domain`-less `SameSite=Strict` on the API host and CORS with credentials for the one allowed origin.
 

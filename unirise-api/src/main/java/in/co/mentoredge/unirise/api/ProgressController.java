@@ -130,7 +130,7 @@ public class ProgressController {
 			SELECT m.id, m.scholar_id, r.name, m.stage, m.due_date FROM milestone m JOIN researcher r ON r.id = m.scholar_id
 			WHERE m.completed_at IS NULL AND m.due_date <= current_date + 14 ORDER BY m.due_date""")
 			.query((rs, n) -> new Due(rs.getLong("id"), rs.getLong("scholar_id"), rs.getString("name"), rs.getString("stage"), rs.getObject("due_date", LocalDate.class))).list();
-		boolean supervisorView = a.isAdmin() || a.hasRole("HOD", "DEAN", "EXECUTIVE");
+		boolean supervisorView = a.isAdmin() || a.isManagement(); // parked module (D3)
 		List<Reminder> out = new ArrayList<>();
 		for (Due d : due) {
 			if (!visible.allows(d.scholarId())) continue;
@@ -157,13 +157,13 @@ public class ProgressController {
 		return out;
 	}
 
-	@GetMapping("/settings")
+	@GetMapping("/progress-settings")
 	Settings settings(HttpServletRequest req) {
 		access.actor(req);
 		return new Settings(db.sql("SELECT escalation_days FROM tenant_settings").query(Integer.class).single());
 	}
 
-	@PutMapping("/settings")
+	@PutMapping("/progress-settings")
 	void setSettings(@RequestBody Settings s, HttpServletRequest req) {
 		access.requireAdmin(access.actor(req));
 		if (s.escalationDays() < 1 || s.escalationDays() > 365) throw new ResponseStatusException(HttpStatus.BAD_REQUEST);

@@ -16,6 +16,7 @@ import org.springframework.test.context.DynamicPropertySource;
 import org.testcontainers.postgresql.PostgreSQLContainer;
 
 /** Milestones, confidential meeting logs, reminders and restricted projects. Needs Docker. */
+@org.junit.jupiter.api.Disabled("Milestones, meeting logs and reminders are parked by decision D3 (2026-11-14): their endpoints are not exposed and the supervisor roles they need no longer exist.")
 @SpringBootTest(webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT, properties = "app.admin-key=test-admin")
 class ProgressTest {
 	static final PostgreSQLContainer PG = new PostgreSQLContainer("postgres:16");

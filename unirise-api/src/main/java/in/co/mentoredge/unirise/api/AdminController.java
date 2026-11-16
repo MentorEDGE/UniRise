@@ -55,15 +55,7 @@ public class AdminController {
 		return Map.of("id", id);
 	}
 
-	@PostMapping("/role-grants")
-	@ResponseStatus(HttpStatus.CREATED)
-	Map<String, Long> grant(@RequestBody NewGrant g, HttpServletRequest req) {
-		Actor admin = access.actor(req);
-		access.requireAdmin(admin);
-		long id = db.sql("INSERT INTO role_grant(app_user_id, role, scope_unit_id, valid_from, valid_to, granted_by) VALUES (:u, :r, :s, COALESCE(:f, current_date), :t, :by) RETURNING id")
-			.param("u", g.userId()).param("r", g.role()).param("s", g.scopeUnitId()).param("f", g.validFrom()).param("t", g.validTo()).param("by", admin.userId()).query(Long.class).single();
-		return Map.of("id", id);
-	}
+	// /role-grants was the old model's scoped roles; replaced by the three roles on app_user (phase 2).
 
 	@PostMapping("/relationships")
 	@ResponseStatus(HttpStatus.CREATED)

@@ -50,7 +50,7 @@ public class PublicationController {
 		Actor a = access.actor(req);
 		size = Math.max(1, Math.min(size, 200));
 		page = Math.max(0, page);
-		String where = " WHERE true" + scope(a) + (q == null ? "" : " AND (p.title ILIKE :q OR p.doi ILIKE :q OR p.venue ILIKE :q)")
+		String where = " WHERE true" + scope(a) + flow.approvedOnly(a, "p.entry_status") + (q == null ? "" : " AND (p.title ILIKE :q OR p.doi ILIKE :q OR p.venue ILIKE :q)")
 			+ (year == null ? "" : " AND p.pub_year = :year") + (type == null ? "" : " AND p.type = :type") + (status == null ? "" : " AND p.entry_status = :status");
 		var count = flow.bindScope(db.sql("SELECT count(*) FROM publication p" + where), a);
 		var rows = flow.bindScope(db.sql(COLS + where + " ORDER BY p.pub_year DESC, p.id DESC LIMIT :size OFFSET :off"), a).param("size", size).param("off", (long) page * size);
@@ -64,7 +64,7 @@ public class PublicationController {
 	@GetMapping("/{id}")
 	View get(@PathVariable long id, HttpServletRequest req) {
 		Actor a = access.actor(req);
-		var s = flow.bindScope(db.sql(COLS + " WHERE p.id = :id" + scope(a)).param("id", id), a);
+		var s = flow.bindScope(db.sql(COLS + " WHERE p.id = :id" + scope(a) + flow.approvedOnly(a, "p.entry_status")).param("id", id), a);
 		return views(s.query(Row.class).list()).stream().findFirst().orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND));
 	}
 

@@ -21,6 +21,8 @@ public class EntryWorkflow {
 	public static final Kind SEED = new Kind("seed_proposal", "status", "seed", false);
 	private static final Set<String> ACTIONS = Set.of("approve", "rework", "revision_required", "reject");
 	private static final Set<String> EDITABLE = Set.of("draft", "rework", "revision_required");
+	/** The final, approved states: all Top-Level Management may ever see (ACCESS_AND_VISIBILITY_MODEL.md). */
+	private static final Set<String> APPROVED = Set.of("approved", "sanctioned");
 
 	private final JdbcClient db;
 	private final AccessService access;
@@ -32,13 +34,19 @@ public class EntryWorkflow {
 
 	public record Head(long ownerId, String status) {}
 
-	/** Owner and status, or 404 when the entry is missing or its owner is outside the caller's slice. */
+	/** Owner and status, or 404 when the entry is missing, its owner is outside the caller's slice, or management asks for an entry that is not approved. */
 	public Head head(Actor a, Kind k, long id) {
 		Head h = db.sql("SELECT owner_id, " + k.statusCol() + " AS status FROM " + k.table() + " WHERE id = :id").param("id", id)
 			.query((r, n) -> new Head(r.getLong("owner_id"), r.getString("status"))).optional()
 			.orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND));
 		if (!access.visible(a).allows(h.ownerId())) throw new ResponseStatusException(HttpStatus.NOT_FOUND);
+		if (a.isManagement() && !APPROVED.contains(h.status())) throw new ResponseStatusException(HttpStatus.NOT_FOUND);
 		return h;
+	}
+
+	/** SQL fragment limiting a listing to approved entries when the caller is Top-Level Management. */
+	public String approvedOnly(Actor a, String statusCol) {
+		return a.isManagement() ? " AND " + statusCol + " IN ('approved','sanctioned')" : "";
 	}
 
 	/** Admins may edit anything; owners only while the entry is a draft or has been sent back. */
@@ -51,6 +59,7 @@ public class EntryWorkflow {
 	}
 
 	public long ownerForNew(Actor a, Long requested) {
+		if (a.isManagement()) throw new ResponseStatusException(HttpStatus.FORBIDDEN); // read-only
 		if (a.researcherId() != null && (requested == null || requested.equals(a.researcherId()))) return a.researcherId();
 		if (a.isAdmin() && requested != null) return requested;
 		throw new ResponseStatusException(a.researcherId() == null ? HttpStatus.BAD_REQUEST : HttpStatus.FORBIDDEN);
@@ -63,9 +72,10 @@ public class EntryWorkflow {
 		event(k, id, "submit", a, null);
 	}
 
-	/** Review by an admin or by a HoD, Dean or Executive whose scope covers the owner. Nobody reviews their own entry. */
+	/** Review by the Office of Research only (or the service key). Nobody reviews an entry they are an author or investigator on. */
 	public String review(Actor a, Kind k, long id, String action, String comment) {
 		if (action == null || !ACTIONS.contains(action)) throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "action");
+		if (!a.isAdmin()) throw new ResponseStatusException(HttpStatus.FORBIDDEN); // only the Office reviews; the same answer for every entry, so it reveals nothing
 		Head h = head(a, k, id);
 		if (!mayReview(a, h.ownerId())) throw new ResponseStatusException(HttpStatus.FORBIDDEN);
 		if (a.researcherId() != null && a.researcherId() == h.ownerId()) throw new ResponseStatusException(HttpStatus.FORBIDDEN, "own entry"); // admins too; only the tenant service key is exempt
@@ -83,18 +93,8 @@ public class EntryWorkflow {
 		return status;
 	}
 
-	/** Review authority comes from a HOD, DEAN or EXECUTIVE grant covering the owner's unit (or an admin). Being able to see the owner is not enough. */
-	private boolean mayReview(Actor a, long ownerId) {
-		if (a.isAdmin()) return true;
-		if (a.userId() == null) return false;
-		return db.sql("""
-			SELECT count(*) FROM role_grant g WHERE g.app_user_id = :u AND g.role IN ('HOD','DEAN','EXECUTIVE')
-			AND g.valid_from <= current_date AND (g.valid_to IS NULL OR g.valid_to >= current_date)
-			AND (g.scope_unit_id IS NULL OR EXISTS (
-			  SELECT 1 FROM appointment ap JOIN org_unit_closure c ON c.descendant_id = ap.org_unit_id
-			  WHERE c.ancestor_id = g.scope_unit_id AND ap.researcher_id = :o AND ap.valid_from <= current_date AND (ap.valid_to IS NULL OR ap.valid_to >= current_date)))""")
-			.param("u", a.userId()).param("o", ownerId).query(Long.class).single() > 0;
-	}
+	/** Only the Office of Research reviews (G1). Seeing the owner is never enough. */
+	private boolean mayReview(Actor a, long ownerId) { return a.isAdmin(); }
 
 	private boolean isParticipant(Actor a, Kind k, long id) {
 		if (a.researcherId() == null) return false;

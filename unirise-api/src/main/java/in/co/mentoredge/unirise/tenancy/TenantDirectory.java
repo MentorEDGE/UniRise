@@ -23,6 +23,15 @@ public class TenantDirectory {
 		return control.sql(SELECT + " WHERE i.slug = :slug").param("slug", slug).query(this::map).optional();
 	}
 
+	public Optional<TenantInfo> byId(long id) {
+		return control.sql(SELECT + " WHERE i.id = :id").param("id", id).query(this::map).optional();
+	}
+
+	/** Display name of an institution (for sign-in responses). */
+	public String name(long id) {
+		return control.sql("SELECT name FROM institution WHERE id = :id").param("id", id).query(String.class).optional().orElse("");
+	}
+
 	public Optional<TenantInfo> byKeyHash(String keyHash) {
 		return control.sql(SELECT + " JOIN institution_credential c ON c.institution_id = i.id WHERE c.key_hash = :h AND c.revoked_at IS NULL")
 			.param("h", keyHash).query(this::map).optional();
