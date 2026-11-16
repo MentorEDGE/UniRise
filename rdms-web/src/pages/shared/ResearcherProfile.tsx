@@ -439,6 +439,11 @@ function OfficialDetails({ f, onClose }: { f: Faculty; onClose: () => void }) {
         <Field label="Full name"><Input value={x.name} onChange={(v) => setX({ ...x, name: v })} /></Field>
         <Field label="Designation"><Select value={x.designation} onChange={(v) => setX({ ...x, designation: v })} options={['Professor', 'Associate Professor', 'Assistant Professor', 'Professor of Practice', 'Adjunct Faculty']} /></Field>
         <Field label="Department"><Select value={x.department} onChange={(v) => setX({ ...x, department: v })} options={db.settings.departments} /></Field>
+        {!f.active && <>
+          {/* Former faculty: reason and last working day stay editable, and are needed for anyone deactivated before they were recorded. */}
+          <Field label="Reason for leaving"><Select value={x.exitReason ?? ''} onChange={(v) => setX({ ...x, exitReason: v })} options={EXIT_REASONS} placeholder="Choose…" /></Field>
+          <Field label="Last working day"><input type="date" value={x.exitDate ?? ''} onChange={(e) => setX({ ...x, exitDate: e.target.value })} /></Field>
+        </>}
       </div>
       {leaving && (
         <fieldset className="weight-group">

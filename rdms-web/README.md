@@ -32,8 +32,10 @@ either one (BACKEND_PLAN phase 6).
   are hosted separately. Empty (the default) means the same origin that serves the pages.
 - `node scripts/api-proxy.mjs` (after `npm run build`): serves `dist/` and forwards `/api` to `API` (default
   `http://127.0.0.1:8181`) on one origin, for local testing.
-- `npx tsx scripts/export-demo.ts [--small] > demo.json`: the sample institutions and demo accounts, for the API's
-  `POST /api/platform/tenants/{slug}/demo-data`.
+- `npx tsx scripts/export-demo.ts [--small] [--random-passwords] > demo.json`: the sample institutions and demo
+  accounts, for the API's `POST /api/platform/tenants/{slug}/demo-data`. Without `--random-passwords` the accounts use
+  the demo passwords in this README, so use that only on your own machine. For any server others can reach, always
+  pass `--random-passwords`: the new passwords are printed once to the terminal.
 
 ## Onboarding a new institution
 1. The institution fills in **Talk to Our Team** (`/#/talk-to-our-team`). The enquiry is stored and emailed to corporate@mentoredge.co.in.

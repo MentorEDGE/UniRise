@@ -11,7 +11,9 @@ import { useAnalyticsFilter } from './filters';
 /** Change from the previous year, as "▲ 12% vs AY 2024-25" (or points for a percentage). */
 function Change({ now, before, prevAy, points }: { now: number; before: number; prevAy: string; points?: boolean }) {
   if (!prevAy) return null;
-  const d = points ? Math.round(now - before) : before ? Math.round(((now - before) / before) * 100) : now ? 100 : 0;
+  // A percentage change from zero has no meaning: say "up from none" instead of a made-up 100%.
+  if (!points && !before && now) return <span className="chg up">▲ up from none <span className="muted">vs AY {prevAy}</span></span>;
+  const d = points ? Math.round(now - before) : before ? Math.round(((now - before) / before) * 100) : 0;
   const cls = d > 0 ? 'up' : d < 0 ? 'down' : 'flat';
   return <span className={`chg ${cls}`}>{d > 0 ? '▲' : d < 0 ? '▼' : '•'} {d === 0 ? 'no change' : `${Math.abs(d)}${points ? ' pts' : '%'}`} <span className="muted">vs AY {prevAy}</span></span>;
 }
@@ -48,8 +50,13 @@ export function ManagementDashboard() {
 
   const insights: Insight[] = [];
   if (up) {
-    const d = up.pubs.length ? Math.round(((u.pubs.length - up.pubs.length) / up.pubs.length) * 100) : 0;
-    insights.push({ tone: d >= 0 ? 'good' : 'watch', text: <>Research output {d >= 0 ? 'rose' : 'fell'} <b>{Math.abs(d)}%</b>: {plural(u.pubs.length, 'publication')} against {up.pubs.length} the year before.</>, to: '/publications?status=Approved' });
+    const now = u.pubs.length, before = up.pubs.length;
+    const d = before ? Math.round(((now - before) / before) * 100) : 0;
+    const text = !before
+      ? (now ? <>{plural(now, 'publication')} this year, against none the year before.</> : <>No publications this year or the year before.</>)
+      : d === 0 ? <>Research output held steady: {plural(now, 'publication')}, as the year before.</>
+      : <>Research output {d > 0 ? 'rose' : 'fell'} <b>{Math.abs(d)}%</b>: {plural(now, 'publication')} against {before} the year before.</>;
+    insights.push({ tone: now > 0 && now >= before ? 'good' : 'watch', text, to: '/publications?status=Approved' });
   }
   if (bestDept && !filter.department) insights.push({ tone: 'info', text: <><b>{bestDept.dept}</b> leads on output, with {bestDept.pubsPF.toFixed(1)} publications per faculty member.</>, to: '/analytics/departments' });
   insights.push({ tone: pct(metPubs, stats.length) >= 50 ? 'good' : 'watch', text: <><b>{pct(metPubs, stats.length)}%</b> of faculty met the publication target of {t.publicationsPerFaculty}; <b>{pct(metFdp, stats.length)}%</b> met the {t.fdpHoursPerFaculty}-hour FDP target.</>, to: '/analytics/participation' });
