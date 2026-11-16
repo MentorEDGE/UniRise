@@ -1,5 +1,6 @@
 import { Component, useEffect, useLayoutEffect } from 'react';
 import { ManagementDashboard } from './pages/mgmt/Dashboard';
+import { OfficeDashboard } from './pages/office/Dashboard';
 import type { ReactNode } from 'react';
 import { HashRouter, Navigate, Route, Routes, useLocation, useParams } from 'react-router-dom';
 import { Layout } from './components/Layout';
@@ -9,7 +10,7 @@ import type { Role } from './lib/types';
 import { AwardEntry, ConferenceEntry, FdpEntry, GrantEntry, IpEntry, PublicationEntry, SeedMoneyEntry } from './pages/faculty/Entries';
 import { FacultyHome } from './pages/faculty/FacultyHome';
 import { MySubmissions } from './pages/faculty/Submissions';
-import { DepartmentAnalytics, FacultyPerformance, InstitutionAnalytics, ParticipationAnalytics } from './pages/mgmt/Analytics';
+import { DepartmentAnalytics, FacultyPerformance, ParticipationAnalytics } from './pages/mgmt/Analytics';
 import { Faculty360 } from './pages/mgmt/Management';
 import { FacultySearch } from './pages/mgmt/Directory';
 import { MyResearchProfile, ResearcherProfileRoute } from './pages/shared/ResearcherProfile';
@@ -75,10 +76,10 @@ const ALL: Role[] = ['management', 'faculty', 'office'];
 /** Institution-wide viewing: Top-Level Management (read-only) and the Office of Research. */
 const VIEWERS: Role[] = ['management', 'office'];
 
-/** After sign-in everyone lands on "/": the faculty workspace, the Dashboard for management, Approval for the Office of Research. */
+/** After sign-in everyone lands on "/": the faculty workspace, the Dashboard for management and for the Office of Research. */
 function Home() {
   const { user } = useStore();
-  if (user?.role === 'office') return <AdminApprovals />;
+  if (user?.role === 'office') return <OfficeDashboard />;
   return user?.role === 'management' ? <ManagementDashboard /> : <FacultyHome />;
 }
 
@@ -145,7 +146,7 @@ export default function App() {
             <Route path="submissions" element={<Only role="faculty"><MySubmissions /></Only>} />
 
             {/* institution-wide viewing: Top-Level Management (read-only) and the Office of Research */}
-            <Route path="analytics" element={<Only role={VIEWERS}><InstitutionAnalytics /></Only>} />
+            <Route path="analytics" element={<Navigate to="/" replace />} /> {/* Institution Overview is now part of the Dashboard */}
             <Route path="analytics/departments" element={<Only role={VIEWERS}><DepartmentAnalytics /></Only>} />
             <Route path="analytics/faculty" element={<Only role={VIEWERS}><FacultyPerformance /></Only>} />
             <Route path="analytics/participation" element={<Only role={VIEWERS}><ParticipationAnalytics /></Only>} />

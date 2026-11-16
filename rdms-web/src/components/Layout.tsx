@@ -26,6 +26,7 @@ const NAV_ICONS = {
   institution: nic(<><path d="M3 21h18" /><path d="M6 18v-7M10 18v-7M14 18v-7M18 18v-7" /><path d="m12 3 8 5H4Z" /></>),
   users: nic(<><circle cx="9" cy="8" r="3.2" /><path d="M3 19.5c.6-3.2 3-5 6-5s5.4 1.8 6 5" /><path d="M17 8v6M14 11h6" /></>),
   approvals: nic(<><path d="M12 3 4.5 6v5.5c0 4.6 3.1 8.2 7.5 9.5 4.4-1.3 7.5-4.9 7.5-9.5V6Z" /><path d="m8.8 12 2.2 2.2 4.2-4.4" /></>),
+  seed: nic(<><path d="M12 21v-9" /><path d="M12 12c0-4 2.7-6.5 7-6.5 0 4.3-2.6 6.5-7 6.5Z" /><path d="M12 14.5c0-3.2-2.2-5.2-6-5.2 0 3.4 2.2 5.2 6 5.2Z" /><path d="M8 21h8" /></>),
 };
 const LOGOUT: MenuEntry = { label: 'Logout', action: 'logout' };
 
@@ -33,13 +34,14 @@ const SETTINGS: MenuDef = { label: 'Settings', icon: 'settings', items: [{ label
 /** Research record views shared by Top-Level Management and the Office of Research (read-only lists and reports). */
 const RECORD_MENUS: MenuDef[] = [
   { label: 'Publications', icon: 'publications', items: [{ label: 'Publication View', to: '/publications' }, { label: 'Publication Reports', to: '/reports/publications' }] },
-  { label: 'Grants and Fellowships', icon: 'grants', items: [{ label: 'Grant View', to: '/grants' }, { label: 'Grant Reports', to: '/reports/grants' }, 'sep', { label: 'Seed Money Reports', to: '/seed-money' }] },
+  { label: 'Grants and Fellowships', icon: 'grants', items: [{ label: 'Grant View', to: '/grants' }, { label: 'Grant Reports', to: '/reports/grants' }] },
+  { label: 'Seed Money', icon: 'seed', to: '/seed-money' },
   { label: 'Faculty Development Programmes', icon: 'fdp', items: [{ label: 'FDP View', to: '/fdp' }, { label: 'FDP Reports', to: '/reports/fdps' }] },
   { label: 'Conferences', icon: 'conferences', items: [{ label: 'Conference View', to: '/conferences' }, { label: 'Conference Reports', to: '/reports/conferences' }] },
   { label: 'Honours & Awards', icon: 'awards', items: [{ label: 'Honours & Awards View', to: '/awards' }, { label: 'Honours & Awards Reports', to: '/reports/awards' }] },
   { label: 'Intellectual Property', icon: 'ipr', items: [{ label: 'Intellectual Property View', to: '/ipr' }, { label: 'Intellectual Property Reports', to: '/reports/ipr' }] },
 ];
-const REPORTS: MenuDef = { label: 'Reports', icon: 'reports', items: [{ label: 'Annual Activity Report', to: '/reports/annual' }, 'sep', { label: 'Institution Overview', to: '/analytics' }, { label: 'Department Comparison', to: '/analytics/departments' }, { label: 'Participation & Compliance', to: '/analytics/participation' }] };
+const REPORTS: MenuDef = { label: 'Reports', icon: 'reports', items: [{ label: 'Annual Activity Report', to: '/reports/annual' }, 'sep', { label: 'Department Comparison', to: '/analytics/departments' }, { label: 'Participation & Compliance', to: '/analytics/participation' }] };
 
 export function menusFor(role: Role, pending: number): MenuDef[] {
   if (role === 'faculty') {
@@ -47,7 +49,8 @@ export function menusFor(role: Role, pending: number): MenuDef[] {
     return [
       { label: 'My Profile', icon: 'profile', items: [{ label: 'My Research Profile', to: '/my-profile' }, { label: 'My Workspace', to: '/' }, { label: 'My Performance', to: '/performance' }, 'sep', { label: 'Print / Download CV', to: '/biodata' }] },
       { label: 'My Publications', icon: 'publications', items: [{ label: 'My Publications', to: '/publications' }, { label: 'Add Publication', to: '/publications/entry' }] },
-      { label: 'My Grants', icon: 'grants', items: [{ label: 'My Grants and Fellowships', to: '/grants' }, { label: 'Add Grant / Fellowship', to: '/grants/entry' }, 'sep', { label: 'Apply for Seed Money', to: '/seed-money/entry' }, { label: 'My Seed Money Projects', to: '/seed-money' }] },
+      { label: 'My Grants', icon: 'grants', items: [{ label: 'My Grants and Fellowships', to: '/grants' }, { label: 'Add Grant / Fellowship', to: '/grants/entry' }] },
+      { label: 'My Seed Money', icon: 'seed', items: [{ label: 'My Seed Money Projects', to: '/seed-money' }, { label: 'Apply for Seed Money', to: '/seed-money/entry' }] },
       { label: 'My FDPs', icon: 'fdp', items: [{ label: 'My Faculty Development Programmes', to: '/fdp' }, { label: 'Add FDP', to: '/fdp/entry' }] },
       { label: 'My Conferences', icon: 'conferences', items: [{ label: 'My Conferences', to: '/conferences' }, { label: 'Add Conference', to: '/conferences/entry' }] },
       { label: 'My Awards', icon: 'awards', items: [{ label: 'My Honours & Awards', to: '/awards' }, { label: 'Add Honour / Award', to: '/awards/entry' }] },
@@ -59,10 +62,12 @@ export function menusFor(role: Role, pending: number): MenuDef[] {
   }
   if (role === 'office') {
     // The institution's administrator and verification authority.
+    // Dashboard (home: the approval queue and the institution at a glance) and Approval come first: the daily work.
     return [
+      { label: 'Dashboard', icon: 'home', to: '/' },
+      { label: `Approval${pending ? ` (${pending})` : ''}`, icon: 'approvals', to: '/approvals' },
       { label: 'Faculty', icon: 'faculty', items: [{ label: 'Find Profiles', to: '/faculty' }, { label: 'Faculty Performance', to: '/analytics/faculty' }, { label: 'Research Networks', to: '/networks' }] },
       ...RECORD_MENUS,
-      { label: `Approval${pending ? ` (${pending})` : ''}`, icon: 'approvals', to: '/' },
       { label: 'Institution', icon: 'institution', items: [{ label: 'Institution & Departments', to: '/settings' }, { label: 'Targets & Scoring', to: '/settings/targets' }, { label: 'Notices', to: '/settings/notices' }] },
       { label: 'User Management', icon: 'users', items: [{ label: 'Users', to: '/office/users' }, { label: 'Audit Log', to: '/office/audit' }] },
       REPORTS,

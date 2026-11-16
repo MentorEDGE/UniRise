@@ -5,7 +5,7 @@ import { BarCard } from '../../components/charts';
 import { PageTitle, Panel } from '../../components/ui';
 import { academicYearRange, facultyStats, lakh, pct, plural, trend, uniqueCounts } from '../../lib/analytics';
 import { useStore } from '../../lib/store';
-import { departmentRows, Tile } from './Analytics';
+import { departmentRows, OverviewCharts, Tile } from './Analytics';
 import { useAnalyticsFilter } from './filters';
 
 /** Change from the previous year, as "▲ 12% vs AY 2024-25" (or points for a percentage). */
@@ -25,6 +25,16 @@ interface Insight { tone: 'good' | 'watch' | 'info'; text: ReactNode; to?: strin
  * approved records of current faculty (former faculty are not counted), compared with the year before.
  */
 export function ManagementDashboard() {
+  return (
+    <>
+      <PageTitle sub="The institution at a glance: approved research activity of current faculty, compared with the year before.">Dashboard</PageTitle>
+      <InstitutionAtAGlance />
+    </>
+  );
+}
+
+/** The year filter, figures, insights, top researchers and charts; shared by the management and Office dashboards. */
+export function InstitutionAtAGlance() {
   const { db } = useStore();
   const { filter, bar, ay, years } = useAnalyticsFilter();
   const sm = db.settings.academicYearStartMonth;
@@ -67,7 +77,6 @@ export function ManagementDashboard() {
 
   return (
     <>
-      <PageTitle sub="The institution at a glance: approved research activity of current faculty, compared with the year before.">Dashboard</PageTitle>
       <Panel size="wide">{bar}</Panel>
       <div className="dash">
         <div className="tiles">
@@ -79,6 +88,8 @@ export function ManagementDashboard() {
           <Tile label="FDP hours" value={Math.round(u.fdpHours).toLocaleString('en-IN')} sub={up ? <Change now={u.fdpHours} before={up.fdpHours} prevAy={prevAy} /> : `${Math.round(u.fdpHours / n)} h per faculty`} to="/fdp?status=Approved" />
           <Tile label="Conferences" value={u.confs.length} sub={up ? <Change now={u.confs.length} before={up.confs.length} prevAy={prevAy} /> : `${u.confs.filter((c) => c.level === 'International').length} international`} to="/conferences?status=Approved" />
           <Tile label="Honours & IP" value={u.awards.length + u.ipr.length} sub={`${plural(u.awards.length, 'honour')} · ${plural(u.ipr.filter((x) => x.ipType === 'Patent').length, 'patent')}`} to="/awards?status=Approved" />
+          <Tile label="Seed money" value={lakh(u.seedAmount)} sub={`${plural(u.seed.length, 'project')} approved`} to="/seed-money" />
+          <Tile label="Collaboration" value={`${pct(u.pubs.filter((p) => p.authors.some((a) => a.kind === 'External')).length, u.pubs.length)}%`} sub="of publications with external co-authors" />
         </div>
 
         <div className="dash-grid">
@@ -118,6 +129,8 @@ export function ManagementDashboard() {
           <BarCard title="Sanctioned funding (₹ lakh)" sub="By department, this period" data={depts.map((d) => ({ d: d.short, funding: Math.round(d.sanctioned / 1e4) / 10 }))} xKey="d" xLabel="Department"
             series={[{ key: 'funding', label: 'Sanctioned (₹ lakh)', color: '#0d9488' }]} fmt={(v) => v.toLocaleString('en-IN', { maximumFractionDigits: 1 })} />
         </div>
+
+        <OverviewCharts filter={filter} ay={ay} rows={rows} />
 
         <nav className="dash-links" aria-label="Go to">
           {([['/faculty', 'Find Profiles', 'Search faculty by expertise, department or SDG'], ['/analytics/faculty', 'Faculty Performance', 'Scores, rankings and targets'], ['/analytics/departments', 'Department Comparison', 'Departments side by side'], ['/reports/annual', 'Annual Activity Report', 'Printable summary of the year']] as const).map(([to, title, sub]) => (

@@ -6,7 +6,7 @@ import type { Column } from '../../components/ui';
 import {
   dateOf, facultyStats, fmtDate, lakh, pct, plural, trend, uniqueCounts,
 } from '../../lib/analytics';
-import type { FacultyStats } from '../../lib/analytics';
+import type { FacultyStats, TrendRow } from '../../lib/analytics';
 import { useStore } from '../../lib/store';
 import type { AnyRecord, EntityKind } from '../../lib/types';
 import { ENTITY_LABEL, SDGS } from '../../lib/types';
@@ -19,31 +19,22 @@ export function Tile({ label, value, sub, to }: { label: string; value: React.Re
   return to ? <Link className="tile" to={to}>{body}</Link> : <div className="tile">{body}</div>;
 }
 
-/** Last six academic years ending at the selected one (or the latest when "all"). */
-function windowYears(years: string[], ay: string) {
-  const sorted = [...years].sort();
-  const end = ay === 'all' ? sorted.length - 1 : sorted.indexOf(ay);
-  return sorted.slice(Math.max(0, end - 5), end + 1);
-}
 
-// ---------------- Institution overview ----------------
+// ---------------- Institution overview (now part of the Dashboard) ----------------
 
-export function InstitutionAnalytics() {
+/**
+ * The detailed charts that used to be the Institution Overview page, shown on the Dashboard below its headline
+ * figures: journal quality, grant funding, FDP hours, conference participation, monthly activity, top journals and
+ * funding agencies. Same filter and the same approved records of current faculty as the rest of the Dashboard.
+ */
+export function OverviewCharts({ filter, ay, rows }: { filter: { from: string; to: string; department: string }; ay: string; rows: TrendRow[] }) {
   const { db } = useStore();
-  const { filter, bar, ay, years } = useAnalyticsFilter();
   const u = useMemo(() => uniqueCounts(db, filter), [db, filter]);
-  const stats = useMemo(() => facultyStats(db, filter), [db, filter]);
-  const rows = useMemo(() => trend(db, filter.department, windowYears(years, ay)), [db, filter.department, years, ay]);
-  const n = stats.length || 1;
   const journals = u.pubs.filter((p) => p.entryType === 'Journal Article');
-  const q12 = journals.filter((p) => p.quartile === 'Q1' || p.quartile === 'Q2').length;
-  const intl = u.pubs.filter((p) => p.authors.some((a) => a.kind === 'External')).length;
-  const student = u.pubs.filter((p) => p.authors.some((a) => a.kind === 'Student' || a.kind === 'Ex-Student')).length;
-
-  // Monthly activity inside the selected range.
   const quartileColors = useQuartileColors();
+  // Monthly activity inside the selected academic year.
   const monthly = useMemo(() => {
-    if (!filter.from) return [];
+    if (!filter.from || ay === 'all') return [];
     const out: Record<string, Record<string, number | string>> = {};
     const start = new Date(filter.from + 'T00:00:00Z');
     for (let i = 0; i < 12; i++) {
@@ -54,50 +45,28 @@ export function InstitutionAnalytics() {
     const add = (kind: EntityKind, xs: AnyRecord[]) => xs.forEach((r) => { const k = dateOf(kind, r).slice(0, 7); if (out[k]) out[k][kind] = (out[k][kind] as number) + 1; });
     add('publications', u.pubs); add('fdps', u.fdps); add('conferences', u.confs); add('grants', u.grants);
     return Object.values(out);
-  }, [u, filter.from]);
-
+  }, [u, filter.from, ay]);
   return (
-    <>
-      <PageTitle sub="Approved research activity across the institution, for the year and department you choose.">Institution Overview</PageTitle>
-      <Panel size="wide">{bar}</Panel>
-      <div style={{ maxWidth: 1180, margin: '0 auto 14px' }}>
-        <div className="tiles">
-          <Tile label="Faculty" value={stats.length} sub={filter.department || 'All departments'} to="/faculty" />
-          <Tile label="Publications" value={u.pubs.length} sub={`${nf(u.pubs.length / n)} per faculty`} to="/reports/publications" />
-          <Tile label="Q1 + Q2 journals" value={`${pct(q12, journals.length)}%`} sub={`${q12} of ${plural(journals.length, 'journal article')}`} />
-          <Tile label="Grant proposals" value={u.grants.length} sub={`${u.sanctioned.length} sanctioned · ${pct(u.sanctioned.length, u.grants.length)}% success`} to="/grants" />
-          <Tile label="Sanctioned funding" value={lakh(u.sanctionedAmount)} sub={`${lakh(u.receivedAmount)} received`} />
-          <Tile label="Seed money" value={lakh(u.seedAmount)} sub={`${plural(u.seed.length, 'proposal')} approved`} />
-          <Tile label="FDP hours" value={nf(u.fdpHours)} sub={`${plural(u.fdps.length, 'programme')} · ${nf(u.fdpHours / n)} h per faculty`} to="/fdp" />
-          <Tile label="Conferences" value={u.confs.length} sub={`${u.confs.filter((c) => c.level === 'International').length} international`} to="/conferences" />
-          <Tile label="Honours & Awards" value={u.awards.length} sub={`${u.awards.filter((a) => a.level === 'International').length} international · ${u.awards.filter((a) => a.level === 'National').length} national`} to="/reports/awards?r=awd-level" />
-          <Tile label="Intellectual Property" value={u.ipr.length} sub={`${plural(u.ipr.filter((x) => x.ipType === 'Patent').length, 'patent')} · ${plural(u.ipr.filter((x) => x.ipType !== 'Patent').length, 'other right')}`} to="/ipr" />
-          <Tile label="Collaboration" value={`${pct(intl, u.pubs.length)}%`} sub={`with external co-authors · ${pct(student, u.pubs.length)}% with students`} />
-        </div>
-      </div>
-      <div className="cards">
-        <BarCard title="Publications by type" sub="Per academic year; a co-authored paper counts once" data={rows} xKey="ay" xLabel="Academic year" stacked
-          series={[{ key: 'journal', label: 'Journal' }, { key: 'confPaper', label: 'Conference paper' }, { key: 'bookChapter', label: 'Book / chapter' }, { key: 'report', label: 'Tech report' }]} />
-        <BarCard title="Journal quality (quartile)" sub="Journal articles per academic year" data={rows} xKey="ay" xLabel="Academic year" stacked
-          series={(['q1', 'q2', 'q3', 'q4', 'unranked'] as const).map((k, i) => ({ key: k, label: k === 'unranked' ? 'Unranked' : k.toUpperCase(), color: quartileColors[i] }))} />
-        <BarCard title="Grant funding (₹ lakh)" sub="Applied vs sanctioned, by year the proposal was applied" data={rows} xKey="ay" xLabel="Academic year" fmt={nf}
-          series={[{ key: 'appliedL', label: 'Applied' }, { key: 'sanctionedL', label: 'Sanctioned' }, { key: 'receivedL', label: 'Received' }]} />
-        <BarCard title="FDP hours" sub="Total hours of approved FDPs, workshops and courses" data={rows} xKey="ay" xLabel="Academic year" series={[{ key: 'fdpHours', label: 'FDP hours' }]} />
-        <BarCard title="Conference participation" sub="By level" data={rows} xKey="ay" xLabel="Academic year" stacked series={[{ key: 'national', label: 'National' }, { key: 'international', label: 'International' }]} />
-        {monthly.length > 0 && (
-          <LineCard title="Monthly activity" sub={`Approved entries per month, AY ${ay}`} data={monthly} xKey="m" xLabel="Month"
-            series={[{ key: 'publications', label: 'Publications' }, { key: 'fdps', label: 'FDPs' }, { key: 'conferences', label: 'Conferences' }, { key: 'grants', label: 'Grant proposals' }]} />
-        )}
-        <section className="card">
-          <h3>Top journals</h3><p className="sub">Most-used venues in the selected period</p>
-          <RankList rows={Object.entries(journals.reduce<Record<string, number>>((a, p) => ((a[p.venue] = (a[p.venue] ?? 0) + 1), a), {})).sort((a, b) => b[1] - a[1]).slice(0, 8).map(([k, v]) => ({ key: k, label: k, value: v }))} />
-        </section>
-        <section className="card">
-          <h3>Top funding agencies</h3><p className="sub">Sanctioned amount</p>
-          <RankList fmt={lakh} rows={Object.entries(u.sanctioned.reduce<Record<string, number>>((a, g) => ((a[g.agency] = (a[g.agency] ?? 0) + g.sanctionedAmount), a), {})).sort((a, b) => b[1] - a[1]).slice(0, 8).map(([k, v]) => ({ key: k, label: k, value: v }))} />
-        </section>
-      </div>
-    </>
+    <div className="cards dash-charts">
+      <BarCard title="Journal quality (quartile)" sub="Journal articles per academic year" data={rows} xKey="ay" xLabel="Academic year" stacked
+        series={(['q1', 'q2', 'q3', 'q4', 'unranked'] as const).map((k, i) => ({ key: k, label: k === 'unranked' ? 'Unranked' : k.toUpperCase(), color: quartileColors[i] }))} />
+      <BarCard title="Grant funding (₹ lakh)" sub="Applied vs sanctioned, by year the proposal was applied" data={rows} xKey="ay" xLabel="Academic year" fmt={nf}
+        series={[{ key: 'appliedL', label: 'Applied' }, { key: 'sanctionedL', label: 'Sanctioned' }, { key: 'receivedL', label: 'Received' }]} />
+      <BarCard title="FDP hours" sub="Total hours of approved FDPs, workshops and courses" data={rows} xKey="ay" xLabel="Academic year" series={[{ key: 'fdpHours', label: 'FDP hours' }]} />
+      <BarCard title="Conference participation" sub="By level" data={rows} xKey="ay" xLabel="Academic year" stacked series={[{ key: 'national', label: 'National' }, { key: 'international', label: 'International' }]} />
+      {monthly.length > 0 && (
+        <LineCard className="span-all" title="Monthly activity" sub={`Approved entries per month, AY ${ay}`} data={monthly} xKey="m" xLabel="Month"
+          series={[{ key: 'publications', label: 'Publications' }, { key: 'fdps', label: 'FDPs' }, { key: 'conferences', label: 'Conferences' }, { key: 'grants', label: 'Grant proposals' }]} />
+      )}
+      <section className="card">
+        <h3>Top journals</h3><p className="sub">Most-used venues in the selected period</p>
+        <RankList rows={Object.entries(journals.reduce<Record<string, number>>((a, p) => ((a[p.venue] = (a[p.venue] ?? 0) + 1), a), {})).sort((a, b) => b[1] - a[1]).slice(0, 8).map(([k, v]) => ({ key: k, label: k, value: v }))} />
+      </section>
+      <section className="card">
+        <h3>Top funding agencies</h3><p className="sub">Sanctioned amount</p>
+        <RankList fmt={lakh} rows={Object.entries(u.sanctioned.reduce<Record<string, number>>((a, g) => ((a[g.agency] = (a[g.agency] ?? 0) + g.sanctionedAmount), a), {})).sort((a, b) => b[1] - a[1]).slice(0, 8).map(([k, v]) => ({ key: k, label: k, value: v }))} />
+      </section>
+    </div>
   );
 }
 
@@ -320,7 +289,7 @@ export function ParticipationAnalytics() {
       <div className="cards">
         <section className="card span-all">
           <h3>Participation rates</h3><p className="sub">Share of {n} active faculty</p>
-          <table className="tbl"><tbody>{measures.map((m) => <tr key={m.label}><td style={{ width: '40%' }}>{m.label}</td><td><Attainment value={m.pct} target={100} /></td><td className="num" style={{ width: 90 }}>{m.count} / {n}</td></tr>)}</tbody></table>
+          <table className="tbl"><tbody>{measures.map((m) => <tr key={m.label}><td style={{ width: '40%' }}>{m.label}</td><td><Attainment value={m.pct} target={100} /></td><td className="num" style={{ width: 90, whiteSpace: 'nowrap' }}>{m.count} / {n}</td></tr>)}</tbody></table>
         </section>
         <section className="card">
           <h3>Below FDP-hours target ({noFdp.length})</h3><p className="sub">Target {t.fdpHoursPerFaculty} hours in the period</p>

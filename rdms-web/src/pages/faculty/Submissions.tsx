@@ -54,6 +54,7 @@ export function MySubmissions() {
       <PageTitle sub="Track every entry and profile update you have sent to the Office of Research, with its status and comments.">My Submissions</PageTitle>
       <Panel size="wide" actions={<Link className="btn sm" to="/biodata/edit">Update profile</Link>}>
         <Tabs value={filter} onChange={setFilter} tabs={[
+          { id: 'all', label: `All (${rows.length})` },
           { id: 'open', label: `Needs your action (${count('open')})` },
           { id: 'waiting', label: `Submitted (${count('waiting')})` },
           { id: 'UnderReview', label: `Under Review (${count('UnderReview')})` },
@@ -61,7 +62,6 @@ export function MySubmissions() {
           { id: 'Approved', label: `Approved (${count('Approved')})` },
           { id: 'Rejected', label: `Rejected (${count('Rejected')})` },
           { id: 'Draft', label: `Draft (${count('Draft')})` },
-          { id: 'all', label: `All (${rows.length})` },
         ]} />
         <p className="muted" style={{ margin: '0 0 10px' }}>
           {filter === 'open' ? 'Drafts to finish, and entries the Office of Research has asked you to change. Open one to read the comment, correct it and resubmit it.'

@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import type { ReactNode } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import { Alert, DataTable, Field, Input, Modal, NumberInput, PageTitle, Panel, Select, StatusBadge, Tabs, TextArea, useToast } from '../../components/ui';
 import type { Column } from '../../components/ui';
 import { fmtDate } from '../../lib/analytics';
@@ -49,11 +50,14 @@ const VIEWS: { id: View; label: string }[] = [
  */
 export function AdminApprovals() {
   const { db: full, institution } = useStore();
-  const [view, setView] = useState<View>('awaiting');
+  // The dashboard links here with ?view= and ?kind= to open the right list.
+  const [params] = useSearchParams();
+  const askedView = params.get('view') as View | null, askedKind = params.get('kind') as QueueKind | null;
+  const [view, setView] = useState<View>(askedView && VIEWS.some((v) => v.id === askedView) ? askedView : 'awaiting');
   const queue = useAdmin<ApprovalQueue>(`/office/approvals?view=${view}`);
   const totals = useAdmin<{ awaiting: number; review: number; returned: number }>('/office/approvals/count');
   const pending = view === 'awaiting' || view === 'review';
-  const [kind, setKind] = useState<QueueKind | ''>('');
+  const [kind, setKind] = useState<QueueKind | ''>(askedKind && ([...KINDS, 'profiles'] as QueueKind[]).includes(askedKind) ? askedKind : '');
   const [dept, setDept] = useState('');
   const [open, setOpen] = useState<AnyRecord | null>(null);
   const [openProfile, setOpenProfile] = useState<ProfileChange | null>(null);
