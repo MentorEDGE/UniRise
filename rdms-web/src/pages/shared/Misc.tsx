@@ -1,7 +1,7 @@
-import { useState } from 'react';
+import { useRef, useState } from 'react';
 import { Link, Navigate } from 'react-router-dom';
 import { Alert, Field, Input, PageTitle, Panel, useToast } from '../../components/ui';
-import { changePassword, login, useStore } from '../../lib/store';
+import { API_BASE, changePassword, login, useStore } from '../../lib/store';
 import { Logo } from '../../components/Logo';
 import { ThemeToggle } from '../../components/ThemeToggle';
 
@@ -64,9 +64,14 @@ function AuthPage({ children, wide = false }: { children: React.ReactNode; wide?
 const DEMO = [
   { email: 'office@abc.edu.in', pw: 'Office@1234', label: 'Office of Research, ABC', note: 'Office of Research · ABC Institute of Technology' },
   { email: 'director@abc.edu.in', pw: 'Admin@1234', label: 'Director, ABC', note: 'Top-Level Management · ABC Institute of Technology' },
-  { email: 'faculty.a@abc.edu.in', pw: 'Faculty@123', label: 'Faculty A, Professor', note: 'Faculty · ABC Institute of Technology' },
+  { email: 'john.doe@abc.edu.in', pw: 'Faculty@123', label: 'Dr. John Doe, Professor', note: 'Faculty · ABC Institute of Technology' },
   { email: 'vc@xyz.ac.in', pw: 'Admin@1234', label: 'Vice-Chancellor, XYZ', note: 'Top-Level Management · XYZ University' },
 ];
+/**
+ * The passwords above are the local prototype's, printed in the README. A shared server (the Java API) has its own demo
+ * password that is never in the code: there the buttons only fill in the email, and the person types the password.
+ */
+const DEMO_FILLS_PASSWORD = !API_BASE;
 
 /** One sign-in for faculty, Top-Level Management and the Office of Research. The role comes from the account. */
 export function Login() {
@@ -77,6 +82,7 @@ export function Login() {
   const [forgot, setForgot] = useState(false);
   const [error, setError] = useState('');
   const [busy, setBusy] = useState(false);
+  const pwRef = useRef<HTMLInputElement>(null);
   // Signed in: each role lands on its own workspace ("/" renders it).
   if (user) return <Navigate to="/" replace />;
   const submit = async (e?: React.FormEvent, em = email, p = pw) => {
@@ -98,7 +104,7 @@ export function Login() {
           <div style={{ height: 14 }} />
           <Field label="Password">
             <div className="pw-wrap">
-              <input type={show ? 'text' : 'password'} value={pw} onChange={(e) => { setPw(e.target.value); setError(''); }} autoComplete="current-password" />
+              <input ref={pwRef} type={show ? 'text' : 'password'} value={pw} onChange={(e) => { setPw(e.target.value); setError(''); }} autoComplete="current-password" />
               <button type="button" className="pw-toggle" onClick={() => setShow(!show)} aria-pressed={show} aria-label={show ? 'Hide password' : 'Show password'}>{show ? 'Hide' : 'Show'}</button>
             </div>
           </Field>
@@ -111,8 +117,10 @@ export function Login() {
         </form>
         <div className="demo-list">
           <p className="eyebrow" style={{ fontSize: 12.5, marginBottom: 4 }}>Demo · sample accounts</p>
+          {!DEMO_FILLS_PASSWORD && <p className="note" style={{ margin: '0 0 6px' }}>Choose an account, then enter the demo password given to you by the UniRise team.</p>}
           {DEMO.map((d) => (
-            <button key={d.email} type="button" className="demo-pick" disabled={busy} onClick={() => submit(undefined, d.email, d.pw)}>
+            <button key={d.email} type="button" className="demo-pick" disabled={busy}
+              onClick={() => { if (DEMO_FILLS_PASSWORD) { submit(undefined, d.email, d.pw); return; } setEmail(d.email); setPw(''); setError(''); pwRef.current?.focus(); }}>
               <span><b>{d.label}</b><small>{d.note}</small></span>
               <span className="arrow" aria-hidden>→</span>
             </button>

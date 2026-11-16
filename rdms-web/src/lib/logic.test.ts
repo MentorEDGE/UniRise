@@ -4,7 +4,7 @@ import { toCsv } from './csv';
 import * as rules from './domain';
 import type { Actor } from './domain';
 import { REPORTS, runReport } from './reports';
-import { createSeed } from './seed';
+import { createSeed, placeholderName } from './seed';
 import type { DB, Fdp, Publication } from './types';
 
 let db: DB;
@@ -336,6 +336,13 @@ describe('management scope and researcher profiles', () => {
     expect(db.biodata.find((x) => x.facultyId === 'EMP1001')!.sdgs).toEqual([3, 9]);
     const fresh = createSeed();
     expect(fresh.biodata.every((x) => x.scholar.citations === null && x.photo === '')).toBe(true);
-    expect(fresh.faculty.every((f) => /^Faculty [A-Z]+$/.test(f.name))).toBe(true);
+    // Placeholder names only (John Doe, Jane Doe, ...), in order; first.last@ the institution's domain; unique; titles match.
+    fresh.faculty.forEach((f, n) => {
+      const p = placeholderName(n);
+      expect(f.name).toBe(p.name);
+      expect(f.email).toBe(`${p.name.toLowerCase().replace(/ /g, '.')}@abc.edu.in`);
+      if (f.title !== 'Dr.') expect(f.title).toBe(p.female ? 'Ms.' : 'Mr.');
+    });
+    expect(new Set(fresh.faculty.map((f) => f.email)).size).toBe(fresh.faculty.length);
   });
 });

@@ -33,11 +33,31 @@ export const DEFAULT_WEIGHTS = {
   ...IP_WEIGHT_DEFAULTS,
 };
 
-/** Placeholder labels instead of real-looking personal names: A, B, ... Z, AA, AB, ... */
+/** Placeholder labels: A, B, ... Z, AA, AB, ... (still used to sort such labels like spreadsheet columns). */
 export const letterLabel = (i: number): string => (i < 26 ? String.fromCharCode(65 + i) : letterLabel(Math.floor(i / 26) - 1) + String.fromCharCode(65 + (i % 26)));
-// Same lengths as the name lists they replace, so the random sequence (and all other sample data) is unchanged.
-const FIRST = Array.from({ length: 38 }, (_, i) => letterLabel(i));
-const LAST = Array.from({ length: 20 }, (_, i) => String(i + 1));
+
+/**
+ * Sample faculty get generic placeholder names in the style of "John Doe", alternating men and women, so the demo reads
+ * like a real institution without naming anyone real. Each institution starts at the top of both lists; emails are
+ * first.last@ the institution's domain.
+ */
+const MEN = ['John Doe', 'Richard Roe', 'John Smith', 'Robert Miles', 'Michael Grant', 'David Clarke', 'William Hayes', 'Thomas Reed', 'Daniel Moore', 'Mark Turner',
+  'Paul Bennett', 'Steven Ward', 'Andrew Collins', 'Peter Lane', 'George Hall', 'Brian Foster', 'Kevin Marsh', 'Edward Price', 'Samuel Gray', 'Joseph Webb'];
+const WOMEN = ['Jane Doe', 'Mary Major', 'Jane Smith', 'Emily Rhodes', 'Sarah Mills', 'Laura Bell', 'Anna Price', 'Emma Hart', 'Grace Hill', 'Linda Park',
+  'Susan Gray', 'Helen Shaw', 'Julia Ross', 'Karen Wells', 'Nina Brooks', 'Olivia Grant', 'Rachel Adams', 'Claire Dawson', 'Alice Morgan', 'Lucy Fletcher'];
+/** The n-th faculty member's placeholder name and gender. Past the end of the lists, a number keeps names unique. */
+export function placeholderName(n: number): { name: string; female: boolean } {
+  const female = n % 2 === 1, list = female ? WOMEN : MEN, i = Math.floor(n / 2);
+  return { name: list[i % list.length] + (i >= list.length ? ` ${Math.floor(i / list.length) + 1}` : ''), female };
+}
+const emailLocal = (name: string) => name.toLowerCase().replace(/[^a-z0-9]+/g, '.').replace(/^\.|\.$/g, '');
+
+// Co-authors (other students, external researchers). Same lengths as the lists they replace, so the random sequence
+// (and all other sample data) is unchanged.
+const FIRST = ['Alex', 'Blake', 'Casey', 'Dana', 'Eli', 'Finn', 'Gabriel', 'Hannah', 'Ivy', 'Jack', 'Kai', 'Leo', 'Maya', 'Noah', 'Owen', 'Quinn', 'Riley', 'Sam', 'Tara',
+  'Uma', 'Victor', 'Wendy', 'Xavier', 'Yara', 'Zoe', 'Aaron', 'Bella', 'Caleb', 'Diana', 'Ethan', 'Fiona', 'Gavin', 'Hazel', 'Isaac', 'Jasmine', 'Kyle', 'Lily', 'Miles'];
+const LAST = ['Archer', 'Baker', 'Carter', 'Dixon', 'Ellis', 'Fisher', 'Gibson', 'Harper', 'Irving', 'Jensen', 'Knight', 'Lawson', 'Mason', 'Nolan', 'Owens', 'Parker',
+  'Quincy', 'Russell', 'Spencer', 'Tucker'];
 const DESIGNATIONS = ['Professor', 'Associate Professor', 'Associate Professor', 'Assistant Professor', 'Assistant Professor', 'Assistant Professor'];
 
 const TOPICS: Record<string, string[]> = {
@@ -151,14 +171,15 @@ export function createSeed(opts: SeedOptions = DEFAULT_SEED): DB {
     const count = opts.sizes[di] ?? 4;
     const T = topicsOf(dept);
     for (let i = 0; i < count; i++) {
-      const label = letterLabel(n);
+      const person = placeholderName(n);
       const designation = i === 0 ? 'Professor' : pick(DESIGNATIONS);
       const id = `EMP${1001 + n}`;
       const joinYear = int(2008, 2022);
       faculty.push({
-        id, title: designation === 'Assistant Professor' && rnd() < 0.3 ? (rnd() < 0.5 ? 'Mr.' : 'Ms.') : 'Dr.',
-        name: `Faculty ${label}`, designation, department: dept,
-        email: `faculty.${label.toLowerCase()}@${opts.emailDomain}`,
+        // The title matches the name; the random draws stay as they were so the rest of the sample data is unchanged.
+        id, title: designation === 'Assistant Professor' && rnd() < 0.3 ? (rnd(), person.female ? 'Ms.' : 'Mr.') : 'Dr.',
+        name: person.name, designation, department: dept,
+        email: `${emailLocal(person.name)}@${opts.emailDomain}`,
         phone: `98${int(10000000, 99999999)}`, joiningDate: `${joinYear}-${pad(int(1, 12))}-01`,
         orcid: `0000-000${int(1, 3)}-${int(1000, 9999)}-${int(1000, 9999)}`,
         scopusId: `${int(55000000000, 59999999999)}`, active: true,
@@ -167,7 +188,7 @@ export function createSeed(opts: SeedOptions = DEFAULT_SEED): DB {
       biodata.push({
         facultyId: id,
         dob: complete > 0.2 ? `${int(1970, 1992)}-${pad(int(1, 12))}-${pad(int(1, 28))}` : '',
-        gender: complete > 0.15 ? (rnd() < 0.5 ? 'Female' : 'Male') : '',
+        gender: complete > 0.15 ? (rnd(), person.female ? 'Female' : 'Male') : '',
         address: complete > 0.35 ? `${int(1, 200)}, ${pick(['MG Road', 'Station Road', 'Lake View', 'Temple Street'])}, ${pick(VENUES)}` : '',
         summary: complete > 0.3 ? `${designation} in ${dept} with interests in ${T[0]} and ${T[1]}.` : '',
         researchInterests: complete > 0.25 ? `${T[int(0, 5)]}; ${T[int(0, 5)]}` : '',
@@ -270,8 +291,8 @@ export function createSeed(opts: SeedOptions = DEFAULT_SEED): DB {
         const authors: Author[] = [facultyAuthor(f)];
         const ps = peer(f);
         if (ps.length && rnd() < 0.55) authors.push(facultyAuthor(pick(ps)));
-        if (rnd() < 0.45) authors.push({ kind: 'Student', code: `STU${int(220000, 239999)}`, name: `Student ${pick(FIRST)}${pick(LAST)}`, institution: INST, department: f.department, email: '' });
-        if (rnd() < 0.35) authors.push({ kind: 'External', code: '', name: `External Author ${pick(FIRST)}${pick(LAST)}`, institution: pick(INSTITUTIONS), department: '', email: '' });
+        if (rnd() < 0.45) authors.push({ kind: 'Student', code: `STU${int(220000, 239999)}`, name: `${pick(FIRST)} ${pick(LAST)}`, institution: INST, department: f.department, email: '' });
+        if (rnd() < 0.35) authors.push({ kind: 'External', code: '', name: `${pick(FIRST)} ${pick(LAST)}`, institution: pick(INSTITUTIONS), department: '', email: '' });
         const ext = authors[authors.length - 1];
         if (ext.kind === 'External') ext.country = COUNTRY_OF[ext.institution];
         const isJournal = entryType === 'Journal Article';

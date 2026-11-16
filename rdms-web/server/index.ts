@@ -16,7 +16,7 @@ if (!store.institutions().length) {
   console.log('\nDemo platform created (two institutions, each with its own database). Sign in at /#/login:');
   console.log(`  Office of Research:  office@abc.edu.in, office@xyz.ac.in  /  ${DEMO_PASSWORDS.office}`);
   console.log(`  Management:          director@abc.edu.in, vc@xyz.ac.in  /  ${DEMO_PASSWORDS.management}`);
-  console.log(`  Faculty:             e.g. faculty.a@abc.edu.in  /  ${DEMO_PASSWORDS.faculty}\n`);
+  console.log(`  Faculty:             e.g. john.doe@abc.edu.in  /  ${DEMO_PASSWORDS.faculty}\n`);
 }
 
 const app = createApp(store, { secureCookies: production });

@@ -83,7 +83,7 @@ function ProfileCard() {
       <p className="hc-kicker">Researcher profile</p>
       <div className="hc-person">
         <span className="hc-avatar" aria-hidden><svg viewBox="0 0 40 44"><circle cx="20" cy="15" r="8.5" /><path d="M4 44c0-9.5 7.2-16 16-16s16 6.5 16 16Z" /></svg></span>
-        <div><b>Dr. Faculty A</b><span>Professor · Computer Science &amp; Engineering</span></div>
+        <div><b>Dr. John Doe</b><span>Professor · Computer Science &amp; Engineering</span></div>
       </div>
       <div className="hc-bars" aria-hidden>{bars.map((h, i) => <i key={i} style={{ height: `${h * 9}%`, ['--b' as string]: i }} className={i === bars.length - 1 ? 'now' : ''} />)}</div>
       <div className="hc-stats"><span><b>42</b> publications</span><span><b>6</b> grants</span><span><b>2</b> patents</span></div>
@@ -108,7 +108,7 @@ function ApprovalCard() {
       <span className="hc-tag">Patent · Filed</span>
       <p className="hc-title">A low-cost sensor for soil moisture</p>
       <ol className="hc-steps">
-        <li className="done">Submitted by Dr. Faculty M</li>
+        <li className="done">Submitted by Dr. Jane Smith</li>
         <li className="done">Filing receipt checked</li>
         <li className="ok">Approved</li>
       </ol>
@@ -467,10 +467,10 @@ function FacultyScreen() {
 }
 function OfficeScreen() {
   const rows = [
-    ['Publication', 'Low-cost sensing for precision agriculture', 'Dr. Faculty A'],
-    ['Patent', 'A modular soil moisture probe', 'Dr. Faculty M'],
-    ['Grant', 'Smart irrigation for semi-arid farms', 'Dr. Faculty Q'],
-    ['Conference', 'International Conference on AgriTech', 'Dr. Faculty E'],
+    ['Publication', 'Low-cost sensing for precision agriculture', 'Dr. John Doe'],
+    ['Patent', 'A modular soil moisture probe', 'Dr. Jane Smith'],
+    ['Grant', 'Smart irrigation for semi-arid farms', 'Dr. Richard Roe'],
+    ['Conference', 'International Conference on AgriTech', 'Dr. Mary Major'],
   ];
   return (
     <div className="ps ps-off">

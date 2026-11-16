@@ -23,7 +23,7 @@ institution come from the account. There is no public sign-up.
 |---|---|
 | `office@abc.edu.in`, `office@xyz.ac.in` (Office of Research of each institution) | `Office@1234` |
 | `director@abc.edu.in`, `dean@abc.edu.in`, `vc@xyz.ac.in`, `registrar@xyz.ac.in` (Top-Level Management) | `Admin@1234` |
-| any faculty email, e.g. `faculty.a@abc.edu.in` | `Faculty@123` |
+| any faculty email, e.g. `john.doe@abc.edu.in` | `Faculty@123` |
 
 ## Running against the Java API (unirise-api)
 The Java backend in `../unirise-api` answers the same requests as the server in `server/`, so the pages work against
@@ -32,10 +32,20 @@ either one (BACKEND_PLAN phase 6).
   are hosted separately. Empty (the default) means the same origin that serves the pages.
 - `node scripts/api-proxy.mjs` (after `npm run build`): serves `dist/` and forwards `/api` to `API` (default
   `http://127.0.0.1:8181`) on one origin, for local testing.
-- `npx tsx scripts/export-demo.ts [--small] [--random-passwords] > demo.json`: the sample institutions and demo
-  accounts, for the API's `POST /api/platform/tenants/{slug}/demo-data`. Without `--random-passwords` the accounts use
+- `npx tsx scripts/export-demo.ts [--small] [--random-password] > demo.json`: the sample institutions and demo
+  accounts, for the API's `POST /api/platform/tenants/{slug}/demo-data`. Without `--random-password` the accounts use
   the demo passwords in this README, so use that only on your own machine. For any server others can reach, always
-  pass `--random-passwords`: the new passwords are printed once to the terminal.
+  pass `--random-password`: every account gets one new password, printed once to the terminal.
+- `RMS_ADMIN_KEY=... scripts/load-demo.sh <api address>`: creates the two sample institutions on a Java API and loads
+  them with one new random password for every account (the way to load the AWS dev API). For AWS dev:
+
+  ```bash
+  RMS_ADMIN_KEY="$(aws secretsmanager get-secret-value --region ap-south-1 --secret-id unirise/dev/admin-key \
+    --query SecretString --output text)" scripts/load-demo.sh https://api.dev-unirise.mentoredge.co.in
+  ```
+
+  On a page served from a shared server, the sign-in page's sample accounts only fill in the email; the person types
+  the demo password.
 
 ## Onboarding a new institution
 1. The institution fills in **Talk to Our Team** (`/#/talk-to-our-team`). The enquiry is stored and emailed to corporate@mentoredge.co.in.

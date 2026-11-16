@@ -30,8 +30,13 @@ export class ApiError extends Error { constructor(public status: number, message
  * Set VITE_API_BASE at build time when the API has its own address, e.g. https://api.dev-unirise.mentoredge.co.in for
  * the Java API (unirise-api) with the pages on Hostinger (BACKEND_PLAN D4). The session cookie is then sent with
  * credentials: 'include'; it is SameSite=Strict, so it only goes to the same site (mentoredge.co.in).
+ *
+ * Pages served from a known UniRise web address use that environment's API when nothing was set at build time, so the
+ * Hostinger build needs no settings there. Any other address (a local run, the prototype server) keeps the same site.
  */
-export const API_BASE = ((import.meta as { env?: Record<string, string | undefined> }).env?.VITE_API_BASE ?? '').replace(/\/$/, '');
+const KNOWN_APIS: Record<string, string> = { 'dev-unirise.mentoredge.co.in': 'https://api.dev-unirise.mentoredge.co.in' };
+const BUILT_API = (import.meta as { env?: Record<string, string | undefined> }).env?.VITE_API_BASE;
+export const API_BASE = (BUILT_API ?? (typeof location === 'undefined' ? '' : KNOWN_APIS[location.hostname] ?? '')).replace(/\/$/, '');
 const CREDENTIALS: RequestCredentials = API_BASE ? 'include' : 'same-origin';
 
 const UNREACHABLE = 'UniRise can’t be reached right now. Check your internet connection, or try again in a few minutes.';

@@ -11,5 +11,5 @@ seedDemo(store);
 store.close();
 console.log(`Demo platform recreated in ${dir}`);
 console.log(`  Management: director@abc.edu.in, vc@xyz.ac.in / ${DEMO_PASSWORDS.management}`);
-console.log(`  Faculty:    e.g. faculty.a@abc.edu.in / ${DEMO_PASSWORDS.faculty}`);
+console.log(`  Faculty:    e.g. john.doe@abc.edu.in / ${DEMO_PASSWORDS.faculty}`);
 console.log(`  Office of Research: office@abc.edu.in, office@xyz.ac.in / ${DEMO_PASSWORDS.office}`);
