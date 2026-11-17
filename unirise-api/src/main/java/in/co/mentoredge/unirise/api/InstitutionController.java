@@ -142,6 +142,10 @@ public class InstitutionController {
 		next.put("institutionName", name);
 		next.put("institutionTagline", Json.str(s.get("institutionTagline"), 200));
 		next.put("departments", departments);
+		// Schools of a university (none for an institute). An older client that does not send them keeps the current ones,
+		// which must still fit the departments.
+		List<Map<String, Object>> schools = schools(s.containsKey("schools") ? s.get("schools") : current.get("schools"), departments);
+		if (schools.isEmpty()) next.remove("schools"); else next.put("schools", schools);
 		long month = Math.round(Json.dbl(s.get("academicYearStartMonth")));
 		next.put("academicYearStartMonth", month >= 1 && month <= 12 ? month : 6L);
 		next.put("seedMoneyWindowOpen", Json.bool(s.get("seedMoneyWindowOpen")));
@@ -157,6 +161,42 @@ public class InstitutionController {
 		settings.put(next);
 		log.record(a, "Institution settings saved", name, null);
 		return Json.of("ok", true, "result", null);
+	}
+
+	/**
+	 * A university's schools, each holding some of the departments; the same rules as rdms-web (domain.ts cleanSchools):
+	 * unique names, every department in exactly one school, only the institution's departments, kept in its order.
+	 */
+	static List<Map<String, Object>> schools(Object in, List<String> departments) {
+		List<Object> raw = Json.arr(in);
+		if (raw.isEmpty()) return List.of();
+		if (raw.size() > 50) throw invalid("At most 50 schools.");
+		List<String> names = new ArrayList<>();
+		Map<String, String> placed = new LinkedHashMap<>();
+		List<Map<String, Object>> out = new ArrayList<>();
+		for (Object x : raw) {
+			Map<String, Object> o = Json.obj(x);
+			String name = Json.str(o.get("name"), 200).trim();
+			if (name.isEmpty()) throw invalid("Every school needs a name.");
+			if (names.contains(name.toLowerCase())) throw invalid("There are two schools called “" + name + "”.");
+			names.add(name.toLowerCase());
+			List<String> mine = new ArrayList<>();
+			for (Object d : Json.arr(o.get("departments"))) {
+				String dept = Json.str(d, 200).trim();
+				if (dept.isEmpty()) continue;
+				if (!departments.contains(dept)) throw invalid("“" + dept + "” is not one of the institution's departments.");
+				if (placed.containsKey(dept)) throw invalid("“" + dept + "” is in both “" + placed.get(dept) + "” and “" + name + "”; a department belongs to one school.");
+				placed.put(dept, name);
+				mine.add(dept);
+			}
+			Map<String, Object> school = new LinkedHashMap<>();
+			school.put("name", name);
+			school.put("departments", departments.stream().filter(mine::contains).toList());
+			out.add(school);
+		}
+		List<String> unplaced = departments.stream().filter((d) -> !placed.containsKey(d)).map((d) -> "“" + d + "”").toList();
+		if (!unplaced.isEmpty()) throw invalid("Choose a school for " + String.join(", ", unplaced) + ".");
+		return out;
 	}
 
 	private static Map<String, Object> numbers(Map<String, Object> in, Map<String, Object> ref) {

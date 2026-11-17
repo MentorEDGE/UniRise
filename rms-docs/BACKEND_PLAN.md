@@ -143,6 +143,7 @@ Custom fields and configurable lists cover most requests in practice, because th
 | G38 | Open pages refresh their data by themselves (on navigation, at most every 5 seconds, and every minute) | `GET /api/data` should answer `304 Not Modified` to an unchanged `ETag`, or the full slice is re-sent each time | 6 |
 | G39 | Review details: start review on opening, views and counts per stage, faculty reply on resubmission, review comments removed from management's data | Part of G4, G6 and G18 | 4 |
 | G40 | Top-Level Management dashboard | None: computed in the browser from the data slice (D2) | — |
+| G41 | Schools of a university (added 2026-11-17): each school holds some departments; every department filter can also name a whole school; Department Comparison by school; "School wise" summary reports; a School column in the annual report | `settings.schools` (jsonb), validated in `PUT /api/settings` (`InstitutionController.schools`, same rules as `domain.ts cleanSchools`) | Done (no table: settings only). Institutes and colleges have no schools and see no change |
 
 ### 4.6 Backend features with no screen
 

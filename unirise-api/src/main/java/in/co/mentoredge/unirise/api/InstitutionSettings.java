@@ -41,6 +41,7 @@ public class InstitutionSettings {
 		s.put("institutionName", stored.getOrDefault("institutionName", name));
 		s.put("institutionTagline", stored.getOrDefault("institutionTagline", ""));
 		s.put("departments", stored.containsKey("departments") ? stored.get("departments") : orgDepartments());
+		if (!Json.arr(stored.get("schools")).isEmpty()) s.put("schools", stored.get("schools")); // universities only; see InstitutionController.schools
 		s.put("academicYearStartMonth", stored.getOrDefault("academicYearStartMonth", 6L));
 		s.put("seedMoneyWindowOpen", stored.getOrDefault("seedMoneyWindowOpen", false));
 		s.put("targets", merge(DEFAULT_TARGETS, Json.obj(stored.get("targets"))));

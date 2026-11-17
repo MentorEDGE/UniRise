@@ -252,6 +252,25 @@ class InstitutionApiTest {
 		assertEquals(403, api.call("POST", "/api/records/seedMoney", b, "{\"record\":{\"title\":\"x\"},\"submit\":false}").statusCode());
 		settings.put("features", Map.of("seedMoney", true));
 		assertEquals(200, api.call("PUT", "/api/settings", office, JSON.writeValueAsString(settings)).statusCode());
+
+		// Schools of a university: every department in exactly one school; the data slice carries them to every role.
+		var half = depts.size() / 2;
+		var schools = List.of(Map.of("name", "School of One", "departments", depts.subList(0, half)), Map.of("name", "School of Two", "departments", depts.subList(half, depts.size())));
+		settings.put("schools", List.of(Map.of("name", "School of One", "departments", depts.subList(0, half))));
+		assertTrue(api.call("PUT", "/api/settings", office, JSON.writeValueAsString(settings)).body().contains("Choose a school for"));  // some departments in no school
+		settings.put("schools", List.of(Map.of("name", "A", "departments", depts), Map.of("name", "B", "departments", depts.subList(0, 1))));
+		assertTrue(api.call("PUT", "/api/settings", office, JSON.writeValueAsString(settings)).body().contains("belongs to one school"));
+		settings.put("schools", List.of(Map.of("name", "A", "departments", depts), Map.of("name", "a", "departments", List.of())));
+		assertTrue(api.call("PUT", "/api/settings", office, JSON.writeValueAsString(settings)).body().contains("two schools"));
+		settings.put("schools", schools);
+		assertEquals(200, api.call("PUT", "/api/settings", office, JSON.writeValueAsString(settings)).statusCode());
+		assertTrue(api.call("GET", "/api/data", dean, null).body().contains("School of Two"));
+		settings.remove("schools"); // an older client that does not send schools keeps them
+		assertEquals(200, api.call("PUT", "/api/settings", office, JSON.writeValueAsString(settings)).statusCode());
+		assertTrue(api.call("GET", "/api/data", b, null).body().contains("School of One"));
+		settings.put("schools", List.of()); // back to an institute without schools
+		assertEquals(200, api.call("PUT", "/api/settings", office, JSON.writeValueAsString(settings)).statusCode());
+		assertFalse(api.call("GET", "/api/data", b, null).body().contains("School of One"));
 	}
 
 	@Test
