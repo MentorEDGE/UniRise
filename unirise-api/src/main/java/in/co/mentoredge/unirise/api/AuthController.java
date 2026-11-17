@@ -69,6 +69,16 @@ public class AuthController {
 			.query((r, n) -> new Login(r.getLong("institution_id"), r.getLong("app_user_id"), r.getString("password_hash"))).optional();
 		if (found.isEmpty()) Passwords.burn(password);
 		Optional<TenantInfo> inst = found.flatMap(f -> directory.byId(f.institutionId()));
+		// A suspended institution's database is closed to requests, so decide from the control plane alone: the right
+		// password gets the suspension message, a wrong one the usual answer (nothing is revealed either way).
+		if (inst.isPresent() && !inst.get().status().matches("sandbox|pilot|active")) {
+			if (!Passwords.matches(password, found.get().hash())) {
+				throttle.fail(byEmail);
+				throttle.fail(byAddress);
+				return error(HttpStatus.UNAUTHORIZED, INVALID);
+			}
+			return error(HttpStatus.FORBIDDEN, "Your institution’s access is suspended. Contact the UniRise team.");
+		}
 		Map<String, Object> user = inst.isEmpty() ? null : inTenant(inst.get(), () -> userRow(found.get().userId()));
 		boolean eligible = user != null && (!officeOnly || Actor.OFFICE.equals(user.get("role")));
 		if (!eligible || !Passwords.matches(password, found.get().hash())) {

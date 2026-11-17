@@ -283,4 +283,136 @@ class InstitutionApiTest {
 		assertEquals(200, api.call("POST", "/api/enquiries", Caller.NOBODY, enq).statusCode());
 		assertEquals(200, api.call("POST", "/api/enquiries", Caller.NOBODY, enq.replace("\"consent\"", "\"website\":\"spam\",\"consent\"")).statusCode()); // honeypot: accepted, not stored
 	}
+
+	// ---------- Cases ported from rdms-web/server/api.test.ts (the prototype server is retired) ----------
+
+	@Test
+	void aRecordFromAnotherInstitutionIsSimplyNotFound() throws Exception {
+		setup();
+		Caller xyzOffice = api.signIn("office@xyz.ac.in", "Office@1234"), office = office(), fac = faculty("c");
+		var abcIds = new java.util.HashSet<Object>();
+		for (String k : KINDS) list(data(office), k).forEach(r -> abcIds.add(r.get("id")));
+		String foreign = (String) list(data(xyzOffice), "fdps").stream().map(r -> r.get("id")).filter(id -> !abcIds.contains(id)).findFirst().orElseThrow();
+		assertEquals(404, api.call("POST", "/api/office/approvals/fdps/" + foreign + "/start", office, null).statusCode());
+		assertEquals(404, api.call("DELETE", "/api/records/fdps/" + foreign, fac, null).statusCode());
+		assertFalse(api.call("GET", "/api/data", office, null).body().contains("\"" + foreign + "\""));
+	}
+
+	@Test
+	void theClientCannotChooseTheInstitution() throws Exception {
+		setup();
+		Caller fac = faculty("c");
+		String plain = api.call("GET", "/api/data", fac, null).body();
+		for (String path : new String[] { "/api/data?institution=xyz", "/api/data?tenant=xyz&slug=xyz" }) {
+			var r = TestApi.HTTP.send(java.net.http.HttpRequest.newBuilder(URI.create(api.url(path))).header("Cookie", fac.cookie()).header("X-Tenant", "xyz").header("X-Institution", "xyz").GET().build(),
+				HttpResponse.BodyHandlers.ofString());
+			assertEquals(200, r.statusCode());
+			assertTrue(r.body().contains("ABC Institute of Technology") && !r.body().contains("XYZ University"), "the account decides the institution");
+			assertEquals(JSON.readValue(plain, Map.class).get("settings"), JSON.readValue(r.body(), Map.class).get("settings"));
+		}
+	}
+
+	@Test
+	void facultyGetOnlyTheirOwnRecordsAndColleaguesNamesAndDepartments() throws Exception {
+		setup();
+		Caller fac = faculty("c");
+		var d = data(fac);
+		String me = (String) ((Map<?, ?>) JSON.readValue(api.call("GET", "/api/session", fac, null).body(), Map.class).get("user")).get("facultyId");
+		for (String k : KINDS) for (var r : list(d, k)) assertTrue(r.toString().contains(me), k + " " + r.get("id") + " does not credit " + me);
+		for (var f : list(d, "faculty")) if (!me.equals(f.get("id"))) {
+			assertTrue(f.get("name") != null && f.get("department") != null);
+			assertEquals("", f.getOrDefault("email", ""), "no colleague email");
+			assertEquals("", f.getOrDefault("phone", ""), "no colleague phone");
+		}
+		assertTrue(list(d, "biodata").stream().allMatch(b -> me.equals(b.get("facultyId"))), "own profile only");
+	}
+
+	@Test
+	void facultyCannotActAsManagementOrTouchAnotherFacultyMembersEntry() throws Exception {
+		setup();
+		Caller c = faculty("c"), d = faculty("d");
+		String draft = field(api.call("POST", "/api/records/fdps", c, fdp("Mine").replace("\"submit\":true", "\"submit\":false")).body(), "result");
+		String edit = fdp("Taken over").replace("\"title\"", "\"id\":\"" + draft + "\",\"title\"").replace("\"submit\":true", "\"submit\":false");
+		int put = api.call("POST", "/api/records/fdps", d, edit).statusCode();
+		assertTrue(put == 403 || put == 404, "another faculty member's draft cannot be edited (404 hides that it exists): " + put);
+		int del = api.call("DELETE", "/api/records/fdps/" + draft, d, null).statusCode();
+		assertTrue(del == 403 || del == 404, "status " + del);
+		assertEquals(403, api.call("PUT", "/api/settings", d, "{}").statusCode());
+		assertEquals(403, api.call("GET", "/api/office/users", d, null).statusCode());
+		assertEquals(403, api.call("POST", "/api/office/approvals/fdps/" + draft + "/start", d, null).statusCode());
+		assertEquals(200, api.call("DELETE", "/api/records/fdps/" + draft, c, null).statusCode()); // the owner may delete a draft
+	}
+
+	@Test
+	void honoursAndAwardsAreSavedCheckedAndApprovedThroughTheApi() throws Exception {
+		setup();
+		Caller fac = faculty("c"), office = office(), dean = director();
+		String award = "{\"record\":{\"category\":\"Award\",\"title\":\"Ported award\",\"awardedBy\":\"IEEE\",\"level\":\"National\",\"awardDate\":\"2026-08-01\",\"citation\":\"For work\",\"prizeAmount\":5000,\"certificateName\":\"a.pdf\"},\"submit\":true}";
+		assertEquals(400, api.call("POST", "/api/records/awards", fac, award.replace("2026-08-01", "2099-01-01")).statusCode());      // not in the future
+		assertEquals(400, api.call("POST", "/api/records/awards", fac, award.replace("5000", "-1")).statusCode());                   // no negative prize
+		String id = field(api.call("POST", "/api/records/awards", fac, award).body(), "result");
+		assertTrue(id.startsWith("AWD"), id);
+		assertFalse(api.call("GET", "/api/data", dean, null).body().contains(id));
+		assertEquals(200, api.call("POST", "/api/office/approvals/awards/" + id + "/start", office, null).statusCode());
+		assertEquals(200, api.call("POST", "/api/office/approvals/awards/" + id + "/review", office, "{\"decision\":\"Approved\"}").statusCode());
+		assertTrue(list(data(dean), "awards").stream().anyMatch(r -> id.equals(r.get("id")) && "Ported award".equals(r.get("title"))));
+	}
+
+	@Test
+	void intellectualPropertyIsEnteredApprovedAndThenVisibleToManagement() throws Exception {
+		setup();
+		Caller fac = faculty("c"), office = office(), dean = director();
+		String ip = "{\"record\":{\"ipType\":\"Patent\",\"title\":\"Ported sensor\",\"description\":\"A soil moisture probe\",\"stage\":\"Filed\",\"applicationNumber\":\"PORT-2026-001\","
+			+ "\"filingDate\":\"2026-03-01\",\"office\":\"IPO India\",\"owner\":\"University\",\"documentName\":\"receipt.pdf\",\"declared\":true},\"submit\":true}";
+		assertEquals(400, api.call("POST", "/api/records/ipr", fac, ip.replace(",\"declared\":true", "")).statusCode());          // declaration needed to submit
+		assertEquals(400, api.call("POST", "/api/records/ipr", fac, ip.replace("\"Patent\"", "\"Recipe\"")).statusCode());
+		String id = field(api.call("POST", "/api/records/ipr", fac, ip).body(), "result");
+		assertTrue(id.startsWith("IPR"), id);
+		assertEquals(400, api.call("POST", "/api/records/ipr", fac, ip.replace("Ported sensor", "Second")).statusCode());            // same application number
+		assertFalse(api.call("GET", "/api/data", dean, null).body().contains(id));
+		assertEquals(200, api.call("POST", "/api/office/approvals/ipr/" + id + "/start", office, null).statusCode());
+		assertEquals(200, api.call("POST", "/api/office/approvals/ipr/" + id + "/review", office, "{\"decision\":\"Approved\"}").statusCode());
+		assertTrue(list(data(dean), "ipr").stream().anyMatch(r -> id.equals(r.get("id"))));
+	}
+
+	@Test
+	void managementCannotAddOrEditFacultyOrProfilesOrEnterRecords() throws Exception {
+		setup();
+		Caller dean = director();
+		assertEquals(403, api.call("POST", "/api/faculty", dean, "{}").statusCode());
+		assertEquals(403, api.call("PUT", "/api/faculty/EMP1001", dean, "{\"name\":\"X\"}").statusCode());
+		assertEquals(403, api.call("POST", "/api/profile-changes", dean, "{\"biodata\":{},\"contact\":{},\"submit\":true}").statusCode());
+		assertEquals(403, api.call("PUT", "/api/biodata/EMP1001", dean, "{}").statusCode());
+		assertEquals(403, api.call("POST", "/api/records/fdps", dean, fdp("By management")).statusCode());
+		assertEquals(403, api.call("POST", "/api/notices", dean, "{\"title\":\"x\"}").statusCode());
+	}
+
+	@Test
+	void selfRegistrationIsClosed() throws Exception {
+		setup();
+		var r = api.call("POST", "/api/register", Caller.NOBODY, "{\"email\":\"new@abc.edu.in\",\"password\":\"Passw0rd!\",\"institutionId\":\"abc\",\"role\":\"faculty\"}");
+		assertTrue(r.statusCode() == 401 || r.statusCode() == 404, "status " + r.statusCode());
+		assertEquals(401, api.login("new@abc.edu.in", "Passw0rd!").statusCode());
+	}
+
+	@Test
+	void aSuspendedInstitutionCannotBeUsedEvenWithAnOpenSession() throws Exception {
+		setup();
+		Caller vc = api.signIn("vc@xyz.ac.in", "Admin@1234");
+		var status = TestApi.HTTP.send(java.net.http.HttpRequest.newBuilder(URI.create(api.url("/api/platform/tenants/xyz/status"))).header("X-Admin-Key", TestApi.OPERATOR)
+			.header("Content-Type", "application/json").POST(java.net.http.HttpRequest.BodyPublishers.ofString("{\"status\":\"suspended\",\"reason\":\"test\"}")).build(), HttpResponse.BodyHandlers.ofString());
+		assertTrue(status.statusCode() < 300, status.body());
+		try {
+			int open = api.call("GET", "/api/data", vc, null).statusCode();
+			assertTrue(open == 401 || open == 403, "an open session is refused once the institution is suspended: " + open);
+			var refused = api.login("vc@xyz.ac.in", "Admin@1234");
+			assertEquals(403, refused.statusCode());
+			assertTrue(refused.body().contains("suspended"), refused.body());
+			assertEquals(401, api.login("vc@xyz.ac.in", "wrong-password1").statusCode()); // nothing revealed with a wrong password
+		} finally {
+			TestApi.HTTP.send(java.net.http.HttpRequest.newBuilder(URI.create(api.url("/api/platform/tenants/xyz/status"))).header("X-Admin-Key", TestApi.OPERATOR)
+				.header("Content-Type", "application/json").POST(java.net.http.HttpRequest.BodyPublishers.ofString("{\"status\":\"sandbox\",\"reason\":\"test over\"}")).build(), HttpResponse.BodyHandlers.ofString());
+		}
+		assertEquals(200, api.login("vc@xyz.ac.in", "Admin@1234").statusCode());
+	}
 }
