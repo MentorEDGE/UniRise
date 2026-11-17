@@ -7,7 +7,7 @@ import { adminApi, deleteRecord, isEditable, reloadData, saveRecord, useStore } 
 import { Decide, GrantOutcome } from '../admin/Admin';
 import { Field, NumberInput } from '../../components/ui';
 import type { AnyRecord, EntityKind, Grant, SeedMoney } from '../../lib/types';
-import { isAwaitingOffice } from '../../lib/types';
+import { customFieldsOf, customText, isAwaitingOffice } from '../../lib/types';
 
 const lastRemark = (r: AnyRecord) => [...r.history].reverse().find((h) => h.remark && (h.action === 'Returned for correction' || h.action === 'Sent for rework' || h.action === 'Rejected'))?.remark;
 
@@ -53,6 +53,7 @@ export function RecordDetail({ kind, id, onClose }: { kind: EntityKind; id: stri
       <dl className="kv">
         <dt>Entered by</dt><dd>{owner ? `${owner.title} ${owner.name} (${owner.id}), ${owner.department}` : r.facultyId}</dd>
         {cfg.details(r).map(([k, v]) => <div key={k} style={{ display: 'contents' }}><dt>{k}</dt><dd>{v}</dd></div>)}
+        {customFieldsOf(db.settings, kind).filter((f) => customText(f, r.custom?.[f.id])).map((f) => <div key={`c-${f.id}`} style={{ display: 'contents' }}><dt>{f.label}</dt><dd>{customText(f, r.custom?.[f.id])}</dd></div>)}
       </dl>
 
       {showWorkflow && <Conversation history={r.history} />}

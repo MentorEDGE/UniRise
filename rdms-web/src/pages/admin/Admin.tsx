@@ -7,7 +7,7 @@ import { fmtDate } from '../../lib/analytics';
 import { ENTITIES, listColumns } from '../../lib/entities';
 import { adminApi, reloadData, useStore } from '../../lib/store';
 import type { AnyRecord, Biodata, DB, EntityKind, Faculty, Grant, HistoryItem, ProfileChange, SeedMoney, Status } from '../../lib/types';
-import { DECISION_ACTIONS, ENTITY_LABEL, GRANT_OUTCOMES, STATUS_LABEL, isAwaitingOffice, statusLabel } from '../../lib/types';
+import { DECISION_ACTIONS, ENTITY_LABEL, GRANT_OUTCOMES, STATUS_LABEL, customFieldsOf, customText, isAwaitingOffice, statusLabel } from '../../lib/types';
 import { Conversation, ProgressTracker } from '../../components/workflow';
 import { hasSchools, inUnit, unitFieldLabel, unitOptions } from '../../lib/org';
 
@@ -178,6 +178,7 @@ function ReviewEntry({ inst, db, kind, r, onClose, onDone }: { inst: { id: strin
         <dt>Institution</dt><dd>{inst.name}</dd>
         <dt>Entered by</dt><dd>{owner ? `${owner.title} ${owner.name} (${owner.id}), ${owner.designation}, ${owner.department}` : r.facultyId}</dd>
         {cfg.details(r).map(([key, v]) => <div key={key} style={{ display: 'contents' }}><dt>{key}</dt><dd>{v}</dd></div>)}
+        {customFieldsOf(db.settings, kind).map((f) => <div key={`c-${f.id}`} style={{ display: 'contents' }}><dt>{f.label}</dt><dd>{customText(f, r.custom?.[f.id]) || <span className="muted">—</span>}</dd></div>)}
       </dl>
       <Conversation history={live.history} />
       {isAwaitingOffice(r.status) && (

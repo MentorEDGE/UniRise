@@ -179,6 +179,10 @@ export const SDGS: { n: number; title: string; color: string }[] = [
 /** A file stored in the private uploads bucket (A1b): which form field it belongs to, where it is, its name and size. */
 export interface FileRef { field: string; key: string; name: string; size: number }
 
+/** A field the institution adds to a record type (G29). Values live in the record's custom map, by id. */
+export interface CustomField { id: string; label: string; type: 'text' | 'number' | 'date' | 'yesno' | 'choice'; required: boolean; options?: string[] }
+export type CustomValue = string | number | boolean;
+
 export interface Base {
   id: string;
   facultyId: string; // owner (the faculty member who entered it)
@@ -188,6 +192,8 @@ export interface Base {
   history: HistoryItem[];
   /** Uploaded files (PDF, certificates, documents). Empty where uploads are off: then only the file names are kept. */
   attachments?: FileRef[];
+  /** Values of the institution's own fields (G29), by field id. */
+  custom?: Record<string, CustomValue>;
 }
 
 export type AuthorKind = 'Faculty' | 'Student' | 'External' | 'Ex-Faculty' | 'Ex-Student';
@@ -414,6 +420,8 @@ export interface Settings {
   schools?: School[];
   /** Record types the institution uses (G28); a type set to false is hidden and the API refuses new entries. Missing means on. */
   features?: Partial<Record<EntityKind, boolean>>;
+  /** The institution's own fields per record type (G29). */
+  customFields?: Partial<Record<EntityKind, CustomField[]>>;
   academicYearStartMonth: number; // 1-12; 6 = June
   seedMoneyWindowOpen: boolean;
   targets: Targets;
@@ -466,3 +474,9 @@ export type AnyRecord = Publication | Grant | SeedMoney | Fdp | Conference | Hon
 
 /** Is this record type used at the institution (G28)? */
 export const kindOn = (s: Settings, kind: EntityKind) => s.features?.[kind] !== false;
+
+/** The institution's own fields for a record type (G29). */
+export const customFieldsOf = (s: Settings, kind: EntityKind): CustomField[] => s.customFields?.[kind] ?? [];
+/** A custom value as text, for record details and exports. */
+export const customText = (f: CustomField, v: CustomValue | undefined): string =>
+  v === undefined || v === '' ? '' : f.type === 'yesno' ? (v ? 'Yes' : 'No') : String(v);

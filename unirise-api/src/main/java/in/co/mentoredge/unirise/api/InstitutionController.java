@@ -156,7 +156,7 @@ public class InstitutionController {
 			for (String k : Records.KINDS) if (f.get(k) instanceof Boolean on) features.put(k, on);
 			next.put("features", features);
 		}
-		if (s.get("customFields") instanceof Map<?, ?> cf) next.put("customFields", cf);   // G29
+		if (s.get("customFields") instanceof Map<?, ?> cf) next.put("customFields", customFields(cf));   // G29
 		if (s.get("lists") instanceof Map<?, ?> l) next.put("lists", l);                   // G30
 		settings.put(next);
 		log.record(a, "Institution settings saved", name, null);
@@ -196,6 +196,50 @@ public class InstitutionController {
 		}
 		List<String> unplaced = departments.stream().filter((d) -> !placed.containsKey(d)).map((d) -> "“" + d + "”").toList();
 		if (!unplaced.isEmpty()) throw invalid("Choose a school for " + String.join(", ", unplaced) + ".");
+		return out;
+	}
+
+	static final List<String> FIELD_TYPES = List.of("text", "number", "date", "yesno", "choice");
+
+	/**
+	 * The institution's own fields per record kind (G29): at most 10 per kind, each with a label (80 characters), a type
+	 * (text, number, date, yes/no or a choice from 1 to 20 options) and whether it is required to submit. Ids are kept
+	 * once given, so values already entered stay attached; a new field gets an id from its label.
+	 */
+	static Map<String, Object> customFields(Map<?, ?> in) {
+		Map<String, Object> out = new LinkedHashMap<>();
+		for (String kind : Records.KINDS) {
+			List<Object> defs = Json.arr(in.get(kind));
+			if (defs.size() > 10) throw invalid("At most 10 custom fields per record type.");
+			List<Map<String, Object>> clean = new ArrayList<>();
+			List<String> ids = new ArrayList<>();
+			for (Object d : defs) {
+				Map<String, Object> f = Json.obj(d);
+				String label = Json.str(f.get("label"), 80).trim(), type = Json.str(f.get("type"), 10);
+				if (label.isEmpty()) throw invalid("Every custom field needs a label.");
+				if (!FIELD_TYPES.contains(type)) throw invalid("Choose the type of “" + label + "”.");
+				String id = Json.str(f.get("id"), 40);
+				if (!id.matches("^[a-z][a-z0-9_]{0,39}$")) id = label.toLowerCase().replaceAll("[^a-z0-9]+", "_").replaceAll("^_+|_+$", "");
+				if (id.isEmpty() || !Character.isLetter(id.charAt(0))) id = "field_" + id;
+				if (id.length() > 40) id = id.substring(0, 40);
+				String base = id;
+				for (int n = 2; ids.contains(id); n++) id = base.substring(0, Math.min(base.length(), 36)) + "_" + n;
+				ids.add(id);
+				List<String> options = new ArrayList<>();
+				if (type.equals("choice")) {
+					for (Object o : Json.arr(f.get("options"))) { String x = Json.str(o, 80).trim(); if (!x.isEmpty() && !options.contains(x)) options.add(x); }
+					if (options.isEmpty() || options.size() > 20) throw invalid("“" + label + "” needs between 1 and 20 options.");
+				}
+				Map<String, Object> field = new LinkedHashMap<>();
+				field.put("id", id);
+				field.put("label", label);
+				field.put("type", type);
+				field.put("required", Json.bool(f.get("required")));
+				if (type.equals("choice")) field.put("options", options);
+				clean.add(field);
+			}
+			if (!clean.isEmpty()) out.put(kind, clean);
+		}
 		return out;
 	}
 

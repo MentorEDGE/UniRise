@@ -75,7 +75,7 @@ function roleMenus(role: Role, pending: number): MenuDef[] {
       { label: `Approval${pending ? ` (${pending})` : ''}`, icon: 'approvals', to: '/approvals' },
       { label: 'Faculty', icon: 'faculty', items: [{ label: 'Find Profiles', to: '/faculty' }, { label: 'Faculty Performance', to: '/analytics/faculty' }, { label: 'Research Networks', to: '/networks' }] },
       ...RECORD_MENUS,
-      { label: 'Institution', icon: 'institution', items: [{ label: 'Institution & Departments', to: '/settings' }, { label: 'Targets & Scoring', to: '/settings/targets' }, { label: 'Notices', to: '/settings/notices' }] },
+      { label: 'Institution', icon: 'institution', items: [{ label: 'Institution & Departments', to: '/settings' }, { label: 'Custom Fields', to: '/settings/fields' }, { label: 'Targets & Scoring', to: '/settings/targets' }, { label: 'Notices', to: '/settings/notices' }] },
       { label: 'User Management', icon: 'users', items: [{ label: 'Users', to: '/office/users' }, { label: 'Audit Log', to: '/office/audit' }] },
       REPORTS,
       SETTINGS,

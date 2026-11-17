@@ -119,7 +119,7 @@ export function PublicationEntry() {
           <Field label="Upload PDF" hint="Only PDF files (optional for Books), up to 10 MB. Larger files: contact the research office." error={x.pdf}>
             <FileName value={r.pdfName} onChange={(v) => u({ pdfName: v })} file={fileOf(r, 'pdfName')} onFile={(f) => e.attach('pdfName', f)} />
           </Field>
-          <SaveBar onSave={e.save} isNew={e.isNew} resubmit={e.resubmit} />
+          <SaveBar extra={e.customFields} onSave={e.save} isNew={e.isNew} resubmit={e.resubmit} />
         </Panel>
       </>}
     </>
@@ -220,7 +220,7 @@ export function GrantEntry() {
           {step > 0 && <button type="button" className="btn secondary" onClick={() => setStep(step - 1)}>‹ Previous</button>}
           {step < STEPS.length - 1 && <button type="button" className="btn secondary" onClick={() => setStep(step + 1)}>Next ›</button>}
         </div>
-        <SaveBar onSave={e.save} isNew={e.isNew} resubmit={e.resubmit} />
+        <SaveBar extra={e.customFields} onSave={e.save} isNew={e.isNew} resubmit={e.resubmit} />
       </Panel>
     </>
   );
@@ -262,7 +262,7 @@ export function SeedMoneyEntry() {
         </Panel>
         <Panel title="Investigator Details" size="wide">
           <InvestigatorTable value={r.investigators} onChange={(v) => u({ investigators: v })} error={x.investigators} />
-          <SaveBar onSave={e.save} isNew={e.isNew} resubmit={e.resubmit} />
+          <SaveBar extra={e.customFields} onSave={e.save} isNew={e.isNew} resubmit={e.resubmit} />
         </Panel>
       </fieldset>
     </>
@@ -310,7 +310,7 @@ export function FdpEntry() {
           <Field label="Certificate" error={x.certificate}><FileName value={r.certificateName} onChange={(v) => u({ certificateName: v })} accept=".pdf,.jpg,.png" file={fileOf(r, 'certificateName')} onFile={(f) => e.attach('certificateName', f)} /></Field>
           <Field label="Key learning / how it was applied" className="span4"><TextArea value={r.outcome} onChange={(v) => u({ outcome: v })} /></Field>
         </div>
-        <SaveBar onSave={e.save} isNew={e.isNew} resubmit={e.resubmit} />
+        <SaveBar extra={e.customFields} onSave={e.save} isNew={e.isNew} resubmit={e.resubmit} />
       </Panel>
     </>
   );
@@ -361,7 +361,7 @@ export function ConferenceEntry() {
           <Field label="Award (if any)"><Input value={r.award} onChange={(v) => u({ award: v })} placeholder="e.g. Best Paper Award" /></Field>
           <Field label="Certificate" error={x.certificate} className="span2"><FileName value={r.certificateName} onChange={(v) => u({ certificateName: v })} accept=".pdf,.jpg,.png" file={fileOf(r, 'certificateName')} onFile={(f) => e.attach('certificateName', f)} /></Field>
         </div>
-        <SaveBar onSave={e.save} isNew={e.isNew} resubmit={e.resubmit} />
+        <SaveBar extra={e.customFields} onSave={e.save} isNew={e.isNew} resubmit={e.resubmit} />
       </Panel>
     </>
   );
@@ -399,7 +399,7 @@ export function AwardEntry() {
           <Field label="Citation / What it recognises" className="span3"><TextArea value={r.citation} onChange={(v) => u({ citation: v })} /></Field>
           <Field label="Certificate / Letter" error={x.certificate}><FileName value={r.certificateName} onChange={(v) => u({ certificateName: v })} accept=".pdf,.jpg,.png" file={fileOf(r, 'certificateName')} onFile={(f) => e.attach('certificateName', f)} /></Field>
         </div>
-        <SaveBar onSave={e.save} isNew={e.isNew} resubmit={e.resubmit} />
+        <SaveBar extra={e.customFields} onSave={e.save} isNew={e.isNew} resubmit={e.resubmit} />
       </Panel>
     </>
   );
@@ -516,7 +516,7 @@ export function IpEntry() {
           {x.declared && <span className="err" role="alert">{x.declared}</span>}
           <p className="ipf-note">Submitting this form records your name and the date in place of a signature.</p>
         </div>
-        <SaveBar onSave={e.save} isNew={e.isNew} resubmit={e.resubmit} />
+        <SaveBar extra={e.customFields} onSave={e.save} isNew={e.isNew} resubmit={e.resubmit} />
       </Panel>
     </>
   );

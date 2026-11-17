@@ -78,7 +78,7 @@ public class Records {
 	public Optional<Map<String, Object>> one(String kind, String id) { return load(" WHERE kind = :k AND id = :id", Map.of("k", kind, "id", id)).stream().findFirst(); }
 
 	private List<Map<String, Object>> load(String where, Map<String, Object> params) {
-		var q = db.sql("SELECT id, owner, status, data::text AS data, created_at, updated_at FROM record" + where + " ORDER BY created_at DESC, id DESC");
+		var q = db.sql("SELECT id, owner, status, data::text AS data, custom::text AS custom, created_at, updated_at FROM record" + where + " ORDER BY created_at DESC, id DESC");
 		for (var e : params.entrySet()) q = q.param(e.getKey(), e.getValue());
 		List<Map<String, Object>> rows = q.query((r, n) -> {
 			Map<String, Object> m = Json.map(r.getString("data"));
@@ -87,6 +87,8 @@ public class Records {
 			m.put("status", r.getString("status"));
 			m.put("createdAt", r.getTimestamp("created_at").toInstant().toString());
 			m.put("updatedAt", r.getTimestamp("updated_at").toInstant().toString());
+			Map<String, Object> custom = Json.map(r.getString("custom"));
+			if (!custom.isEmpty()) m.put("custom", custom); // the institution's own fields (G29)
 			return m;
 		}).list();
 		if (rows.isEmpty()) return rows;
@@ -169,20 +171,43 @@ public class Records {
 		rec.put("id", newId);
 		rec.put("facultyId", me);
 		validate(kind, rec, submit);
+		Map<String, Object> custom = custom(kind, input.get("custom"), submit);
 
 		String at = now();
 		if (existing == null) {
-			db.sql("INSERT INTO record(id, kind, owner, status, data, created_at, updated_at) VALUES (:id, :k, :o, :s, CAST(:d AS jsonb), CAST(:at AS timestamptz), CAST(:at AS timestamptz))")
-				.param("id", newId).param("k", kind).param("o", me).param("s", status).param("d", Json.write(data)).param("at", at).update();
+			db.sql("INSERT INTO record(id, kind, owner, status, data, custom, created_at, updated_at) VALUES (:id, :k, :o, :s, CAST(:d AS jsonb), CAST(:c AS jsonb), CAST(:at AS timestamptz), CAST(:at AS timestamptz))")
+				.param("id", newId).param("k", kind).param("o", me).param("s", status).param("d", Json.write(data)).param("c", Json.write(custom)).param("at", at).update();
 		} else {
-			db.sql("UPDATE record SET status = :s, data = CAST(:d AS jsonb), updated_at = CAST(:at AS timestamptz), version = version + 1 WHERE id = :id")
-				.param("s", status).param("d", Json.write(data)).param("at", at).param("id", newId).update();
+			db.sql("UPDATE record SET status = :s, data = CAST(:d AS jsonb), custom = CAST(:c AS jsonb), updated_at = CAST(:at AS timestamptz), version = version + 1 WHERE id = :id")
+				.param("s", status).param("d", Json.write(data)).param("c", Json.write(custom)).param("at", at).param("id", newId).update();
 		}
 		setCredits(kind, newId, rec);
 		event(newId, at, a.name(), existing == null ? "Created" : "Edited", null);
 		String note = Json.str(input.get("note"), 1000).trim(); // the faculty member's reply to the Office, sent with a (re)submission
 		if (submit) event(newId, at, a.name(), existing != null && "Rework".equals(existing.get("status")) ? "Resubmitted" : "Submitted", note);
 		return newId;
+	}
+
+	/**
+	 * The institution's own fields on this kind of record (G29), checked against its definitions in the settings:
+	 * unknown fields are dropped, values take the field's type, and required fields must be filled in to submit.
+	 */
+	Map<String, Object> custom(String kind, Object input, boolean submit) {
+		Map<String, Object> in = Json.obj(input), out = new LinkedHashMap<>();
+		for (Object d : Json.arr(Json.obj(settings.get().get("customFields")).get(kind))) {
+			Map<String, Object> def = Json.obj(d);
+			String id = Json.str(def.get("id"), 40), label = Json.str(def.get("label"), 80), type = Json.str(def.get("type"), 10);
+			Object v = in.get(id), value = switch (type) {
+				case "number" -> v instanceof Number || (v instanceof String str && str.matches("-?\\d+(\\.\\d+)?")) ? Json.num(v instanceof String str ? Double.parseDouble(str) : v) : null;
+				case "yesno" -> v instanceof Boolean b ? b : null;
+				case "date" -> Json.str(v, 10).matches("\\d{4}-\\d{2}-\\d{2}") ? Json.str(v, 10) : null;
+				case "choice" -> Json.arr(def.get("options")).contains(v) ? v : null;
+				default -> Json.str(v, 500).trim().isEmpty() ? null : Json.str(v, 500).trim();
+			};
+			if (value != null) out.put(id, value);
+			else if (submit && Json.bool(def.get("required"))) throw invalid(label + " is required.");
+		}
+		return out;
 	}
 
 	void setCredits(String kind, String id, Map<String, Object> rec) {

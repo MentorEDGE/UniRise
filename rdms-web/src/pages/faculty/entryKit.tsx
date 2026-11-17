@@ -1,11 +1,12 @@
 import { useMemo, useState } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
-import { Alert, NumberInput, Select, TextArea, useToast } from '../../components/ui';
+import { Alert, Field, Input, NumberInput, Select, TextArea, useToast } from '../../components/ui';
+import type { ReactNode } from 'react';
 import { ENTITIES } from '../../lib/entities';
 import { emptyBase, getDB, isEditable, saveRecord, useStore } from '../../lib/store';
 import type { Uploaded } from '../../lib/store';
-import type { AnyRecord, Author, AuthorKind, EntityKind, Investigator } from '../../lib/types';
-import { AUTHOR_KINDS } from '../../lib/types';
+import type { AnyRecord, Author, AuthorKind, CustomField, CustomValue, EntityKind, Investigator } from '../../lib/types';
+import { AUTHOR_KINDS, customFieldsOf } from '../../lib/types';
 
 export type Errors = Record<string, string>;
 
@@ -45,7 +46,7 @@ export function useEntry<T extends AnyRecord>(kind: EntityKind, blank: (facultyI
   const [busy, setBusy] = useState(false);
   const save = async (submit: boolean) => {
     if (busy) return;
-    const errs = validate(rec, submit);
+    const errs = { ...validate(rec, submit), ...customErrors(fields, rec.custom, submit) };
     setErrors(errs);
     if (Object.keys(errs).length) { setFailure('Please correct the highlighted fields.'); window.scrollTo({ top: 0, behavior: 'smooth' }); return; }
     setBusy(true);
@@ -66,17 +67,33 @@ export function useEntry<T extends AnyRecord>(kind: EntityKind, blank: (facultyI
       )}
     </>
   );
-  return { rec, update, setRec, attach, errors, save, blocked, banner, isNew: !existing, resubmit: existing?.status === 'Rework' };
+  const fields = customFieldsOf(db.settings, kind);
+  const customFields = fields.length > 0 && (
+    <fieldset className="custom-fields">
+      <legend>More details for {db.settings.institutionName}</legend>
+      <div className="grid g2">
+        {fields.map((f) => (
+          <Field key={f.id} label={f.label} required={f.required} error={errors[`custom.${f.id}`]}>
+            <CustomInput field={f} value={rec.custom?.[f.id]} onChange={(v) => setRec((r) => { const c = { ...(r.custom ?? {}) }; if (v === undefined) delete c[f.id]; else c[f.id] = v; return { ...r, custom: c }; })} />
+          </Field>
+        ))}
+      </div>
+    </fieldset>
+  );
+  return { rec, update, setRec, attach, customFields, errors, save, blocked, banner, isNew: !existing, resubmit: existing?.status === 'Rework' };
 }
 
-export function SaveBar({ onSave, isNew, resubmit }: { onSave: (submit: boolean) => void; isNew: boolean; resubmit?: boolean }) {
+export function SaveBar({ onSave, isNew, resubmit, extra }: { onSave: (submit: boolean) => void; isNew: boolean; resubmit?: boolean; /** the institution's own fields (G29) */ extra?: ReactNode }) {
   const nav = useNavigate();
   return (
+    <>
+    {extra}
     <div className="btn-row">
       <button className="btn secondary" type="button" onClick={() => nav(-1)}>Cancel</button>
       <button className="btn" type="button" onClick={() => onSave(false)}>{isNew ? 'Save Draft' : 'Save'}</button>
       <button className="btn ok" type="button" onClick={() => onSave(true)}>{resubmit ? 'Resubmit for Approval' : 'Submit for Approval'}</button>
     </div>
+    </>
   );
 }
 
@@ -188,4 +205,20 @@ export const BlockedEntry = ({ msg }: { msg: string }) => <div className="panel"
 const COUNTRIES = ['Australia', 'Austria', 'Bangladesh', 'Belgium', 'Brazil', 'Canada', 'China', 'Denmark', 'Egypt', 'Finland', 'France', 'Germany', 'Hong Kong', 'India', 'Indonesia', 'Iran', 'Ireland', 'Israel', 'Italy', 'Japan', 'Kenya', 'Malaysia', 'Mexico', 'Nepal', 'Netherlands', 'New Zealand', 'Nigeria', 'Norway', 'Oman', 'Pakistan', 'Poland', 'Portugal', 'Qatar', 'Russia', 'Saudi Arabia', 'Singapore', 'South Africa', 'South Korea', 'Spain', 'Sri Lanka', 'Sweden', 'Switzerland', 'Taiwan', 'Thailand', 'Turkey', 'United Arab Emirates', 'United Kingdom', 'United States', 'Vietnam'];
 function CountryList() {
   return <datalist id="country-names">{COUNTRIES.map((c) => <option key={c} value={c} />)}</datalist>;
+}
+
+/** Required custom fields must be filled in to submit (the API checks the same). */
+function customErrors(fields: CustomField[], values: Record<string, CustomValue> | undefined, submit: boolean): Errors {
+  const errs: Errors = {};
+  if (submit) for (const f of fields) { const v = values?.[f.id]; if (f.required && (v === undefined || v === '')) errs[`custom.${f.id}`] = `${f.label} is required.`; }
+  return errs;
+}
+
+/** One input for an institution-defined field, by its type. */
+function CustomInput({ field, value, onChange }: { field: CustomField; value: CustomValue | undefined; onChange: (v: CustomValue | undefined) => void }) {
+  if (field.type === 'number') return <input type="number" value={value === undefined ? '' : String(value)} onChange={(e) => onChange(e.target.value === '' ? undefined : Number(e.target.value))} />;
+  if (field.type === 'date') return <input type="date" value={typeof value === 'string' ? value : ''} onChange={(e) => onChange(e.target.value || undefined)} />;
+  if (field.type === 'yesno') return <Select value={value === undefined ? '' : value ? 'yes' : 'no'} onChange={(v) => onChange(v === '' ? undefined : v === 'yes')} options={[{ value: 'yes', label: 'Yes' }, { value: 'no', label: 'No' }]} placeholder="Choose…" />;
+  if (field.type === 'choice') return <Select value={typeof value === 'string' ? value : ''} onChange={(v) => onChange(v || undefined)} options={(field.options ?? []).map((o) => o.trim()).filter(Boolean)} placeholder="Choose…" />;
+  return <Input value={typeof value === 'string' ? value : ''} onChange={(v) => onChange(v.trim() ? v : undefined)} />;
 }

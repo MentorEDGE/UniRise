@@ -2660,3 +2660,9 @@ fieldset { min-width: 0; }                       /* a fieldset otherwise grows t
 .check-row { display: flex; gap: 10px; align-items: center; padding: 10px 12px; border: 1px solid var(--border); border-radius: 10px; cursor: pointer; }
 .check-row input { width: 18px; height: 18px; accent-color: var(--primary); flex: none; }
 .check-row:has(input:not(:checked)) { opacity: .7; }
+
+/* Custom fields (G29): the Office's definitions and the extra fields on entry forms */
+.custom-def { border: 1px solid var(--border); border-radius: 12px; padding: 12px 14px 4px; margin: 10px 0; }
+.check-inline { display: inline-flex; gap: 6px; align-items: center; margin-right: auto; }
+.custom-fields { border: 1px solid var(--border); border-radius: 12px; padding: 12px 14px 4px; margin: 14px 0 6px; }
+.custom-fields legend { padding: 0 6px; font-weight: 600; }

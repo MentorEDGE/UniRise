@@ -415,4 +415,36 @@ class InstitutionApiTest {
 		}
 		assertEquals(200, api.login("vc@xyz.ac.in", "Admin@1234").statusCode());
 	}
+
+	@Test
+	@SuppressWarnings("unchecked")
+	void theOfficeAddsItsOwnFieldsAndTheyAreCheckedOnEveryEntry() throws Exception {
+		setup();
+		Caller office = office(), fac = faculty("c");
+		Map<String, Object> settings = (Map<String, Object>) data(office).get("settings");
+		java.util.function.Function<Object, Integer> put = (cf) -> {
+			try { var copy = new java.util.LinkedHashMap<>(settings); copy.put("customFields", cf); return api.call("PUT", "/api/settings", office, JSON.writeValueAsString(copy)).statusCode(); }
+			catch (Exception e) { throw new RuntimeException(e); }
+		};
+		assertEquals(400, put.apply(Map.of("fdps", List.of(Map.of("label", "Odd", "type", "colour")))));
+		assertEquals(400, put.apply(Map.of("fdps", List.of(Map.of("label", "Pick one", "type", "choice", "options", List.of())))));
+		assertEquals(400, put.apply(Map.of("fdps", java.util.Collections.nCopies(11, Map.of("label", "X", "type", "text")))));
+		assertEquals(200, put.apply(Map.of("fdps", List.of(
+			Map.of("label", "Funding source code", "type", "text", "required", true),
+			Map.of("label", "Hours certified", "type", "number"),
+			Map.of("label", "Verified", "type", "choice", "options", List.of("Yes", "No"))))));
+		var defs = (List<Map<String, Object>>) ((Map<String, Object>) ((Map<String, Object>) data(fac).get("settings")).get("customFields")).get("fdps");
+		assertEquals(List.of("funding_source_code", "hours_certified", "verified"), defs.stream().map(d -> d.get("id")).toList());
+		try {
+			var missing = api.call("POST", "/api/records/fdps", fac, fdp("Custom fields"));
+			assertEquals(400, missing.statusCode());
+			assertTrue(missing.body().contains("Funding source code is required."), missing.body());
+			String with = fdp("Custom fields").replace("\"certificateName\":\"c.pdf\"}", "\"certificateName\":\"c.pdf\",\"custom\":{\"funding_source_code\":\" DST-42 \",\"hours_certified\":\"12.5\",\"verified\":\"Maybe\",\"made_up\":\"x\"}}");
+			String id = field(api.call("POST", "/api/records/fdps", fac, with).body(), "result");
+			var rec = list(data(office), "fdps").stream().filter(r -> id.equals(r.get("id"))).findFirst().orElseThrow();
+			assertEquals(Map.of("funding_source_code", "DST-42", "hours_certified", 12.5), rec.get("custom"), "trimmed, typed; a wrong choice and an unknown field are dropped");
+		} finally {
+			put.apply(Map.of());
+		}
+	}
 }

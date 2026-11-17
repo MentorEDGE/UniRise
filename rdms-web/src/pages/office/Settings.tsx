@@ -1,8 +1,8 @@
 import { useState } from 'react';
-import { Alert, Field, Input, NumberInput, PageTitle, Panel, Select, TextArea, useToast } from '../../components/ui';
+import { Alert, Field, Input, NumberInput, PageTitle, Panel, Select, Tabs, TextArea, useToast } from '../../components/ui';
 import { schoolOf } from '../../lib/org';
 import { ENTITY_LABEL, kindOn } from '../../lib/types';
-import type { AnyRecord, EntityKind } from '../../lib/types';
+import type { AnyRecord, CustomField, EntityKind } from '../../lib/types';
 
 const RECORD_KINDS: EntityKind[] = ['publications', 'grants', 'seedMoney', 'fdps', 'conferences', 'awards', 'ipr'];
 import { DEFAULT_WEIGHTS } from '../../lib/seed';
@@ -155,3 +155,56 @@ export function NoticeSettings() {
   );
 }
 
+
+const FIELD_TYPES: { value: CustomField['type']; label: string }[] = [
+  { value: 'text', label: 'Text' }, { value: 'number', label: 'Number' }, { value: 'date', label: 'Date' },
+  { value: 'yesno', label: 'Yes / No' }, { value: 'choice', label: 'Choice from a list' },
+];
+
+/**
+ * Institution → Custom Fields (G29): up to 10 extra fields per record type. They appear on the entry form above the
+ * Save buttons and in the record's details; the API checks them (required to submit, type, options).
+ */
+export function CustomFieldSettings() {
+  const { s, setS, save, error } = useSettingsDraft();
+  const [kind, setKind] = useState<EntityKind>('publications');
+  const fields = s.customFields?.[kind] ?? [];
+  const setFields = (next: CustomField[]) => setS({ ...s, customFields: { ...(s.customFields ?? {}), [kind]: next } });
+  const change = (i: number, patch: Partial<CustomField>) => setFields(fields.map((f, j) => (j === i ? { ...f, ...patch } : f)));
+  const move = (i: number, d: number) => { const next = [...fields]; const [f] = next.splice(i, 1); next.splice(i + d, 0, f); setFields(next); };
+  return (
+    <>
+      <PageTitle sub="Extra fields your institution needs on an entry, beyond the standard ones. Faculty fill them in on the form; the Office of Research sees them when reviewing.">Custom Fields</PageTitle>
+      <Panel size="wide">
+        {error && <Alert kind="error">{error}</Alert>}
+        <Tabs value={kind} onChange={setKind} tabs={RECORD_KINDS.map((k) => ({ id: k, label: `${ENTITY_LABEL[k]}${s.customFields?.[k]?.length ? ` (${s.customFields[k]!.length})` : ''}` }))} />
+        {fields.length === 0 && <p className="note">No custom fields for {ENTITY_LABEL[kind].toLowerCase()} entries yet.</p>}
+        {fields.map((f, i) => (
+          <fieldset key={f.id || `new-${i}`} className="custom-def">
+            <div className="grid g2">
+              <Field label="Label" required><Input value={f.label} onChange={(v) => change(i, { label: v })} placeholder="e.g. Funding scheme code" /></Field>
+              <Field label="Type"><Select value={f.type} onChange={(v) => change(i, { type: v as CustomField['type'], options: v === 'choice' ? f.options ?? [] : undefined })} options={FIELD_TYPES} /></Field>
+              {f.type === 'choice' && (
+                <Field label="Options" hint="One per line, up to 20" className="span2">
+                  <TextArea value={(f.options ?? []).join('\n')} onChange={(v) => change(i, { options: v.split('\n').slice(0, 21) })} /> {/* kept as typed (blank lines too, so Enter works); the API trims and drops blanks */}
+                </Field>
+              )}
+            </div>
+            <div className="btn-row left">
+              <label className="check-inline"><input type="checkbox" checked={f.required} onChange={(e) => change(i, { required: e.target.checked })} /> Required to submit</label>
+              <button type="button" className="link-btn" disabled={i === 0} onClick={() => move(i, -1)}>Move up</button>
+              <button type="button" className="link-btn" disabled={i === fields.length - 1} onClick={() => move(i, 1)}>Move down</button>
+              <button type="button" className="link-btn" onClick={() => setFields(fields.filter((_, j) => j !== i))}>Remove</button>
+            </div>
+          </fieldset>
+        ))}
+        <div className="btn-row left">
+          <button type="button" className="btn secondary" disabled={fields.length >= 10} onClick={() => setFields([...fields, { id: '', label: '', type: 'text', required: false }])}>+ Add field</button>
+          {fields.length >= 10 && <span className="muted">Up to 10 fields per record type.</span>}
+        </div>
+        <p className="note">Removing a field hides it everywhere; values already entered are kept with the entries. Renaming keeps the values.</p>
+      </Panel>
+      <div className="btn-row"><button className="btn ok" onClick={save}>Save settings</button></div>
+    </>
+  );
+}
