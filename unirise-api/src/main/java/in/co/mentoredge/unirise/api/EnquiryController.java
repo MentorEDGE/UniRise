@@ -12,15 +12,16 @@ import org.springframework.web.bind.annotation.*;
 
 /**
  * Public "Talk to Our Team" enquiries (G24), as in the prototype server: required fields, consent, a hidden honeypot
- * field and 5 enquiries an hour per address. Stored in the control plane. shortcut: the email to the team is sent once
- * SES is wired (phase 7); until then delivered stays false.
+ * field and 5 enquiries an hour per address. Stored in the control plane first, then emailed to the UniRise team
+ * (EnquiryMail, A1a) where email is configured.
  */
 @RestController
 public class EnquiryController {
 	private static final String EMAIL = "^[^@\\s]+@[^@\\s]+\\.[^@\\s]+$";
 	private final JdbcClient control;
+	private final EnquiryMail mail;
 
-	public EnquiryController(@Qualifier("controlJdbc") JdbcClient control) { this.control = control; }
+	public EnquiryController(@Qualifier("controlJdbc") JdbcClient control, EnquiryMail mail) { this.control = control; this.mail = mail; }
 
 	@PostMapping("/api/enquiries")
 	ResponseEntity<?> enquire(@RequestBody(required = false) Map<String, Object> body, HttpServletRequest req) {
@@ -49,7 +50,9 @@ public class EnquiryController {
 			INSERT INTO sign_in_failure(key, failures, window_end) VALUES (:k, 1, now() + interval '60 minutes')
 			ON CONFLICT (key) DO UPDATE SET failures = CASE WHEN sign_in_failure.window_end > now() THEN sign_in_failure.failures + 1 ELSE 1 END,
 			window_end = CASE WHEN sign_in_failure.window_end > now() THEN sign_in_failure.window_end ELSE now() + interval '60 minutes' END""").param("k", key).update();
-		control.sql("INSERT INTO enquiry(data, delivery_note) VALUES (CAST(:d AS jsonb), 'email not configured (SES, phase 7)')").param("d", Json.write(e)).update();
+		long id = control.sql("INSERT INTO enquiry(data, delivery_note) VALUES (CAST(:d AS jsonb), :n) RETURNING id")
+			.param("d", Json.write(e)).param("n", mail.on() ? "sending" : "email not configured here; stored only").query(Long.class).single();
+		mail.send(id); // stored already: a failed email is retried later and never fails the request
 		return ResponseEntity.ok(Map.of("ok", true));
 	}
 }

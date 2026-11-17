@@ -56,6 +56,15 @@
 			<artifactId>url-connection-client</artifactId>
 		</dependency>
 		<dependency>
+			<!-- SES v2: "Talk to our team" enquiries emailed to the UniRise team (A1a). -->
+			<groupId>software.amazon.awssdk</groupId>
+			<artifactId>sesv2</artifactId>
+			<exclusions>
+				<exclusion><groupId>software.amazon.awssdk</groupId><artifactId>netty-nio-client</artifactId></exclusion>
+				<exclusion><groupId>software.amazon.awssdk</groupId><artifactId>apache-client</artifactId></exclusion>
+			</exclusions>
+		</dependency>
+		<dependency>
 			<!-- S3: presigned upload and download links for record files (A1b); the files never pass through the API. -->
 			<groupId>software.amazon.awssdk</groupId>
 			<artifactId>s3</artifactId>

@@ -86,3 +86,9 @@ variable "domain_name" {
     error_message = "domain_name must be a lower-case host name such as dev-unirise.mentoredge.co.in."
   }
 }
+
+variable "enquiries_to" {
+  description = "Where \"Talk to our team\" enquiries are emailed (A1a). While SES is in the sandbox AWS sends this address a verification link once. Empty: enquiries are stored only."
+  type        = string
+  default     = ""
+}

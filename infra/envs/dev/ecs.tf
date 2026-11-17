@@ -74,8 +74,9 @@ data "aws_iam_policy_document" "task" {
   dynamic "statement" {
     for_each = local.ses_on ? [1] : []
     content {
-      actions   = ["ses:SendEmail", "ses:SendRawEmail"]
-      resources = concat(local.email_on ? [aws_sesv2_email_identity.sender[0].arn] : [], local.domain_on ? [aws_sesv2_email_identity.domain[0].arn] : [], [aws_sesv2_configuration_set.main[0].arn])
+      actions = ["ses:SendEmail", "ses:SendRawEmail"]
+      # In the SES sandbox the recipient's identity must be allowed too (the team's verified address).
+      resources = concat(local.email_on ? [aws_sesv2_email_identity.sender[0].arn] : [], local.domain_on ? [aws_sesv2_email_identity.domain[0].arn] : [], [aws_sesv2_configuration_set.main[0].arn], aws_sesv2_email_identity.enquiries_to[*].arn)
     }
   }
 }
@@ -223,6 +224,10 @@ resource "aws_ecs_task_definition" "api" {
       SECRETS_STORE         = "aws" # institution database passwords in Secrets Manager, not in the control-plane database (A2)
       SECRETS_PREFIX        = local.tenant_secret_prefix
       UPLOADS_BUCKET        = aws_s3_bucket.b["uploads"].bucket # record files (A1b); the task role may read and write it
+      # Email (A1a): enquiries from the website go to the UniRise team, sent from the verified dev domain.
+      MAIL_FROM              = local.domain_on ? "UniRise <no-reply@${var.domain_name}>" : ""
+      MAIL_ENQUIRIES_TO      = var.enquiries_to
+      MAIL_CONFIGURATION_SET = local.ses_on ? aws_sesv2_configuration_set.main[0].configuration_set_name : ""
     } : { name = name, value = value }]
     secrets = [
       { name = "RMS_DB_PASSWORD", valueFrom = data.aws_secretsmanager_secret.app_db.arn },
