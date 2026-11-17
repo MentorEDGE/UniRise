@@ -42,13 +42,13 @@ public class Records {
 
 	/** Field name to type, per kind (SPECS in domain.ts). Workflow fields are never taken from input. */
 	static final Map<String, Map<String, String>> SPECS = Map.of(
-		"publications", spec("entryType:s category:s title:s doi:s month:s year:n issn:s venue:s indexing:s quartile:s impactFactor:n erfRelated:b projectReference:s openAccess:b authors:authors pdfName:s"),
-		"grants", spec("unit:s grantType:s utn:s title:s description:s callTitle:s callSource:s source:s agency:s agencyComment:s appliedDate:s appliedAmount:n durationMonths:n erfRelated:b matchingGrant:b contactNumber:s investigators:investigators enclosures:strings otherRemarks:s"),
-		"seedMoney", spec("appliedDate:s category:s title:s abstract:s requestedAmount:n investigators:investigators"),
-		"fdps", spec("role:s programmeType:s title:s organiser:s sponsoredBy:s mode:s level:s fromDate:s toDate:s hours:n outcome:s certificateName:s"),
-		"conferences", spec("participation:s conferenceName:s paperTitle:s organiser:s venue:s country:s level:s mode:s fromDate:s toDate:s proceedingsIndexed:s funding:s registrationFee:n amountClaimed:n award:s certificateName:s"),
-		"awards", spec("category:s title:s awardedBy:s level:s awardDate:s citation:s prizeAmount:n certificateName:s"),
-		"ipr", spec("ipType:s ipTypeOther:s title:s description:s stage:s applicationNumber:s filingDate:s grantDate:s office:s owner:s ownerOther:s funding:s licensed:b licensee:s coOwners:s documentName:s agreementName:s declared:b"));
+		"publications", spec("entryType:s category:s title:s doi:s month:s year:n issn:s venue:s indexing:s quartile:s impactFactor:n erfRelated:b projectReference:s openAccess:b authors:authors pdfName:s attachments:files"),
+		"grants", spec("unit:s grantType:s utn:s title:s description:s callTitle:s callSource:s source:s agency:s agencyComment:s appliedDate:s appliedAmount:n durationMonths:n erfRelated:b matchingGrant:b contactNumber:s investigators:investigators enclosures:strings otherRemarks:s attachments:files"),
+		"seedMoney", spec("appliedDate:s category:s title:s abstract:s requestedAmount:n investigators:investigators attachments:files"),
+		"fdps", spec("role:s programmeType:s title:s organiser:s sponsoredBy:s mode:s level:s fromDate:s toDate:s hours:n outcome:s certificateName:s attachments:files"),
+		"conferences", spec("participation:s conferenceName:s paperTitle:s organiser:s venue:s country:s level:s mode:s fromDate:s toDate:s proceedingsIndexed:s funding:s registrationFee:n amountClaimed:n award:s certificateName:s attachments:files"),
+		"awards", spec("category:s title:s awardedBy:s level:s awardDate:s citation:s prizeAmount:n certificateName:s attachments:files"),
+		"ipr", spec("ipType:s ipTypeOther:s title:s description:s stage:s applicationNumber:s filingDate:s grantDate:s office:s owner:s ownerOther:s funding:s licensed:b licensee:s coOwners:s documentName:s agreementName:s declared:b attachments:files"));
 
 	private static Map<String, String> spec(String s) {
 		Map<String, String> m = new LinkedHashMap<>();
@@ -154,6 +154,9 @@ public class Records {
 		if (kind.equals("seedMoney") && existing == null && !Json.bool(settings.get().get("seedMoneyWindowOpen"))) throw forbid("The seed money window is closed for this quarter.");
 
 		Map<String, Object> data = sanitize(kind, input);
+		// A file belongs to this institution's uploads only (its key starts with the institution).
+		String tenant = in.co.mentoredge.unirise.tenancy.TenantContext.require();
+		for (Object f : Json.arr(data.get("attachments"))) if (!Json.str(Json.obj(f).get("key")).startsWith(tenant + "/")) throw invalid("That file belongs to another institution.");
 		// Funding outcomes belong to the Office of Research: keep what is stored.
 		if (kind.equals("grants")) for (String k : List.of("outcome", "sanctionDate", "sanctionedAmount", "receivedAmount")) {
 			Object def = k.equals("outcome") ? "Applied" : k.equals("sanctionDate") ? "" : (Object) 0L;
@@ -265,6 +268,7 @@ public class Records {
 				case "n" -> Json.num(v);
 				case "b" -> Json.bool(v);
 				case "strings" -> new ArrayList<>(Json.arr(v).stream().limit(50).map(x -> Json.str(x, 300)).filter(x -> !x.isEmpty()).toList());
+				case "files" -> files(v);
 				case "authors" -> Json.take(v, 100, x -> Json.of("kind", kindOf(x.get("kind")), "code", Json.str(x.get("code"), 40), "name", Json.str(x.get("name"), 200),
 					"institution", Json.str(x.get("institution"), 300), "department", Json.str(x.get("department"), 300), "email", Json.str(x.get("email"), 200), "country", Json.str(x.get("country"), 80)));
 				default -> Json.take(v, 30, x -> Json.of("kind", kindOf(x.get("kind")), "code", Json.str(x.get("code"), 40), "name", Json.str(x.get("name"), 200),
@@ -276,6 +280,22 @@ public class Records {
 	}
 
 	private static String kindOf(Object v) { return AUTHOR_KINDS.contains(v) ? (String) v : "External"; }
+
+	/** Where an uploaded file is stored: <institution>/<uploader>/<uuid>/<file name> in the uploads bucket (UploadController). */
+	static final java.util.regex.Pattern FILE_KEY = java.util.regex.Pattern.compile("^[a-z][a-z0-9_]{2,30}/[0-9]{1,18}/[0-9a-f-]{36}/[^/\\\\]{1,150}$");
+
+	/** Files attached to a record: which form field, where it is stored, its name and size. Anything else is dropped. */
+	static List<Map<String, Object>> files(Object v) {
+		List<Map<String, Object>> out = new ArrayList<>();
+		for (Object x : Json.arr(v)) {
+			if (out.size() >= 30) break;
+			Map<String, Object> f = Json.obj(x);
+			String key = Json.str(f.get("key"), 400), field = Json.str(f.get("field"), 40);
+			if (!FILE_KEY.matcher(key).matches() || !field.matches("^[a-zA-Z]{1,40}$")) continue;
+			out.add(Json.of("field", field, "key", key, "name", Json.str(f.get("name"), 150), "size", Json.num(f.get("size"))));
+		}
+		return out;
+	}
 
 	private static void need(Object v, String label) {
 		boolean empty = v instanceof String s ? s.isBlank() : v == null || Boolean.FALSE.equals(v) || (v instanceof Number n && n.doubleValue() == 0);

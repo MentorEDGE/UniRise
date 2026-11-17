@@ -80,3 +80,16 @@ resource "aws_s3_bucket_policy" "b" {
   policy     = data.aws_iam_policy_document.tls_only[each.key].json
   depends_on = [aws_s3_bucket_public_access_block.b]
 }
+
+# Record files (A1b): the website uploads straight to the uploads bucket with a short-lived signed link, and opens
+# files through signed links. Browsers may do that from the website's own address only.
+resource "aws_s3_bucket_cors_configuration" "uploads" {
+  bucket = aws_s3_bucket.b["uploads"].id
+  cors_rule {
+    allowed_origins = ["https://${var.domain_name}"]
+    allowed_methods = ["PUT", "GET"]
+    allowed_headers = ["content-type"]
+    expose_headers  = ["ETag"]
+    max_age_seconds = 3000
+  }
+}

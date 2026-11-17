@@ -222,6 +222,7 @@ resource "aws_ecs_task_definition" "api" {
       AWS_REGION            = var.region
       SECRETS_STORE         = "aws" # institution database passwords in Secrets Manager, not in the control-plane database (A2)
       SECRETS_PREFIX        = local.tenant_secret_prefix
+      UPLOADS_BUCKET        = aws_s3_bucket.b["uploads"].bucket # record files (A1b); the task role may read and write it
     } : { name = name, value = value }]
     secrets = [
       { name = "RMS_DB_PASSWORD", valueFrom = data.aws_secretsmanager_secret.app_db.arn },
