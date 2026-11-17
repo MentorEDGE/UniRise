@@ -52,6 +52,17 @@ Decisions already made that the plan keeps: database per institution, no Hiberna
 
 Status: **Missing** = nothing in the API. **Partial** = exists but the contract differs.
 
+**Status on 2026-11-17** (the tables below keep the original gap descriptions; this is where each one stands):
+
+| State | Gaps |
+|---|---|
+| Done in phases 2 to 6 (Java API, deployed to AWS dev) | G1 to G23, G31 (seed money limit, PDF rule), G35 to G40 |
+| Done in the browser by design (D2: the API sends the scoped slice) | G26 reports, G27 analytics, G40 management dashboard |
+| Done after phase 6 | G41 schools (2026-11-17) |
+| Partly done | G24 enquiries: stored, rate-limited and honeypot-checked; **email to the team waits for A1a**. G28 to G30: stored in settings and enforced by the API (G28), **no Office screens yet** |
+| Not started | G25 file uploads (**A1b**) |
+| Later (phase 8) | G32 per-institution reports, G33 OIDC and integrations, G34 configurable review steps |
+
 ### 4.1 Cross-cutting
 
 | # | UI behaviour | Backend today | Work |
