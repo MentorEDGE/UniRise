@@ -1,0 +1,59 @@
+# Deploys the API to AWS dev (BACKEND_PLAN A4) on every push to dev that changes it: tests, builds an ARM64 image,
+# pushes it to ECR, rolls out a new task definition (only the image changes) and waits until the service is stable.
+# A rollout whose new task cannot become healthy is rolled back by ECS (deployment circuit breaker).
+# AWS access: OpenID Connect into arn:aws:iam::417441726165:role/unirise-dev-github-deploy (dev branch only; see
+# infra/envs/dev/github.tf). No stored keys. Infrastructure changes still go through `tofu plan` and `tofu apply`.
+name: deploy-dev
+on:
+  # Manual until the AWS role exists (A4 not applied yet). Then add back:
+  #   push: { branches: [dev], paths: ["unirise-api/**", ".github/workflows/deploy-dev.yml"] }
+  workflow_dispatch:
+concurrency: { group: deploy-dev, cancel-in-progress: false }
+permissions:
+  contents: read
+  id-token: write
+env:
+  AWS_REGION: ap-south-1
+  ROLE: arn:aws:iam::417441726165:role/unirise-dev-github-deploy
+  REPOSITORY: unirise-backend
+  CLUSTER: unirise-dev
+  SERVICE: unirise-dev-api
+  IMAGE_PARAMETER: /unirise/dev/api-image-digest
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with: { distribution: temurin, java-version: "21", cache: maven }
+      - name: Test and build the API
+        working-directory: unirise-api
+        run: ./mvnw -B verify
+      - uses: docker/setup-qemu-action@v3
+      - uses: docker/setup-buildx-action@v3
+      - uses: aws-actions/configure-aws-credentials@v4
+        with: { role-to-assume: "${{ env.ROLE }}", aws-region: "${{ env.AWS_REGION }}" }
+      - id: ecr
+        uses: aws-actions/amazon-ecr-login@v2
+      - name: Build and push the ARM64 image
+        run: |
+          tag="${GITHUB_SHA::7}"
+          docker buildx build --platform linux/arm64 -f unirise-api/Dockerfile.ci -t "${{ steps.ecr.outputs.registry }}/$REPOSITORY:$tag" --push unirise-api
+          digest="$(aws ecr describe-images --repository-name "$REPOSITORY" --image-ids imageTag="$tag" --query 'imageDetails[0].imageDigest' --output text)"
+          echo "IMAGE=${{ steps.ecr.outputs.registry }}/$REPOSITORY@$digest" >> "$GITHUB_ENV"
+          echo "DIGEST=$digest" >> "$GITHUB_ENV"
+      - name: Roll out the new image
+        run: |
+          current="$(aws ecs describe-services --cluster "$CLUSTER" --services "$SERVICE" --query 'services[0].taskDefinition' --output text)"
+          aws ecs describe-task-definition --task-definition "$current" --query taskDefinition > current.json
+          jq --arg image "$IMAGE" '.containerDefinitions[0].image = $image
+            | del(.taskDefinitionArn, .revision, .status, .requiresAttributes, .compatibilities, .registeredAt, .registeredBy, .deregisteredAt)' current.json > next.json
+          next="$(aws ecs register-task-definition --cli-input-json file://next.json --query taskDefinition.taskDefinitionArn --output text)"
+          aws ecs update-service --cluster "$CLUSTER" --service "$SERVICE" --task-definition "$next" --query 'service.deployments[0].id' --output text
+          aws ecs wait services-stable --cluster "$CLUSTER" --services "$SERVICE"
+          final="$(aws ecs describe-services --cluster "$CLUSTER" --services "$SERVICE" --query 'services[0].taskDefinition' --output text)"
+          [ "$final" = "$next" ] || { echo "The new version did not become healthy; ECS rolled back to $final." >&2; exit 1; }
+          aws ssm put-parameter --name "$IMAGE_PARAMETER" --value "$DIGEST" --overwrite > /dev/null
+          echo "Deployed $IMAGE as $next"
+      - name: Check the API answers
+        run: curl -fsS --retry 5 --retry-delay 10 https://api.dev-unirise.mentoredge.co.in/actuator/health/readiness

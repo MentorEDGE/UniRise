@@ -211,7 +211,7 @@ resource "aws_ecs_task_definition" "api" {
   }
   container_definitions = jsonencode([{
     name         = "api"
-    image        = "${aws_ecr_repository.backend.repository_url}@${var.api_image_digest}"
+    image        = "${aws_ecr_repository.backend.repository_url}@${aws_ssm_parameter.api_image.insecure_value}" # the image GitHub deployed (A4); seeded from var.api_image_digest
     essential    = true
     portMappings = [{ containerPort = 8080, protocol = "tcp" }]
     environment = [for name, value in {

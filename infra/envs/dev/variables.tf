@@ -98,3 +98,9 @@ variable "alert_email" {
   type        = string
   default     = ""
 }
+
+variable "github_repo" {
+  description = "The GitHub repository allowed to deploy (A4), dev branch only."
+  type        = string
+  default     = "MentorEDGE/UniRise"
+}

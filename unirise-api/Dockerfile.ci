@@ -1,0 +1,9 @@
+# Runtime image for the GitHub deploy (A4): the jar is built and tested in the workflow first (./mvnw verify), so this
+# only packages it. Same runtime as the Dockerfile's second stage. Build: docker buildx build -f Dockerfile.ci .
+FROM eclipse-temurin:21-jre
+RUN useradd --system --uid 10001 --no-create-home app
+COPY target/unirise-api-*.jar /app.jar
+USER 10001
+EXPOSE 8080
+ENV JAVA_TOOL_OPTIONS="-XX:MaxRAMPercentage=75 -XX:+ExitOnOutOfMemoryError"
+ENTRYPOINT ["java", "-jar", "/app.jar"]

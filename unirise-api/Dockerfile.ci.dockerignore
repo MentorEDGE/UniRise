@@ -1,0 +1,3 @@
+# Dockerfile.ci packages only the jar built by ./mvnw verify (BuildKit reads this file for Dockerfile.ci).
+*
+!target/unirise-api-*.jar
