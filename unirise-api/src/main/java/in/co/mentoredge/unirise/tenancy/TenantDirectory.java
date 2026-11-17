@@ -9,14 +9,16 @@ import org.springframework.stereotype.Component;
 @Component
 public class TenantDirectory {
 	private static final String SELECT = """
-		SELECT i.id, i.slug, i.status, i.db_host, i.db_port, i.db_name, i.db_user, s.db_password
-		FROM institution i JOIN institution_secret s ON s.institution_id = i.id""";
+		SELECT i.id, i.slug, i.status, i.db_host, i.db_port, i.db_name, i.db_user
+		FROM institution i""";
 	private final JdbcClient control;
 	private final String jdbcParams;
+	private final SecretStore secrets;
 
-	public TenantDirectory(@Qualifier("controlJdbc") JdbcClient control, AppProperties props) {
+	public TenantDirectory(@Qualifier("controlJdbc") JdbcClient control, AppProperties props, SecretStore secrets) {
 		this.control = control;
 		this.jdbcParams = props.tenants().jdbcParams();
+		this.secrets = secrets;
 	}
 
 	public Optional<TenantInfo> bySlug(String slug) {
@@ -48,11 +50,16 @@ public class TenantDirectory {
 	}
 
 	public java.util.List<TenantInfo> all() {
-		return control.sql(SELECT + " WHERE i.status NOT IN ('provisioning','closed') ORDER BY i.slug").query(this::map).list();
+		return control.sql(SELECT + " WHERE i.status NOT IN ('provisioning','closed') ORDER BY i.slug").query(this::map).list().stream().filter(java.util.Objects::nonNull).toList();
 	}
 
 	private TenantInfo map(java.sql.ResultSet r, int n) throws java.sql.SQLException {
-		return new TenantInfo(r.getLong("id"), r.getString("slug"), r.getString("status"), r.getString("db_host"), r.getInt("db_port"),
-			r.getString("db_name"), r.getString("db_user"), r.getString("db_password"), jdbcParams);
+		String slug = r.getString("slug");
+		// The password comes from the secret store (Secrets Manager on AWS), not from the control-plane database.
+		// As before, an institution with no stored password (a deleted one) is treated as not found.
+		String password = secrets.get(slug).orElse(null);
+		if (password == null) return null;
+		return new TenantInfo(r.getLong("id"), slug, r.getString("status"), r.getString("db_host"), r.getInt("db_port"),
+			r.getString("db_name"), r.getString("db_user"), password, jdbcParams);
 	}
 }

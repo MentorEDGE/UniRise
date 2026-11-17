@@ -61,6 +61,16 @@ data "aws_iam_policy_document" "task" {
     actions   = ["s3:GetObject", "s3:PutObject", "s3:DeleteObject", "s3:AbortMultipartUpload", "s3:ListMultipartUploadParts"]
     resources = [for b in aws_s3_bucket.b : "${b.arn}/*"]
   }
+  # Institution database passwords (A2): one secret per institution under this prefix, created by the API when it
+  # provisions an institution. Nothing outside the prefix.
+  statement {
+    sid = "InstitutionDatabasePasswords"
+    actions = [
+      "secretsmanager:CreateSecret", "secretsmanager:GetSecretValue", "secretsmanager:PutSecretValue", "secretsmanager:DescribeSecret",
+      "secretsmanager:DeleteSecret", "secretsmanager:TagResource",
+    ]
+    resources = ["arn:aws:secretsmanager:${var.region}:${local.account_id}:secret:${local.tenant_secret_prefix}*"]
+  }
   dynamic "statement" {
     for_each = local.ses_on ? [1] : []
     content {
@@ -210,6 +220,8 @@ resource "aws_ecs_task_definition" "api" {
       TENANT_DB_PORT        = "5432"
       TENANT_DB_JDBC_PARAMS = "sslmode=require"
       AWS_REGION            = var.region
+      SECRETS_STORE         = "aws" # institution database passwords in Secrets Manager, not in the control-plane database (A2)
+      SECRETS_PREFIX        = local.tenant_secret_prefix
     } : { name = name, value = value }]
     secrets = [
       { name = "RMS_DB_PASSWORD", valueFrom = data.aws_secretsmanager_secret.app_db.arn },

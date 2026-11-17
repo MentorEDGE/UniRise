@@ -25,7 +25,10 @@ public class Provisioner {
 	private final Migrator migrator;
 	private final AppProperties props;
 
-	public Provisioner(@Qualifier("controlJdbc") JdbcClient control, TenantDirectory directory, Migrator migrator, AppProperties props) {
+	private final SecretStore secrets;
+
+	public Provisioner(@Qualifier("controlJdbc") JdbcClient control, TenantDirectory directory, Migrator migrator, AppProperties props, SecretStore secrets) {
+		this.secrets = secrets;
 		this.control = control;
 		this.directory = directory;
 		this.migrator = migrator;
@@ -55,8 +58,7 @@ public class Provisioner {
 		boolean roleExists = control.sql("SELECT count(*) FROM pg_roles WHERE rolname = :r").param("r", role).query(Long.class).single() > 0;
 		control.sql((roleExists ? "ALTER ROLE \"" + role + "\" LOGIN PASSWORD '" + password + "'" : "CREATE ROLE \"" + role + "\" LOGIN PASSWORD '" + password + "'")).update();
 		control.sql("GRANT \"" + role + "\" TO CURRENT_USER").update(); // lets a non-superuser (RDS master) create a database owned by the role
-		control.sql("INSERT INTO institution_secret(institution_id, db_password) VALUES (:i, :p) ON CONFLICT (institution_id) DO UPDATE SET db_password = EXCLUDED.db_password")
-			.param("i", id).param("p", password).update();
+		secrets.put(slug, password); // Secrets Manager on AWS; the control-plane table only for local runs and tests
 
 		boolean dbExists = control.sql("SELECT count(*) FROM pg_database WHERE datname = :d").param("d", db).query(Long.class).single() > 0;
 		if (!dbExists) control.sql("CREATE DATABASE \"" + db + "\" OWNER \"" + role + "\"").update();

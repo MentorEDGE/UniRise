@@ -31,7 +31,10 @@ public class TenantLifecycle {
 	private final TenantRoutingDataSource routing;
 	private final AppProperties props;
 
-	public TenantLifecycle(@Qualifier("controlJdbc") JdbcClient control, TenantDirectory directory, TenantRoutingDataSource routing, AppProperties props) {
+	private final SecretStore secrets;
+
+	public TenantLifecycle(@Qualifier("controlJdbc") JdbcClient control, TenantDirectory directory, TenantRoutingDataSource routing, AppProperties props, SecretStore secrets) {
+		this.secrets = secrets;
 		this.control = control;
 		this.directory = directory;
 		this.routing = routing;
@@ -113,7 +116,7 @@ public class TenantLifecycle {
 		control.sql("SELECT pg_terminate_backend(pid) FROM pg_stat_activity WHERE datname = :d AND pid <> pg_backend_pid()").param("d", r.dbName()).query().listOfRows();
 		control.sql("DROP DATABASE \"" + r.dbName() + "\"").update();   // names were validated when the tenant was provisioned
 		control.sql("DROP ROLE \"" + r.dbUser() + "\"").update();
-		control.sql("DELETE FROM institution_secret WHERE institution_id = :i").param("i", r.id()).update();
+		secrets.delete(slug); // on AWS the secret can be restored for 7 days
 		control.sql("DELETE FROM user_token WHERE institution_id = :i").param("i", r.id()).update();
 		control.sql("UPDATE institution_credential SET revoked_at = now() WHERE institution_id = :i AND revoked_at IS NULL").param("i", r.id()).update();
 		control.sql("UPDATE institution SET status = 'closed', closed_at = now() WHERE id = :i").param("i", r.id()).update();

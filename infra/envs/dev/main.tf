@@ -16,4 +16,6 @@ locals {
   domain_on  = var.domain_name != ""
   api_host   = var.api_host != "" ? var.api_host : "api.${var.domain_name}"
   ses_on     = local.email_on || local.domain_on
+  # Secrets Manager names of the institution database passwords: <prefix><institution slug>.
+  tenant_secret_prefix = "unirise/dev/tenant/"
 }

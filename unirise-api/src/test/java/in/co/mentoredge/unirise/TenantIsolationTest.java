@@ -41,6 +41,7 @@ class TenantIsolationTest {
 	}
 
 	@Value("${local.server.port}") int port;
+	@Autowired in.co.mentoredge.unirise.tenancy.SecretStore secrets;
 	@Autowired Migrator migrator;
 	@Autowired TenantRoutingDataSource routing;
 	@Autowired @Qualifier("tenantJdbc") JdbcClient tenantJdbc;
@@ -127,7 +128,7 @@ class TenantIsolationTest {
 	@Test
 	void oneTenantsLoginCannotConnectToAnotherTenantsDatabase() throws Exception {
 		ensureTenants();
-		String passA = control.sql("SELECT db_password FROM institution_secret s JOIN institution i ON i.id = s.institution_id WHERE slug = 'alpha'").query(String.class).single();
+		String passA = secrets.get("alpha").orElseThrow();
 		String urlB = PG.getJdbcUrl().replace("/" + PG.getDatabaseName(), "/tenant_beta");
 		assertThrows(SQLException.class, () -> DriverManager.getConnection(urlB, "app_alpha", passA).close());
 	}
@@ -135,15 +136,15 @@ class TenantIsolationTest {
 	@Test
 	void failingMigrationOnOneTenantDoesNotBlockTheOthers() throws Exception {
 		ensureTenants();
-		String good = control.sql("SELECT db_password FROM institution_secret s JOIN institution i ON i.id = s.institution_id WHERE slug = 'beta'").query(String.class).single();
-		control.sql("UPDATE institution_secret SET db_password = 'wrong' WHERE institution_id = (SELECT id FROM institution WHERE slug = 'beta')").update();
+		String good = secrets.get("beta").orElseThrow();
+		secrets.put("beta", "wrong"); // through the store, as the API does (it keeps passwords in a short cache)
 		try {
 			List<Migrator.Result> results = migrator.migrateAll();
 			assertTrue(results.stream().filter(r -> r.slug().equals("alpha")).findFirst().orElseThrow().ok());
 			assertFalse(results.stream().filter(r -> r.slug().equals("beta")).findFirst().orElseThrow().ok());
 			assertEquals(1, control.sql("SELECT count(*) FROM migration_run WHERE status = 'failed'").query(Long.class).single());
 		} finally {
-			control.sql("UPDATE institution_secret SET db_password = :p WHERE institution_id = (SELECT id FROM institution WHERE slug = 'beta')").param("p", good).update();
+			secrets.put("beta", good);
 			routing.evict("beta");
 		}
 	}
