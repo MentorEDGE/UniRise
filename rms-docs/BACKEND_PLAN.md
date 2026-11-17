@@ -220,7 +220,7 @@ Account `417441726165`, `ap-south-1`, shared with MentorEDGE. Only UniRise resou
 | A2 | ~~Tenant database passwords from the control-plane table to Secrets Manager~~ **Done 2026-11-17** | `SecretStore` (`app.secrets.store=aws` on AWS): one secret per institution, `unirise/dev/tenant/<slug>`, labelled Project=UniRise; the API task may use only that prefix. The three existing passwords were moved at start-up (written, read back, then removed from `institution_secret`). The table stays for local runs and tests only |
 | A3 | SES production access request | Without it, mail goes only to verified addresses |
 | A4 | Deploy pipeline: CI builds and tests only; deploys are `scripts/push-image.sh` plus `tofu apply` by hand | Repeatable releases |
-| A5 | Scheduled tenant backups (EventBridge Scheduler running the existing admin task) | Backups are manual today |
+| A5 | ~~Scheduled tenant backups~~ **Done 2026-11-17** | EventBridge Scheduler `unirise-dev-nightly-backup` runs the admin task with `backup-all` at 03:00 IST: one dump per live institution to `exports/backups/<slug>/` (AES-256, kept 30 days). First manual run: 3 of 3. No alert on failure yet (A8); the run is in the log group under `admin/` |
 | A6 | Frontend hosting for `dev-unirise.mentoredge.co.in`: Hostinger, not AWS (D4). Build `rdms-web` with the API base URL and upload `dist/` | The UI is not deployed anywhere |
 | A7 | Human IAM users with MFA instead of root; budget alerts | Deferred by request; needed before production |
 | A8 | Alarms (task health, 5xx, RDS storage and CPU), rate limiting at the edge | No monitoring today. The dev database was down for 11 days unnoticed because the health page does not test it; include a check that reaches the database |
