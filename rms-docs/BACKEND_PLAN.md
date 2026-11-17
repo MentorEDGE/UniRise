@@ -164,42 +164,31 @@ Milestones, meeting logs, reminders, restricted projects, mentor relationships, 
 
 ## 5. All features and their state
 
-| Feature | UI | Backend |
+Updated 2026-11-17. "Browser" means computed in the website from the scoped data slice the API sends (decision D2).
+
+| Feature | Website | Java API (AWS dev) |
 |---|---|---|
-| Multi-institution isolation (database per institution) | Built (SQLite) | Built |
-| Institution provision, suspend, export, delete, usage | CLI | Built |
+| Multi-institution isolation (database per institution) | Built | Built |
+| Institution provision, suspend, export, delete, usage | Operator API only | Built |
 | Email and password sign-in, lockout, CSRF, idle timeouts | Built | Built (phase 2) |
-| OIDC sign-in | Not built | Not built (target) |
-| Three-role access model | Built | Built (phase 2) |
-| Publications | Built | Built (phases 3-4) |
-| Grants and outcomes | Built | Built (phases 3-4) |
-| Seed money | Built | Built (phases 3-4; window is a switch in settings) |
-| FDPs | Built | Built (phases 3-4) |
-| Conferences | Built | Built (phases 3-4) |
-| Honours and Awards | Built | Built (phases 3-4) |
-| Intellectual Property | Built | Built (phases 3-4) |
-| Review workflow with Under Review and Resubmitted | Built | Built (phase 4) |
-| Approvals queue and counts | Built | Built (phase 4) |
-| Biodata, CV, researcher profile | Built | Built (phase 5; CV is rendered in the browser) |
-| Profile update approval | Built | Built (phase 4) |
-| Faculty directory, Find Profiles, SDG filters | Built | Partial (researcher list) |
-| Research Networks, collaboration map, conference map | Built | Data only |
-| Dashboards, analytics, scores, targets | Built | Missing (data only if D2 is "browser") |
-| Reports (54) with CSV and print | Built | 19 of a different catalogue |
-| Annual report | Built | Missing |
-| User management | Built | Built (phase 2) |
-| Institution, departments, targets, weights settings | Built | Built (phase 5) |
-| Notices | Built | Built (phase 5) |
-| Office audit log | Built | Partial (accounts and sign-ins; entry decisions in phase 4) |
-| Enquiry form with email | Built (SMTP) | Stored (phase 5); email in phase 7 |
-| File uploads | Names only | Missing |
-| Email to users (invites, reset) | Not built | Not built |
+| OIDC sign-in | Not built | Not built (phase 8) |
+| Three-role access model, former faculty | Built | Built |
+| The seven record types (publications, grants, seed money, FDPs, conferences, honours, IP) | Built | Built (phases 3-4) |
+| Review workflow (Under Review, Changes Requested, Resubmitted), approvals queue, profile approval | Built | Built (phase 4) |
+| Biodata, CV, researcher profile, Follow me links | Built | Built (phase 5; CV printed by the browser) |
+| Find Profiles, Research Networks, maps | Built | Browser |
+| Dashboards (management, Office), analytics, scores, targets | Built | Browser |
+| Reports (60, incl. School wise) with CSV and print; annual report | Built | Browser |
+| Schools of a university (G41) | Built | Built (settings) |
+| User management, audit log | Built | Built |
+| Institution, departments, targets, weights, notices | Built | Built |
+| Record types on/off (G28), custom fields (G29), option lists (G30) | Built | Built |
+| Enquiry form, emailed to the team (G24) | Built | Built (A1a; delivery after the team address is verified) |
+| File uploads with virus scanning (G25) | Built | Built (A1b, A9) |
+| Email to users (invitations, password reset) | Not built | Not built (needs SES production access, A3) |
 | Landing page, dark mode, branding, print | Built | Not applicable |
-| Feature switches per institution | Not built | Built in the API (settings.features); no screen yet |
-| Custom fields per record type | Not built | Storage built (settings.customFields, record.custom); no screen or validation yet |
-| Configurable option lists | Constants in code | Storage built (settings.lists); the UI still uses its constants |
-| Milestones, meeting logs, projects, periods, CSV import | No screen | Built |
-| Backups and restore drill | Not built | Built (manual job) |
+| Milestones, meeting logs, projects, periods, CSV import (old model) | No screen | Built, parked (D3) |
+| Backups | Not applicable | Nightly (A5), restore drill tested |
 
 ## 6. AWS integration
 
@@ -219,11 +208,12 @@ Account `417441726165`, `ap-south-1`, shared with MentorEDGE. Only UniRise resou
 - CORS for `https://dev-unirise.mentoredge.co.in`.
 - Cost estimate: $50 to $70 a month before tax and usage.
 
-### Provisioned but not used by the application
+### In use since 2026-11-17
 
-- S3 `uploads` bucket: the API has no upload code.
-- SES: the API sends no email. The account is still in the SES sandbox.
-- `exports` bucket: used only by the manual backup job.
+- S3 `uploads` bucket: record files (A1b), scanned by GuardDuty Malware Protection (A9).
+- SES: enquiries to the team (A1a). The account is still in the SES sandbox (A3), so mail reaches verified addresses only.
+- `exports` bucket: nightly backups (A5).
+- Secrets Manager: one secret per institution database (A2).
 
 ### Not started
 
@@ -234,7 +224,7 @@ Account `417441726165`, `ap-south-1`, shared with MentorEDGE. Only UniRise resou
 | A3 | SES production access request | Without it, mail goes only to verified addresses |
 | A4 | Deploy pipeline: CI builds and tests only; deploys are `scripts/push-image.sh` plus `tofu apply` by hand | Repeatable releases |
 | A5 | ~~Scheduled tenant backups~~ **Done 2026-11-17** | EventBridge Scheduler `unirise-dev-nightly-backup` runs the admin task with `backup-all` at 03:00 IST: one dump per live institution to `exports/backups/<slug>/` (AES-256, kept 30 days). First manual run: 3 of 3. No alert on failure yet (A8); the run is in the log group under `admin/` |
-| A6 | Frontend hosting for `dev-unirise.mentoredge.co.in`: Hostinger, not AWS (D4). Build `rdms-web` with the API base URL and upload `dist/` | The UI is not deployed anywhere |
+| A6 | ~~Frontend hosting~~ **Done 2026-11-16** | Hostinger publishes `dev-unirise.mentoredge.co.in` from the `dev` branch; the pages call the AWS API (`KNOWN_APIS` in `store.ts`); `.htaccess` stops browsers keeping an old page |
 | A7 | Human IAM users with MFA instead of root; budget alerts | Deferred by request; needed before production |
 | A8 | Alarms (task health, 5xx, RDS storage and CPU), rate limiting at the edge | No monitoring today. The dev database was down for 11 days unnoticed because the health page does not test it; include a check that reaches the database |
 | A9 | ~~Upload scanning~~ **Built 2026-11-17** | GuardDuty Malware Protection for S3 on the uploads bucket only (`malware.tf`); each object is tagged with its scan result and the API opens a file only when it is NO_THREATS_FOUND (otherwise a short page: still being checked, flagged, or could not be checked) |
@@ -259,7 +249,7 @@ Each phase ends with tests passing and the docs updated. Order matters: phases 2
 
 **Phase 6. Frontend switch (G3). Done 2026-11-14; the SQLite prototype server was removed on 2026-11-17 after its API tests were ported to Java (`InstitutionApiTest`).** The API answers the same requests as the prototype, so the switch is one setting: `VITE_API_BASE` (empty = same origin). The frontend's end-to-end test (298 checks per run, every page and workflow for the three roles) passes against the Java API through `rdms-web/scripts/api-proxy.mjs` with the sample data loaded by `scripts/export-demo.ts`. The prototype server stays until the API is deployed (phase 7), because the shared demo still runs on it. Replace `store.ts` calls slice by slice: sign-in, then publications, then the remaining kinds, approvals, profiles, administration. Port `server/api.test.ts` as acceptance tests against the API. Remove the SQLite server last.
 
-**Phase 7. AWS (A1 to A9).** S3 uploads, SES mail and enquiries (G24, G25), Secrets Manager for tenant credentials, deploy pipeline, scheduled backups, alarms, IAM users and budget. The frontend goes to Hostinger (A6), which also means the UI calls the API cross-origin: the session cookie needs `Domain`-less `SameSite=Strict` on the API host and CORS with credentials for the one allowed origin.
+**Phase 7. AWS (A1 to A9). Mostly done 2026-11-17.** Done: A1 (uploads A1b, enquiry email A1a), A2 secrets, A5 nightly backups, A6 hosting, A9 virus scanning, A11. Open: A3 SES production access (a form the account owner submits), A4 deploy pipeline, A7 IAM users with MFA and budget alerts, A8 alarms. The frontend is on Hostinger and calls the API cross-origin with the SameSite=Strict session cookie and CORS for the one allowed origin, as planned.
 
 **Phase 8. Later.** OIDC with per-institution settings and integration webhooks (G33), per-institution report selection (G32), configurable review steps only when a customer needs them (G34), server-side reports and PDF if the browser approach is outgrown, production environment (A10), harvesting, webhooks.
 
@@ -278,6 +268,6 @@ Each phase ends with tests passing and the docs updated. Order matters: phases 2
 
 ## 9. Not checked for this document
 
-- AWS resources were not listed live. Section 6 comes from the Terraform files and the 2026-11-04 deployment notes; only the public health endpoint was called on 2026-11-14, and it does not prove the database works.
-- The backend tests were not re-run.
-- Grant and seed-money columns were compared at table level, not field by field. That comparison belongs to phase 3.
+- Updated 2026-11-17. AWS resources in section 6 were checked live with the AWS CLI on 2026-11-17 (the deploy user). The backend suite ran on 2026-11-17: 64 tests, 0 failures, 5 skipped (parked features).
+- The first scheduled nightly backup (A5) runs on the night of 17-18 November; not yet seen.
+- Grant and seed-money columns were compared at table level, not field by field.
