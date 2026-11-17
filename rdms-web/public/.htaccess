@@ -1,0 +1,11 @@
+# Hostinger (Apache-compatible server): copied into the site by the build.
+# The page itself (index.html) must always be checked for a newer version, or browsers keep showing the old site
+# after an update. Scripts, styles and images have a new name on every build, so they can be kept for a long time.
+<IfModule mod_headers.c>
+  <FilesMatch "\.html$">
+    Header set Cache-Control "no-cache, must-revalidate"
+  </FilesMatch>
+  <FilesMatch "\.(js|css|woff2?|svg|png|jpe?g|webp|mp4|mp3)$">
+    Header set Cache-Control "public, max-age=604800"
+  </FilesMatch>
+</IfModule>
