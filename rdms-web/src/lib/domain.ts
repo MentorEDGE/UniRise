@@ -4,7 +4,7 @@
  * actor's own institution database, so nothing here can reach another institution.
  */
 import type {
-  AnyRecord, Author, Biodata, Course, Engagement, HistoryItem, MediaItem, ProfileLinks, Supervisee, DB, EntityKind, Faculty, Grant, Investigator, Notice, ProfileChange, Publication, School, Settings, Status,
+  AnyRecord, Author, Biodata, Course, Engagement, HistoryItem, MediaItem, ProfileLinks, Supervisee, DB, EntityKind, Faculty, Grant, Investigator, FileRef, Notice, ProfileChange, Publication, School, Settings, Status,
 } from './types';
 import { EXIT_REASONS, PROFILE_LINKS, linkAllowed, AUTHOR_KINDS, AWARD_CATEGORIES, EMPTY_LINKS, EMPTY_SCHOLAR, ENGAGEMENT_TYPES, MAX_HIGHLIGHTS, SUPERVISION_DEGREES, SUPERVISION_STATUS, IP_DESCRIPTION_WORDS, IP_OWNERS, IP_STATUSES, IP_TYPES, LEVELS, PUB_TYPES, wordCount } from './types';
 import type { IntellectualProperty } from './types';
@@ -111,7 +111,15 @@ function sanitize(kind: EntityKind, input: Record<string, unknown>): Record<stri
     else if (t === 'authors') out[k] = list(v, 100, (a): Author => ({ kind: kindOf(a.kind), code: str(a.code, 40), name: str(a.name, 200), institution: str(a.institution, 300), department: str(a.department, 300), email: str(a.email, 200), country: str(a.country, 80) }));
     else out[k] = list(v, 30, (a): Investigator => ({ kind: kindOf(a.kind), code: str(a.code, 40), name: str(a.name, 200), role: (['PI', 'Co-PI', 'Co-I'].includes(a.role as string) ? a.role : 'Co-I') as Investigator['role'], institution: str(a.institution, 300), department: str(a.department, 300), sharePct: num(a.sharePct), country: str(a.country, 80) }));
   }
+  out.attachments = files(input.attachments); // every record kind may carry uploaded files
   return out;
+}
+
+/** Where an uploaded file is stored: <institution>/<uploader>/<uuid>/<file name> (the Java API's UploadController). */
+export const FILE_KEY = /^[a-z][a-z0-9_]{2,30}\/[0-9]{1,18}\/[0-9a-f-]{36}\/[^/\\]{1,150}$/;
+function files(v: unknown): FileRef[] {
+  return list(v, 30, (f) => ({ field: str(f.field, 40), key: str(f.key, 400), name: str(f.name, 150), size: num(f.size) }))
+    .filter((f) => FILE_KEY.test(f.key) && /^[a-zA-Z]{1,40}$/.test(f.field));
 }
 
 /** Core checks repeated on the server; the forms do the same and more for a friendlier message. */

@@ -176,6 +176,9 @@ export const SDGS: { n: number; title: string; color: string }[] = [
 ];
 
 /** Fields every workflow record has. */
+/** A file stored in the private uploads bucket (A1b): which form field it belongs to, where it is, its name and size. */
+export interface FileRef { field: string; key: string; name: string; size: number }
+
 export interface Base {
   id: string;
   facultyId: string; // owner (the faculty member who entered it)
@@ -183,6 +186,8 @@ export interface Base {
   createdAt: string;
   updatedAt: string;
   history: HistoryItem[];
+  /** Uploaded files (PDF, certificates, documents). Empty where uploads are off: then only the file names are kept. */
+  attachments?: FileRef[];
 }
 
 export type AuthorKind = 'Faculty' | 'Student' | 'External' | 'Ex-Faculty' | 'Ex-Student';

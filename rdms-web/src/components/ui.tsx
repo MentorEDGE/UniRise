@@ -1,6 +1,8 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from 'react';
 import type { ReactNode } from 'react';
-import type { Status } from '../lib/types';
+import type { FileRef, Status } from '../lib/types';
+import { fileUrl, uploadFile } from '../lib/store';
+import type { Uploaded } from '../lib/store';
 import { STATUS_LABEL, isResubmission } from '../lib/types';
 import type { HistoryItem } from '../lib/types';
 import { downloadCsv } from '../lib/csv';
@@ -71,16 +73,39 @@ export function Select({ value, onChange, options, placeholder, ...rest }: Omit<
 export function YesNo({ value, onChange }: { value: boolean; onChange: (v: boolean) => void }) {
   return <select value={value ? 'Yes' : 'No'} onChange={(e) => onChange(e.target.value === 'Yes')}><option>No</option><option>Yes</option></select>;
 }
-export function FileName({ value, onChange, accept = '.pdf' }: { value: string; onChange: (v: string) => void; accept?: string }) {
+/**
+ * A file field. Where the API offers uploads (A1b), the file goes to the private bucket and the name becomes a link;
+ * elsewhere (the prototype server) only the file name is kept, as before. PDF (or the given types) up to 10 MB.
+ */
+export function FileName({ value, onChange, accept = '.pdf', file, onFile, onDone }: {
+  value: string; onChange: (v: string) => void; accept?: string;
+  /** The stored file for this field, if any. */ file?: FileRef;
+  /** Called with the stored file once uploaded, null when removed or when only the name is kept. */ onFile?: (f: Uploaded | null) => void;
+  /** For lists of files: called once a file is in (stored, or named only where uploads are off); not on failure. */ onDone?: (name: string, f: Uploaded | null) => void;
+}) {
+  const [state, setState] = useState<'idle' | 'uploading' | 'error'>('idle');
+  const [error, setError] = useState('');
   return (
     <div style={{ display: 'flex', gap: 6, alignItems: 'center', flexWrap: 'wrap' }}>
-      <input type="file" accept={accept} onChange={(e) => {
+      <input type="file" accept={accept} disabled={state === 'uploading'} onChange={async (e) => {
         const f = e.target.files?.[0];
         if (!f) return;
-        if (f.size > 10 * 1024 * 1024) { alert('The file must be 10 MB or smaller.'); e.target.value = ''; return; }
-        onChange(f.name);
+        if (f.size > 10 * 1024 * 1024) { setError('The file must be 10 MB or smaller.'); setState('error'); e.target.value = ''; return; }
+        setError(''); onChange(f.name);
+        if (!onFile && !onDone) return;
+        setState('uploading');
+        try { const up = await uploadFile(f); onFile?.(up); onDone?.(f.name, up); setState('idle'); if (onDone) e.target.value = ''; } catch (err) {
+          onChange(''); onFile?.(null); setError((err as Error).message); setState('error'); e.target.value = '';
+        }
       }} />
-      {value && <span className="badge neutral" title="Only the file name is stored in this demo">📎 {value} <button className="link-btn" type="button" onClick={() => onChange('')} aria-label="Remove file">×</button></span>}
+      {state === 'uploading' && <span className="muted"><span className="spinner" aria-hidden /> Uploading…</span>}
+      {value && state !== 'uploading' && (
+        <span className="badge neutral" title={file ? 'Stored securely; opens in a new tab' : 'Only the file name is stored here'}>
+          📎 {file ? <a href={fileUrl(file.key)} target="_blank" rel="noreferrer">{value}</a> : value}
+          <button className="link-btn" type="button" onClick={() => { onChange(''); onFile?.(null); }} aria-label="Remove file">×</button>
+        </span>
+      )}
+      {error && <span className="err" role="alert">{error}</span>}
     </div>
   );
 }

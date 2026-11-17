@@ -39,6 +39,32 @@ const BUILT_API = (import.meta as { env?: Record<string, string | undefined> }).
 export const API_BASE = (BUILT_API ?? (typeof location === 'undefined' ? '' : KNOWN_APIS[location.hostname] ?? '')).replace(/\/$/, '');
 const CREDENTIALS: RequestCredentials = API_BASE ? 'include' : 'same-origin';
 
+/** An uploaded file before it is attached to a record (A1b). */
+export interface Uploaded { key: string; name: string; size: number }
+let uploadsOff = false; // the prototype server and a local Java API without a bucket answer 404: keep file names only
+
+/**
+ * Uploads a file for a record: asks the API for a short-lived link, then sends the file straight to the private
+ * bucket. Returns null where uploads are not available (then only the name is kept, as before).
+ */
+export async function uploadFile(file: File): Promise<Uploaded | null> {
+  if (uploadsOff) return null;
+  let link: { key: string; url: string; headers: Record<string, string> };
+  try {
+    link = await api('POST', '/uploads', { name: file.name, type: file.type, size: file.size });
+  } catch (e) {
+    if (e instanceof ApiError && e.status === 404) { uploadsOff = true; return null; }
+    throw e;
+  }
+  let put: Response;
+  try { put = await fetch(link.url, { method: 'PUT', headers: link.headers, body: file }); } catch { throw new ApiError(0, UNREACHABLE); }
+  if (!put.ok) throw new ApiError(put.status, 'The file could not be uploaded. Try again.');
+  return { key: link.key, name: file.name, size: file.size };
+}
+
+/** Opens an uploaded file: the API checks the caller may see its record, then redirects to a 5-minute link. */
+export const fileUrl = (key: string) => `${API_BASE}/api/uploads/file?key=${encodeURIComponent(key)}`;
+
 const UNREACHABLE = 'UniRise can’t be reached right now. Check your internet connection, or try again in a few minutes.';
 
 async function api<T = unknown>(method: string, path: string, body?: unknown): Promise<T> {

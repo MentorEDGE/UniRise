@@ -3,6 +3,7 @@ import { useNavigate, useSearchParams } from 'react-router-dom';
 import { Alert, NumberInput, Select, TextArea, useToast } from '../../components/ui';
 import { ENTITIES } from '../../lib/entities';
 import { emptyBase, getDB, isEditable, saveRecord, useStore } from '../../lib/store';
+import type { Uploaded } from '../../lib/store';
 import type { AnyRecord, Author, AuthorKind, EntityKind, Investigator } from '../../lib/types';
 import { AUTHOR_KINDS } from '../../lib/types';
 
@@ -36,6 +37,11 @@ export function useEntry<T extends AnyRecord>(kind: EntityKind, blank: (facultyI
   else if (existing && !isEditable(existing)) blocked = `Entry ${id} is ${existing.status.toLowerCase()} and can no longer be edited.`;
 
   const update = (patch: Partial<T>) => setRec((r) => ({ ...r, ...patch }));
+  /** Records an uploaded file for a field (replacing the field's previous file unless several are allowed); null removes it. */
+  const attach = (field: string, file: Uploaded | null, opts: { many?: boolean; removeName?: string } = {}) => setRec((r) => {
+    const others = (r.attachments ?? []).filter((x) => x.field !== field || (opts.many && x.name !== opts.removeName));
+    return { ...r, attachments: file ? [...(opts.many ? others : others.filter((x) => x.field !== field)), { field, ...file }] : others };
+  });
   const [busy, setBusy] = useState(false);
   const save = async (submit: boolean) => {
     if (busy) return;
@@ -60,7 +66,7 @@ export function useEntry<T extends AnyRecord>(kind: EntityKind, blank: (facultyI
       )}
     </>
   );
-  return { rec, update, setRec, errors, save, blocked, banner, isNew: !existing, resubmit: existing?.status === 'Rework' };
+  return { rec, update, setRec, attach, errors, save, blocked, banner, isNew: !existing, resubmit: existing?.status === 'Rework' };
 }
 
 export function SaveBar({ onSave, isNew, resubmit }: { onSave: (submit: boolean) => void; isNew: boolean; resubmit?: boolean }) {

@@ -2,6 +2,7 @@ import type { ReactNode } from 'react';
 import type { Column } from '../components/ui';
 import { StatusBadge } from '../components/ui';
 import { dateOf, fmtDate, inr } from './analytics';
+import { fileUrl } from './store';
 import type { AnyRecord, Conference, DB, EntityKind, Fdp, Grant, Honour, IntellectualProperty, Publication, SeedMoney } from './types';
 import { AWARD_CATEGORIES, IP_TYPES, ipTypeLabel, statusLabel } from './types';
 
@@ -24,7 +25,12 @@ const people = (list: { name: string; kind: string; role?: string; institution: 
   </ol>
 );
 const yn = (b: boolean) => (b ? 'Yes' : 'No');
-const file = (n: string) => (n ? `📎 ${n}` : <span className="muted">Not attached</span>);
+/** A file field: a link that opens the stored file (A1b), or just the name where uploads are off. */
+const file = (r: AnyRecord, field: string, n: string): ReactNode => {
+  if (!n) return <span className="muted">Not attached</span>;
+  const f = r.attachments?.find((a) => a.field === field && a.name === n) ?? r.attachments?.find((a) => a.field === field && field !== 'enclosures');
+  return f ? <a href={fileUrl(f.key)} target="_blank" rel="noreferrer">📎 {n}</a> : `📎 ${n}`;
+};
 
 export const ENTITIES: Record<EntityKind, EntityConfig> = {
   publications: {
@@ -44,7 +50,7 @@ export const ENTITIES: Record<EntityKind, EntityConfig> = {
         ['Entry Type', p.entryType], ['Category', p.category], ['Title', p.title], ['DOI / Webpage', p.doi ? <a href={p.doi} target="_blank" rel="noreferrer">{p.doi}</a> : '—'],
         ['Journal / Venue', p.venue], ['ISSN / ISBN', p.issn || '—'], ['Published', `${p.month} ${p.year}`], ['Indexing', p.indexing],
         ['Quartile', p.quartile], ['Impact Factor', p.impactFactor || '—'], ['Open Access', yn(p.openAccess)], ['ERF Related', yn(p.erfRelated)],
-        ['Project Reference', p.projectReference || 'No'], ['Authors', people(p.authors)], ['Full text', file(p.pdfName)],
+        ['Project Reference', p.projectReference || 'No'], ['Authors', people(p.authors)], ['Full text', file(p, 'pdfName', p.pdfName)],
       ];
     },
   },
@@ -68,7 +74,7 @@ export const ENTITIES: Record<EntityKind, EntityConfig> = {
         ['Duration', `${g.durationMonths} months`], ['ERF Related', yn(g.erfRelated)], ['Matching grant for capital items', yn(g.matchingGrant)],
         ['Contact Number', g.contactNumber || '—'], ['Outcome', g.outcome], ['Sanction Date', fmtDate(g.sanctionDate) || '—'],
         ['Sanctioned Amount', g.sanctionedAmount ? inr(g.sanctionedAmount) : '—'], ['Received Amount', g.receivedAmount ? inr(g.receivedAmount) : '—'],
-        ['Investigators', people(g.investigators)], ['Enclosures', g.enclosures.length ? g.enclosures.join(', ') : '—'], ['Other remarks', g.otherRemarks || '—'],
+        ['Investigators', people(g.investigators)], ['Enclosures', g.enclosures.length ? <>{g.enclosures.map((n, i) => <span key={i}>{i ? ', ' : ''}{file(g, 'enclosures', n)}</span>)}</> : '—'], ['Other remarks', g.otherRemarks || '—'],
       ];
     },
   },
@@ -103,7 +109,7 @@ export const ENTITIES: Record<EntityKind, EntityConfig> = {
       const f = r as Fdp;
       return [['Role', f.role], ['Programme Type', f.programmeType], ['Title', f.title], ['Organised by', f.organiser], ['Sponsored by', f.sponsoredBy || '—'],
         ['Mode', f.mode], ['Level', f.level], ['Dates', `${fmtDate(f.fromDate)} to ${fmtDate(f.toDate)}`], ['Duration', `${f.hours} hours`],
-        ['Outcome / Learning applied', f.outcome || '—'], ['Certificate', file(f.certificateName)]];
+        ['Outcome / Learning applied', f.outcome || '—'], ['Certificate', file(f, 'certificateName', f.certificateName)]];
     },
   },
   conferences: {
@@ -122,7 +128,7 @@ export const ENTITIES: Record<EntityKind, EntityConfig> = {
       return [['Participation', c.participation], ['Conference', c.conferenceName], ['Paper / Talk Title', c.paperTitle || '—'], ['Organiser', c.organiser],
         ['Venue', `${c.venue}, ${c.country}`], ['Level', c.level], ['Mode', c.mode], ['Dates', `${fmtDate(c.fromDate)} to ${fmtDate(c.toDate)}`],
         ['Proceedings indexed', c.proceedingsIndexed], ['Funding', c.funding], ['Registration Fee', inr(c.registrationFee)],
-        ['Amount Claimed', c.amountClaimed ? inr(c.amountClaimed) : '—'], ['Award', c.award || '—'], ['Certificate', file(c.certificateName)]];
+        ['Amount Claimed', c.amountClaimed ? inr(c.amountClaimed) : '—'], ['Award', c.award || '—'], ['Certificate', file(c, 'certificateName', c.certificateName)]];
     },
   },
   awards: {
@@ -137,7 +143,7 @@ export const ENTITIES: Record<EntityKind, EntityConfig> = {
     details: (r) => {
       const a = r as Honour;
       return [['Category', a.category], ['Honour / Award', a.title], ['Conferred by', a.awardedBy], ['Level', a.level], ['Date received', fmtDate(a.awardDate)],
-        ['Citation', a.citation || '—'], ['Prize / Honorarium', a.prizeAmount ? inr(a.prizeAmount) : '—'], ['Certificate', file(a.certificateName)]];
+        ['Citation', a.citation || '—'], ['Prize / Honorarium', a.prizeAmount ? inr(a.prizeAmount) : '—'], ['Certificate', file(a, 'certificateName', a.certificateName)]];
     },
   },
   ipr: {
@@ -155,7 +161,7 @@ export const ENTITIES: Record<EntityKind, EntityConfig> = {
         ['Application / registration number', x.applicationNumber], ['Filing date', fmtDate(x.filingDate)], ['Grant / registration date', x.grantDate ? fmtDate(x.grantDate) : '—'],
         ['Office / country', x.office], ['Registered owner / applicant', x.owner === 'Other' ? x.ownerOther || 'Other' : x.owner], ['Funding source / sponsor', x.funding || '—'],
         ['Licensed or commercialised?', x.licensed ? `Yes — ${x.licensee}` : 'No'], ['Co-inventors / co-creators', x.coOwners || '—'],
-        ['Filing receipt / registration certificate', file(x.documentName)], ['Funding or ownership agreement', x.agreementName ? file(x.agreementName) : '—'],
+        ['Filing receipt / registration certificate', file(x, 'documentName', x.documentName)], ['Funding or ownership agreement', x.agreementName ? file(x, 'agreementName', x.agreementName) : '—'],
         ['Declaration', x.declared ? 'Confirmed: the information is accurate and all co-inventors / co-creators are listed.' : 'Not confirmed']];
     },
   },
