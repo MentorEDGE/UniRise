@@ -58,7 +58,7 @@ data "aws_iam_policy_document" "task" {
     resources = [for b in aws_s3_bucket.b : b.arn]
   }
   statement {
-    actions   = ["s3:GetObject", "s3:PutObject", "s3:DeleteObject", "s3:AbortMultipartUpload", "s3:ListMultipartUploadParts"]
+    actions   = ["s3:GetObject", "s3:GetObjectTagging", "s3:PutObject", "s3:DeleteObject", "s3:AbortMultipartUpload", "s3:ListMultipartUploadParts"]
     resources = [for b in aws_s3_bucket.b : "${b.arn}/*"]
   }
   # Institution database passwords (A2): one secret per institution under this prefix, created by the API when it
@@ -224,6 +224,7 @@ resource "aws_ecs_task_definition" "api" {
       SECRETS_STORE         = "aws" # institution database passwords in Secrets Manager, not in the control-plane database (A2)
       SECRETS_PREFIX        = local.tenant_secret_prefix
       UPLOADS_BUCKET        = aws_s3_bucket.b["uploads"].bucket # record files (A1b); the task role may read and write it
+      UPLOADS_MALWARE_SCAN  = "true"                            # A9: open a file only once GuardDuty has tagged it clean
       # Email (A1a): enquiries from the website go to the UniRise team, sent from the verified dev domain.
       MAIL_FROM              = local.domain_on ? "UniRise <no-reply@${var.domain_name}>" : ""
       MAIL_ENQUIRIES_TO      = var.enquiries_to

@@ -20,10 +20,28 @@ import org.testcontainers.postgresql.PostgreSQLContainer;
  * with dummy credentials, so no AWS account is used.
  */
 @SpringBootTest(webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT,
-	properties = { "app.admin-key=test-admin", "app.session.secure-cookie=false", "app.uploads.bucket=unirise-test-uploads" })
+	properties = { "app.admin-key=test-admin", "app.session.secure-cookie=false", "app.uploads.bucket=unirise-test-uploads", "app.uploads.malware-scan=true",
+		"spring.main.allow-bean-definition-overriding=true" }) // the stand-in below replaces the real S3 client
 class UploadsTest {
 	static final PostgreSQLContainer PG = new PostgreSQLContainer("postgres:16");
 	static final HttpClient NO_REDIRECT = HttpClient.newBuilder().followRedirects(HttpClient.Redirect.NEVER).build();
+	/** The virus-scan tag of each object, as GuardDuty would set it (A9). */
+	static final java.util.Map<String, String> SCAN = new java.util.concurrent.ConcurrentHashMap<>();
+
+	@org.springframework.boot.test.context.TestConfiguration
+	static class FakeS3 {
+		@org.springframework.context.annotation.Bean
+		software.amazon.awssdk.services.s3.S3Client s3Client() {
+			return new software.amazon.awssdk.services.s3.S3Client() {
+				@Override public String serviceName() { return "s3"; }
+				@Override public void close() {}
+				@Override public software.amazon.awssdk.services.s3.model.GetObjectTaggingResponse getObjectTagging(software.amazon.awssdk.services.s3.model.GetObjectTaggingRequest r) {
+					var tags = SCAN.containsKey(r.key()) ? java.util.List.of(software.amazon.awssdk.services.s3.model.Tag.builder().key("GuardDutyMalwareScanStatus").value(SCAN.get(r.key())).build()) : java.util.List.<software.amazon.awssdk.services.s3.model.Tag>of();
+					return software.amazon.awssdk.services.s3.model.GetObjectTaggingResponse.builder().tagSet(tags).build();
+				}
+			};
+		}
+	}
 
 	@DynamicPropertySource
 	static void props(DynamicPropertyRegistry r) {
@@ -81,6 +99,15 @@ class UploadsTest {
 		var foreign = api.call("POST", "/api/records/publications", fac, rec.replace("\"key\":\"upl/", "\"key\":\"abc/"));
 		assertEquals(400, foreign.statusCode(), foreign.body());
 
+		// A9: not scanned yet, or flagged, means no link even for the owner.
+		var waiting = download(fac, key);
+		assertEquals(409, waiting.statusCode());
+		assertTrue(waiting.body().contains("still being checked for viruses"), waiting.body());
+		SCAN.put(key, "THREATS_FOUND");
+		var flagged = download(fac, key);
+		assertEquals(403, flagged.statusCode());
+		assertTrue(flagged.body().contains("flagged this file as unsafe") && flagged.headers().firstValue("Content-Type").orElse("").startsWith("text/html"), flagged.body());
+		SCAN.put(key, "NO_THREATS_FOUND");
 		// Downloads: the owner and the Office get a short-lived link; a colleague and management (draft) do not.
 		var mine = download(fac, key);
 		assertEquals(302, mine.statusCode());

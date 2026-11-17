@@ -38,12 +38,14 @@ public class UploadController {
 	private final DataSlice slice;
 	private final AppProperties props;
 	private final S3Presigner presigner;
+	private final software.amazon.awssdk.services.s3.S3Client s3;
 
-	public UploadController(AccessService access, DataSlice slice, AppProperties props, java.util.Optional<S3Presigner> presigner) {
+	public UploadController(AccessService access, DataSlice slice, AppProperties props, java.util.Optional<S3Presigner> presigner, java.util.Optional<software.amazon.awssdk.services.s3.S3Client> s3) {
 		this.access = access;
 		this.slice = slice;
 		this.props = props;
 		this.presigner = presigner.orElse(null);
+		this.s3 = s3.orElse(null);
 	}
 
 	private boolean off() { return props.uploads().bucket().isEmpty() || presigner == null; }
@@ -70,10 +72,28 @@ public class UploadController {
 		var found = attachedTo(slice.build(a), key);
 		if (found == null) return AuthController.error(HttpStatus.NOT_FOUND, "File not found.");
 		String name = Json.str(found.get("name"), 150);
+		if (props.uploads().malwareScan()) { // A9: GuardDuty tags each object with its scan result
+			String scan = s3.getObjectTagging((t) -> t.bucket(props.uploads().bucket()).key(key)).tagSet().stream()
+				.filter((t) -> t.key().equals("GuardDutyMalwareScanStatus")).map(software.amazon.awssdk.services.s3.model.Tag::value).findFirst().orElse("");
+			switch (scan) {
+				case "NO_THREATS_FOUND" -> {}
+				case "" -> { return page(HttpStatus.CONFLICT, "This file is still being checked for viruses. Try again in a minute."); }
+				case "THREATS_FOUND" -> { return page(HttpStatus.FORBIDDEN, "The virus scan flagged this file as unsafe, so it cannot be opened. Remove it from the entry and upload a clean copy."); }
+				default -> { return page(HttpStatus.FORBIDDEN, "This file could not be checked for viruses (" + scan.toLowerCase().replace('_', ' ') + "). Upload it again, or contact your Office of Research."); }
+			}
+		}
 		var get = presigner.presignGetObject((p) -> p.signatureDuration(Duration.ofMinutes(5))
 			.getObjectRequest((o) -> o.bucket(props.uploads().bucket()).key(key)
 				.responseContentDisposition("inline; filename=\"" + name.replaceAll("[\"\\\\\\r\\n]", "_") + "\"")));
 		return ResponseEntity.status(HttpStatus.FOUND).location(URI.create(get.url().toString())).header("Cache-Control", "no-store").build();
+	}
+
+	/** A file link opens in a browser tab, so a refusal is a short readable page rather than JSON. */
+	private static ResponseEntity<String> page(HttpStatus status, String message) {
+		String html = "<!doctype html><meta charset=utf-8><meta name=viewport content=\"width=device-width\"><title>UniRise file</title>"
+			+ "<body style=\"font:16px system-ui;max-width:560px;margin:15vh auto;padding:0 20px\"><h1 style=\"font-size:20px\">UniRise</h1><p>"
+			+ message.replace("&", "&amp;").replace("<", "&lt;") + "</p><p><a href=\"javascript:window.close()\">Close this tab</a></p>";
+		return ResponseEntity.status(status).contentType(org.springframework.http.MediaType.TEXT_HTML).header("Cache-Control", "no-store").body(html);
 	}
 
 	/** The attachment with this key on any record in the caller's data, or null. */

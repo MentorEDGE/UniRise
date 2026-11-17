@@ -237,7 +237,7 @@ Account `417441726165`, `ap-south-1`, shared with MentorEDGE. Only UniRise resou
 | A6 | Frontend hosting for `dev-unirise.mentoredge.co.in`: Hostinger, not AWS (D4). Build `rdms-web` with the API base URL and upload `dist/` | The UI is not deployed anywhere |
 | A7 | Human IAM users with MFA instead of root; budget alerts | Deferred by request; needed before production |
 | A8 | Alarms (task health, 5xx, RDS storage and CPU), rate limiting at the edge | No monitoring today. The dev database was down for 11 days unnoticed because the health page does not test it; include a check that reaches the database |
-| A9 | Upload scanning for PDFs and certificates | Needed once uploads exist |
+| A9 | ~~Upload scanning~~ **Built 2026-11-17** | GuardDuty Malware Protection for S3 on the uploads bucket only (`malware.tf`); each object is tagged with its scan result and the API opens a file only when it is NO_THREATS_FOUND (otherwise a short page: still being checked, flagged, or could not be checked) |
 | A10 | Production environment: region and account choice, Multi-AZ, deletion protection | Not designed |
 | A11 | ~~Commit the infra and API changes from 2026-11-04~~ **Done 2026-11-14** | The running image was built from source that was uncommitted until then |
 

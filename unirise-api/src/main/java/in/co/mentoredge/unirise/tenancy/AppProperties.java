@@ -11,7 +11,7 @@ public record AppProperties(Control control, Tenants tenants, String adminKey, @
 	public record Secrets(@DefaultValue("database") String store, @DefaultValue("unirise/local/tenant/") String prefix) {}
 
 	/** Record files (A1b): the private S3 bucket. Empty: uploads are switched off and the UI keeps file names only. */
-	public record Uploads(@DefaultValue("") String bucket, @DefaultValue("10485760") long maxBytes) {}
+	public record Uploads(@DefaultValue("") String bucket, @DefaultValue("10485760") long maxBytes, /** A9: open only files GuardDuty tagged clean */ @DefaultValue("false") boolean malwareScan) {}
 
 	/** Email (A1a): sender, where enquiries go, SES configuration set. Empty sender or recipient: no email (enquiries are only stored). */
 	public record Mail(@DefaultValue("") String from, @DefaultValue("") String enquiriesTo, @DefaultValue("") String configurationSet) {}

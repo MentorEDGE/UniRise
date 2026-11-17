@@ -13,4 +13,11 @@ public class UploadsConfig {
 	S3Presigner s3Presigner() {
 		return S3Presigner.create();
 	}
+
+	/** Reads the virus-scan result (an object tag) before a file is opened (A9). */
+	@Bean(destroyMethod = "close")
+	@ConditionalOnExpression("!'${app.uploads.bucket:}'.isEmpty()")
+	software.amazon.awssdk.services.s3.S3Client s3Client() {
+		return software.amazon.awssdk.services.s3.S3Client.builder().httpClientBuilder(software.amazon.awssdk.http.urlconnection.UrlConnectionHttpClient.builder()).build();
+	}
 }
