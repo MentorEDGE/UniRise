@@ -92,3 +92,9 @@ variable "enquiries_to" {
   type        = string
   default     = ""
 }
+
+variable "alert_email" {
+  description = "Where alerts go (A8): API down, server errors, database storage and CPU, failed backup jobs. AWS sends a confirmation link once. Empty: no alerts."
+  type        = string
+  default     = ""
+}
