@@ -20,7 +20,7 @@ import { BiodataEdit, BiodataView } from './pages/shared/Biodata';
 import { Account, Login } from './pages/shared/Misc';
 import { IntroLanding } from './pages/shared/Landing';
 import { AdminApprovals, AdminAudit, AdminUsers } from './pages/admin/Admin';
-import { CustomFieldSettings, InstitutionSettings, NoticeSettings, TargetSettings } from './pages/office/Settings';
+import { CustomFieldSettings, InstitutionSettings, NoticeSettings, OptionListSettings, TargetSettings } from './pages/office/Settings';
 import { InstitutionNetworks, MyCollaborations } from './pages/mgmt/Networks';
 import { TalkToOurTeam } from './pages/shared/Contact';
 import { RecordView } from './pages/shared/RecordView';
@@ -170,6 +170,7 @@ export default function App() {
             <Route path="settings" element={<Only role="office"><InstitutionSettings /></Only>} />
             <Route path="settings/targets" element={<Only role="office"><TargetSettings /></Only>} />
             <Route path="settings/fields" element={<Only role="office"><CustomFieldSettings /></Only>} />
+            <Route path="settings/lists" element={<Only role="office"><OptionListSettings /></Only>} />
             <Route path="settings/notices" element={<Only role="office"><NoticeSettings /></Only>} />
             <Route path="office/users" element={<Only role="office"><AdminUsers /></Only>} />
             <Route path="office/audit" element={<Only role="office"><AdminAudit /></Only>} />

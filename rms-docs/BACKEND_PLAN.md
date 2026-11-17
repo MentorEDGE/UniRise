@@ -60,7 +60,8 @@ Status: **Missing** = nothing in the API. **Partial** = exists but the contract 
 | Done in the browser by design (D2: the API sends the scoped slice) | G26 reports, G27 analytics, G40 management dashboard |
 | Done after phase 6 | G41 schools (2026-11-17) |
 | Done 2026-11-17 | G28 record types on/off (Institution → Record types; hidden in menus and forms, refused by the API). G29 custom fields (Institution → Custom Fields; up to 10 per record type; on entry forms, in record details and the review window; checked by the API: type, options, required to submit) |
-| Partly done | G24 enquiries: stored and emailed (A1a, deploy pending). G30 option lists: stored in settings, **no screen and not used yet** |
+| Done 2026-11-17 (G30) | Option lists (Institution → Option Lists): designations, publication categories, grant types, grant sources and FDP programme types can be reworded (up to 50 each; empty = default); lists used by scoring, reports or record rules stay fixed. Entries keep their value if it leaves the list |
+| Partly done | G24 enquiries: stored and emailed (A1a, deploy pending) |
 | Not started | G25 file uploads (**A1b**) |
 | Later (phase 8) | G32 per-institution reports, G33 OIDC and integrations, G34 configurable review steps |
 

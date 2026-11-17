@@ -422,6 +422,8 @@ export interface Settings {
   features?: Partial<Record<EntityKind, boolean>>;
   /** The institution's own fields per record type (G29). */
   customFields?: Partial<Record<EntityKind, CustomField[]>>;
+  /** The institution's own wording of some option lists (G30); a missing or empty list uses the default. */
+  lists?: Partial<Record<ListKey, string[]>>;
   academicYearStartMonth: number; // 1-12; 6 = June
   seedMoneyWindowOpen: boolean;
   targets: Targets;
@@ -480,3 +482,20 @@ export const customFieldsOf = (s: Settings, kind: EntityKind): CustomField[] => 
 /** A custom value as text, for record details and exports. */
 export const customText = (f: CustomField, v: CustomValue | undefined): string =>
   v === undefined || v === '' ? '' : f.type === 'yesno' ? (v ? 'Yes' : 'No') : String(v);
+
+/**
+ * Option lists an institution may reword (G30). Only plain labels: lists that scoring, reports or the API rely on
+ * (publication types, quartiles, levels, conference roles, IP types, funding) stay fixed.
+ */
+export const OPTION_LISTS = {
+  designations: { label: 'Faculty designations', defaults: ['Professor', 'Associate Professor', 'Assistant Professor', 'Professor of Practice', 'Adjunct Faculty'] },
+  publicationCategories: { label: 'Publication categories', defaults: PUB_CATEGORIES },
+  grantTypes: { label: 'Grant types', defaults: GRANT_TYPES },
+  grantSources: { label: 'Grant sources', defaults: GRANT_SOURCES },
+  fdpTypes: { label: 'FDP programme types', defaults: FDP_TYPES },
+} as const;
+export type ListKey = keyof typeof OPTION_LISTS;
+/** The institution's list, or the default. */
+export const listOf = (s: Settings, key: ListKey): string[] => (s.lists?.[key]?.length ? [...s.lists[key]!] : [...OPTION_LISTS[key].defaults]);
+/** Keeps a value already chosen selectable after the list was reworded. */
+export const withCurrent = (list: string[], v: string | undefined) => (v && !list.includes(v) ? [...list, v] : list);

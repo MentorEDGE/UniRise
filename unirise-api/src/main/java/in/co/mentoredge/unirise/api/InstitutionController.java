@@ -157,7 +157,7 @@ public class InstitutionController {
 			next.put("features", features);
 		}
 		if (s.get("customFields") instanceof Map<?, ?> cf) next.put("customFields", customFields(cf));   // G29
-		if (s.get("lists") instanceof Map<?, ?> l) next.put("lists", l);                   // G30
+		if (s.get("lists") instanceof Map<?, ?> l) next.put("lists", lists(l));            // G30
 		settings.put(next);
 		log.record(a, "Institution settings saved", name, null);
 		return Json.of("ok", true, "result", null);
@@ -196,6 +196,21 @@ public class InstitutionController {
 		}
 		List<String> unplaced = departments.stream().filter((d) -> !placed.containsKey(d)).map((d) -> "“" + d + "”").toList();
 		if (!unplaced.isEmpty()) throw invalid("Choose a school for " + String.join(", ", unplaced) + ".");
+		return out;
+	}
+
+	/** The option lists an institution may reword (G30); the lists scoring, reports and record rules rely on stay fixed. */
+	static final List<String> LISTS = List.of("designations", "publicationCategories", "grantTypes", "grantSources", "fdpTypes");
+
+	/** Only the known lists; each item trimmed (80 characters), no blanks or repeats, at most 50. An empty list means the default. */
+	static Map<String, Object> lists(Map<?, ?> in) {
+		Map<String, Object> out = new LinkedHashMap<>();
+		for (String key : LISTS) {
+			List<String> items = new ArrayList<>();
+			for (Object o : Json.arr(in.get(key))) { String x = Json.str(o, 80).trim(); if (!x.isEmpty() && !items.contains(x)) items.add(x); }
+			if (items.size() > 50) throw invalid("At most 50 options in a list.");
+			if (!items.isEmpty()) out.put(key, items);
+		}
 		return out;
 	}
 

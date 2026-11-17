@@ -447,4 +447,21 @@ class InstitutionApiTest {
 			put.apply(Map.of());
 		}
 	}
+
+	@Test
+	@SuppressWarnings("unchecked")
+	void theOfficeRewordsTheOptionListsThatAreSafeToChange() throws Exception {
+		setup();
+		Caller office = office(), fac = faculty("c");
+		Map<String, Object> settings = (Map<String, Object>) data(office).get("settings");
+		var copy = new java.util.LinkedHashMap<>(settings);
+		copy.put("lists", Map.of("grantTypes", List.of(" Research Project ", "Seed Grant", "", "Seed Grant"), "publicationTypes", List.of("Poem"), "designations", List.of()));
+		assertEquals(200, api.call("PUT", "/api/settings", office, JSON.writeValueAsString(copy)).statusCode());
+		var lists = (Map<String, Object>) ((Map<String, Object>) data(fac).get("settings")).get("lists");
+		assertEquals(Map.of("grantTypes", List.of("Research Project", "Seed Grant")), lists, "trimmed, no blanks or repeats; unknown lists ignored; an empty list means the default");
+		copy.put("lists", Map.of("fdpTypes", java.util.stream.IntStream.range(0, 51).mapToObj(n -> "Type " + n).toList()));
+		assertEquals(400, api.call("PUT", "/api/settings", office, JSON.writeValueAsString(copy)).statusCode());
+		copy.put("lists", Map.of());
+		assertEquals(200, api.call("PUT", "/api/settings", office, JSON.writeValueAsString(copy)).statusCode());
+	}
 }

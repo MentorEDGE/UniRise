@@ -1,8 +1,8 @@
 import { useState } from 'react';
 import { Alert, Field, Input, NumberInput, PageTitle, Panel, Select, Tabs, TextArea, useToast } from '../../components/ui';
 import { schoolOf } from '../../lib/org';
-import { ENTITY_LABEL, kindOn } from '../../lib/types';
-import type { AnyRecord, CustomField, EntityKind } from '../../lib/types';
+import { ENTITY_LABEL, OPTION_LISTS, kindOn, listOf } from '../../lib/types';
+import type { AnyRecord, CustomField, EntityKind, ListKey } from '../../lib/types';
 
 const RECORD_KINDS: EntityKind[] = ['publications', 'grants', 'seedMoney', 'fdps', 'conferences', 'awards', 'ipr'];
 import { DEFAULT_WEIGHTS } from '../../lib/seed';
@@ -203,6 +203,37 @@ export function CustomFieldSettings() {
           {fields.length >= 10 && <span className="muted">Up to 10 fields per record type.</span>}
         </div>
         <p className="note">Removing a field hides it everywhere; values already entered are kept with the entries. Renaming keeps the values.</p>
+      </Panel>
+      <div className="btn-row"><button className="btn ok" onClick={save}>Save settings</button></div>
+    </>
+  );
+}
+
+/**
+ * Institution → Option Lists (G30): the institution's own wording of five plain-label lists. Lists that scoring,
+ * reports or the API rely on stay fixed. Entries already made keep their value even if it is no longer in the list.
+ */
+export function OptionListSettings() {
+  const { s, setS, save, error } = useSettingsDraft();
+  const keys = Object.keys(OPTION_LISTS) as ListKey[];
+  const setList = (k: ListKey, text: string) => setS({ ...s, lists: { ...(s.lists ?? {}), [k]: text.split('\n').slice(0, 51) } });
+  return (
+    <>
+      <PageTitle sub="Word the choices on forms the way your institution does. Entries already made keep their value.">Option Lists</PageTitle>
+      <Panel size="wide">
+        {error && <Alert kind="error">{error}</Alert>}
+        <div className="grid g2">
+          {keys.map((k) => {
+            const own = !!s.lists?.[k]?.some((x) => x.trim());
+            return (
+              <Field key={k} label={OPTION_LISTS[k].label} hint={own ? 'Your institution’s list · one per line, up to 50' : 'The default list · edit to make it your own'}>
+                <TextArea value={(own ? s.lists![k]! : listOf(s, k)).join('\n')} onChange={(v) => setList(k, v)} />
+                {own && <button type="button" className="link-btn" onClick={() => setS({ ...s, lists: { ...(s.lists ?? {}), [k]: [] } })}>Use the default list</button>}
+              </Field>
+            );
+          })}
+        </div>
+        <p className="note">Fixed lists (publication types, quartiles, levels, conference roles, intellectual property types and conference funding) are used by scoring and reports, so they cannot be changed here.</p>
       </Panel>
       <div className="btn-row"><button className="btn ok" onClick={save}>Save settings</button></div>
     </>

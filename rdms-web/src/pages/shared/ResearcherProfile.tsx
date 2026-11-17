@@ -8,7 +8,7 @@ import { SHOW_FULL_PHONE_NUMBERS, displayPhone, fmtDate, inr, isSanctioned } fro
 import { creditedFaculty } from '../../lib/domain';
 import { saveFaculty, useStore } from '../../lib/store';
 import type { EntityKind, Faculty, Grant, Honour, IntellectualProperty, Publication, SeedMoney } from '../../lib/types';
-import { EMPTY_SCHOLAR, ENGAGEMENT_TYPES, EXIT_REASONS, SDGS, ipTypeLabel } from '../../lib/types';
+import { EMPTY_SCHOLAR, ENGAGEMENT_TYPES, EXIT_REASONS, SDGS, ipTypeLabel, listOf, withCurrent } from '../../lib/types';
 import { RecordDetail } from './RecordDetail';
 import { NetworkGraph, outputsOf } from '../../components/network';
 
@@ -437,7 +437,7 @@ function OfficialDetails({ f, onClose }: { f: Faculty; onClose: () => void }) {
       <div className="grid g2">
         <Field label="Title"><Select value={x.title} onChange={(v) => setX({ ...x, title: v })} options={['Dr.', 'Prof.', 'Mr.', 'Ms.', 'Mrs.']} /></Field>
         <Field label="Full name"><Input value={x.name} onChange={(v) => setX({ ...x, name: v })} /></Field>
-        <Field label="Designation"><Select value={x.designation} onChange={(v) => setX({ ...x, designation: v })} options={['Professor', 'Associate Professor', 'Assistant Professor', 'Professor of Practice', 'Adjunct Faculty']} /></Field>
+        <Field label="Designation"><Select value={x.designation} onChange={(v) => setX({ ...x, designation: v })} options={withCurrent(listOf(db.settings, 'designations'), x.designation)} /></Field>
         <Field label="Department"><Select value={x.department} onChange={(v) => setX({ ...x, department: v })} options={db.settings.departments} /></Field>
         {!f.active && <>
           {/* Former faculty: reason and last working day stay editable, and are needed for anyone deactivated before they were recorded. */}

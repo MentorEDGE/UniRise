@@ -7,7 +7,7 @@ import { fmtDate } from '../../lib/analytics';
 import { ENTITIES, listColumns } from '../../lib/entities';
 import { adminApi, reloadData, useStore } from '../../lib/store';
 import type { AnyRecord, Biodata, DB, EntityKind, Faculty, Grant, HistoryItem, ProfileChange, SeedMoney, Status } from '../../lib/types';
-import { DECISION_ACTIONS, ENTITY_LABEL, GRANT_OUTCOMES, STATUS_LABEL, customFieldsOf, customText, isAwaitingOffice, statusLabel } from '../../lib/types';
+import { DECISION_ACTIONS, ENTITY_LABEL, GRANT_OUTCOMES, STATUS_LABEL, customFieldsOf, customText, isAwaitingOffice, listOf, statusLabel } from '../../lib/types';
 import { Conversation, ProgressTracker } from '../../components/workflow';
 import { hasSchools, inUnit, unitFieldLabel, unitOptions } from '../../lib/org';
 
@@ -305,7 +305,7 @@ function AddUser({ onClose, onDone }: { onClose: () => void; onDone: () => void 
             </>}
             <Field label="Designation" className={f.role === 'faculty' ? 'span2' : ''}>
               {f.role === 'faculty'
-                ? <Select value={f.designation} onChange={(v) => u({ designation: v })} options={['Professor', 'Associate Professor', 'Assistant Professor', 'Professor of Practice', 'Adjunct Faculty']} />
+                ? <Select value={f.designation} onChange={(v) => u({ designation: v })} options={listOf(db.settings, 'designations')} />
                 : <Input value={f.designation} onChange={(v) => u({ designation: v })} placeholder="e.g. Director, Dean (Research), Registrar" />}
             </Field>
           </div>

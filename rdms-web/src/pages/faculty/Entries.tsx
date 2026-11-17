@@ -3,13 +3,14 @@ import type { ReactNode } from 'react';
 import { Field, FileName, Input, NumberInput, PageTitle, Panel, Select, TextArea, YesNo } from '../../components/ui';
 import { getDB, useStore } from '../../lib/store';
 import {
-  AWARD_CATEGORIES, CONF_PARTICIPATION, IP_DESCRIPTION_WORDS, IP_OWNERS, IP_STATUSES, IP_TYPES, wordCount, FDP_ROLES, FDP_TYPES, FUNDING, GRANT_SOURCES, GRANT_TYPES, GRANT_UNITS, INDEXING, LEVELS, MODES, MONTHS,
-  PUB_CATEGORIES, PUB_TYPES, QUARTILES,
+  AWARD_CATEGORIES, CONF_PARTICIPATION, IP_DESCRIPTION_WORDS, IP_OWNERS, IP_STATUSES, IP_TYPES, wordCount, FDP_ROLES, FUNDING, GRANT_UNITS, INDEXING, LEVELS, MODES, MONTHS,
+  PUB_TYPES, QUARTILES,
 } from '../../lib/types';
 import type { AnyRecord, Conference, Fdp, Grant, Honour, IntellectualProperty, PubType, Publication, SeedMoney } from '../../lib/types';
 import { AuthorTable, BlockedEntry, InvestigatorTable, SaveBar, selfAuthor, selfInvestigator, useEntry, validateInvestigators } from './entryKit';
 import type { Errors } from './entryKit';
 import { fileUrl } from '../../lib/store';
+import { listOf, withCurrent } from '../../lib/types';
 
 /** The stored file of a field, where uploads are on. */
 const fileOf = (r: AnyRecord, field: string) => r.attachments?.find((a) => a.field === field);
@@ -81,7 +82,7 @@ export function PublicationEntry() {
         <div className="grid">
           {!e.isNew && <Field label="Entry Type"><Select value={t} onChange={() => {}} options={PUB_TYPES} disabled /></Field>}
           {t && <>
-            <Field label="Category"><Select value={r.category} onChange={(v) => u({ category: v })} options={PUB_CATEGORIES} /></Field>
+            <Field label="Category"><Select value={r.category} onChange={(v) => u({ category: v })} options={withCurrent(listOf(getDB().settings, 'publicationCategories'), r.category)} /></Field>
             <Field label="DOI/Webpage Link" required={t === 'Journal Article'} error={x.doi}><Input value={r.doi} onChange={(v) => u({ doi: v })} placeholder="https://doi.org/…" /></Field>
             <Field label="Publication Id"><input type="text" readOnly value={r.id || 'Generated on save'} /></Field>
             <Field label="Title" required error={x.title} className="span2"><TextArea value={r.title} onChange={(v) => u({ title: v })} /></Field>
@@ -169,13 +170,13 @@ export function GrantEntry() {
             <div className="grid">
               <Field label="Grant Unit" required error={x.unit}><Select value={r.unit} onChange={(v) => u({ unit: v })} options={GRANT_UNITS} placeholder="--Select--" /></Field>
               <Field label="Grant Status"><input type="text" readOnly value={r.status} /></Field>
-              <Field label="Grant Type" required error={x.grantType}><Select value={r.grantType} onChange={(v) => u({ grantType: v })} options={GRANT_TYPES} placeholder="--Select--" /></Field>
+              <Field label="Grant Type" required error={x.grantType}><Select value={r.grantType} onChange={(v) => u({ grantType: v })} options={withCurrent(listOf(getDB().settings, 'grantTypes'), r.grantType)} placeholder="--Select--" /></Field>
               <Field label="Grant ID"><input type="text" readOnly value={r.id || 'Generated on save'} /></Field>
               <Field label="UTN" hint="Unique transaction number from the agency portal"><Input value={r.utn} onChange={(v) => u({ utn: v })} /></Field>
               <Field label="Grant Applied Date" required error={x.appliedDate}><input type="date" value={r.appliedDate} max={today()} onChange={(ev) => u({ appliedDate: ev.target.value })} /></Field>
               <Field label="Applied Amount (in INR)" required error={x.appliedAmount}><NumberInput value={r.appliedAmount} onChange={(v) => u({ appliedAmount: v })} min={0} /></Field>
               <Field label="Contact Number" error={x.contactNumber}><Input value={r.contactNumber} onChange={(v) => u({ contactNumber: v })} /></Field>
-              <Field label="Grant Source"><Select value={r.source} onChange={(v) => u({ source: v })} options={GRANT_SOURCES} /></Field>
+              <Field label="Grant Source"><Select value={r.source} onChange={(v) => u({ source: v })} options={withCurrent(listOf(getDB().settings, 'grantSources'), r.source)} /></Field>
               <Field label="Duration Of The Grant" hint="(in months)"><NumberInput value={r.durationMonths} onChange={(v) => u({ durationMonths: v })} min={1} /></Field>
               <Field label="ERF Related?" hint="(Environmental Research Fund)"><YesNo value={r.erfRelated} onChange={(v) => u({ erfRelated: v })} /></Field>
               <Field label="Matching grant required for capital items?" hint="(If mandated by funding agency)"><YesNo value={r.matchingGrant} onChange={(v) => u({ matchingGrant: v })} /></Field>
@@ -298,7 +299,7 @@ export function FdpEntry() {
       <Panel title="Faculty Development Programme Details" size="wide">
         <div className="grid">
           <Field label="Your Role" required><Select value={r.role} onChange={(v) => u({ role: v })} options={FDP_ROLES} /></Field>
-          <Field label="Programme Type" required><Select value={r.programmeType} onChange={(v) => u({ programmeType: v })} options={FDP_TYPES} /></Field>
+          <Field label="Programme Type" required><Select value={r.programmeType} onChange={(v) => u({ programmeType: v })} options={withCurrent(listOf(getDB().settings, 'fdpTypes'), r.programmeType)} /></Field>
           <Field label="Mode"><Select value={r.mode} onChange={(v) => u({ mode: v })} options={MODES} /></Field>
           <Field label="Level"><Select value={r.level} onChange={(v) => u({ level: v })} options={LEVELS} /></Field>
           <Field label="Programme Title" required error={x.title} className="span2"><TextArea value={r.title} onChange={(v) => u({ title: v })} /></Field>

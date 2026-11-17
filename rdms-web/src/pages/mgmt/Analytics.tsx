@@ -9,7 +9,7 @@ import {
 import type { FacultyStats, TrendRow } from '../../lib/analytics';
 import { useStore } from '../../lib/store';
 import type { AnyRecord, EntityKind } from '../../lib/types';
-import { ENTITY_LABEL, SDGS } from '../../lib/types';
+import { ENTITY_LABEL, SDGS, listOf } from '../../lib/types';
 import { useAnalyticsFilter } from './filters';
 import { SCHOOL, hasSchools, inUnit, unitLabel } from '../../lib/org';
 
@@ -204,7 +204,7 @@ export function FacultyPerformance() {
   cols[0].render = (r) => stats.indexOf(r) + 1;
   const avg = (xs: FacultyStats[], k: 'score' | 'publications' | 'fdpHours' | 'conferences') => Math.round((xs.reduce((a, x) => a + x[k], 0) / (xs.length || 1)) * 10) / 10;
   const buckets = [0, 10, 20, 30, 40, 60].map((lo, i, a) => ({ range: i === a.length - 1 ? `${lo}+` : `${lo}–${a[i + 1] - 1}`, faculty: stats.filter((s) => s.score >= lo && (i === a.length - 1 || s.score < a[i + 1])).length }));
-  const byDesig = ['Professor', 'Associate Professor', 'Assistant Professor'].map((d) => { const s = stats.filter((x) => x.faculty.designation === d); return { d: d.replace(' Professor', ' Prof.'), score: avg(s, 'score'), pubs: avg(s, 'publications') }; });
+  const byDesig = listOf(db.settings, 'designations').filter((d) => stats.some((x) => x.faculty.designation === d)).map((d) => { const s = stats.filter((x) => x.faculty.designation === d); return { d: d.replace(' Professor', ' Prof.'), score: avg(s, 'score'), pubs: avg(s, 'publications') }; });
   const byDept = db.settings.departments.filter((d) => inUnit(db.settings, filter.department, d)).map((d) => { const s = stats.filter((x) => x.faculty.department === d); return { d: shortDept(d), score: avg(s, 'score'), pubs: avg(s, 'publications'), funding: Math.round(s.reduce((a, x) => a + x.sanctionedAmount, 0) / 100000 * 10) / 10 }; });
   const top = [...stats].sort((a, b) => b.score - a.score).slice(0, 10).map((s) => ({ name: s.faculty.name, score: s.score, pubs: s.publications }));
   const ids = new Set(stats.map((s) => s.faculty.id));
