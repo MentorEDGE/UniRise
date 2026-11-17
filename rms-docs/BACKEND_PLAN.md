@@ -217,7 +217,7 @@ Account `417441726165`, `ap-south-1`, shared with MentorEDGE. Only UniRise resou
 | # | Item | Why it matters |
 |---|---|---|
 | A1 | AWS SDK in the API: S3 presigned uploads, SES send | Blocks G24, G25 and any email to users |
-| A2 | Tenant database passwords from the control-plane table to Secrets Manager | Required before real data (marked `shortcut:` in `V1__control_plane.sql`) |
+| A2 | ~~Tenant database passwords from the control-plane table to Secrets Manager~~ **Done 2026-11-17** | `SecretStore` (`app.secrets.store=aws` on AWS): one secret per institution, `unirise/dev/tenant/<slug>`, labelled Project=UniRise; the API task may use only that prefix. The three existing passwords were moved at start-up (written, read back, then removed from `institution_secret`). The table stays for local runs and tests only |
 | A3 | SES production access request | Without it, mail goes only to verified addresses |
 | A4 | Deploy pipeline: CI builds and tests only; deploys are `scripts/push-image.sh` plus `tofu apply` by hand | Repeatable releases |
 | A5 | Scheduled tenant backups (EventBridge Scheduler running the existing admin task) | Backups are manual today |
