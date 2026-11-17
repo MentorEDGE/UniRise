@@ -3,7 +3,7 @@ import { Link, useSearchParams } from 'react-router-dom';
 import { DataTable, Field, Input, PageTitle, Panel, Select, Tabs } from '../../components/ui';
 import { ENTITIES, listColumns } from '../../lib/entities';
 import { creditedFaculty, useStore, visible } from '../../lib/store';
-import { dateOf } from '../../lib/analytics';
+import { dateOf, forAnalysis } from '../../lib/analytics';
 import type { AnyRecord, EntityKind } from '../../lib/types';
 import { STATUS_LABEL, STATUSES } from '../../lib/types';
 import { RecordDetail } from './RecordDetail';
@@ -102,8 +102,8 @@ export function RecordView({ kind }: { kind: EntityKind }) {
         </form>
       </Panel>
       {kind === 'conferences'
-        ? <Suspense fallback={<div className="panel wide insights"><p className="muted">Loading map…</p></div>}><ConferenceMap rows={rows as Conference[]} db={db} /></Suspense>
-        : <RecordInsights key={kind} kind={kind} rows={rows} db={db} focus={focus} onFocus={setFocus} />}
+        ? <Suspense fallback={<div className="panel wide insights"><p className="muted">Loading map…</p></div>}><ConferenceMap rows={forAnalysis(db, kind, rows) as Conference[]} db={db} /></Suspense>
+        : <RecordInsights key={kind} kind={kind} rows={forAnalysis(db, kind, rows)} db={db} focus={focus} onFocus={setFocus} />}
       <Panel size="wide">
         <DataTable rows={tableRows} columns={listColumns(db, kind, { showOwner: !isFaculty || scope === 'all' }).filter((c) => !(isMgmt && c.key === 'status'))} rowKey={(r) => r.id}
           onRowClick={(r) => setOpenId(r.id)} exportName={cfg.plural} empty={`No ${cfg.plural.toLowerCase()} match the search.`} />

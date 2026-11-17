@@ -272,3 +272,13 @@ export const displayPhone = (p: string) => {
   const digits = p.replace(/\D/g, '');
   return digits.length <= 5 ? p : `${digits.slice(0, 5)}${'*'.repeat(digits.length - 5)}`;
 };
+
+/**
+ * Former faculty (retired, resigned, transferred) stay in the database, but their work is used in no analysis, for any
+ * role and any year (decided 2026-11-17). A record counts in figures, charts, reports and networks only when it credits
+ * at least one current faculty member; lists of records still show everything the role may see.
+ */
+export function forAnalysis<T extends AnyRecord>(db: DB, kind: EntityKind, rows: T[]): T[] {
+  const current = new Set(db.faculty.filter((f) => f.active).map((f) => f.id));
+  return rows.filter((r) => creditedFaculty(kind, r).some((id) => current.has(id)));
+}

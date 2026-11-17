@@ -32,7 +32,8 @@ const conf = (r: AnyRecord) => r as Conference;
 const award = (r: AnyRecord) => r as Honour;
 const ip = (r: AnyRecord) => r as IntellectualProperty;
 const owner = (r: AnyRecord, c: Ctx) => c.byId.get(r.facultyId);
-const credited = (kind: EntityKind) => (r: AnyRecord, c: Ctx) => creditedFaculty(kind, r).filter((id) => c.byId.has(id));
+// Current faculty only: a former faculty member named on a shared record gets no row, department or credit in any report.
+const credited = (kind: EntityKind) => (r: AnyRecord, c: Ctx) => creditedFaculty(kind, r).filter((id) => c.byId.get(id)?.active);
 const facultyKey = (kind: EntityKind) => (r: AnyRecord, c: Ctx) => credited(kind)(r, c).map((id) => `${id} – ${c.byId.get(id)!.name}`);
 const deptKey = (kind: EntityKind) => (r: AnyRecord, c: Ctx) => [...new Set(credited(kind)(r, c).map((id) => c.byId.get(id)!.department))];
 const count: Measure = { label: 'Count', get: (rows) => rows.length };

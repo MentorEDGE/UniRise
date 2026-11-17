@@ -54,7 +54,8 @@ export function Faculty360({ facultyId: given }: { facultyId?: string }) {
         </div>
         <div style={{ marginTop: 10 }}>{bar}</div>
       </Panel>
-      {s && (
+      {!f.active && <Panel size="wide"><Alert kind="info">{f.title} {f.name} is former faculty ({(f.exitReason || 'left').toLowerCase()}{f.exitDate ? `, last working day ${fmtDate(f.exitDate)}` : ''}). Their records stay in the institution's database, listed below, but are not used in any performance figures, analysis or reports.</Alert></Panel>}
+      {f.active && s && (
         <div style={{ maxWidth: 1180, margin: '0 auto 14px' }}>
           <div className="tiles">
             <Tile label="Score" value={s.score} sub={isMgmt ? `Dept. avg ${avg('score').toFixed(1)}` : 'Weighted score'} />
@@ -70,7 +71,7 @@ export function Faculty360({ facultyId: given }: { facultyId?: string }) {
           </div>
         </div>
       )}
-      <div className="cards" style={{ marginBottom: 14 }}>
+      {f.active && <div className="cards" style={{ marginBottom: 14 }}>
         <BarCard title="Publications by year" data={rows} xKey="ay" xLabel="Academic year" stacked series={[{ key: 'journal', label: 'Journal' }, { key: 'confPaper', label: 'Conference paper' }, { key: 'bookChapter', label: 'Book / chapter' }, { key: 'report', label: 'Tech report' }]} height={200} />
         <BarCard title="FDP hours by year" data={rows} xKey="ay" xLabel="Academic year" series={[{ key: 'fdpHours', label: 'FDP hours' }]} height={200} />
         <BarCard title="Conferences by year" data={rows} xKey="ay" xLabel="Academic year" stacked series={[{ key: 'national', label: 'National' }, { key: 'international', label: 'International' }]} height={200} />
@@ -101,7 +102,7 @@ export function Faculty360({ facultyId: given }: { facultyId?: string }) {
             </table></div>
           </>}
         </section>
-      </div>
+      </div>}
       <Panel size="wide" title={`Records${ay === 'all' ? '' : ` in AY ${ay}`}`}>
         <Tabs value={tab} onChange={setTab} tabs={kinds.map((k) => ({ id: k, label: ENTITY_LABEL[k] }))} />
         <DataTable rows={records} columns={listColumns(db, tab, { showOwner: false }).filter((c) => !(user?.role === 'management' && c.key === 'status')).map((c) => (c.key === 'status' ? { ...c, render: (r: AnyRecord) => <StatusBadge status={r.status} history={r.history} /> } : c))}

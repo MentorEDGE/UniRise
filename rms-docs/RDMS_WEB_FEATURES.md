@@ -16,7 +16,7 @@ Three roles, fixed (decided 2026-11-06 and 2026-11-14). Each institution has its
 
 Rules in `scopeFor` and `canView` (`src/lib/domain.ts`); the Java API applies the same (`DataSlice`, `AccessService`).
 
-**Former faculty** (retired, resigned, transferred, other; with the last working day): the Office of Research keeps their profile and records. They cannot sign in. Management does not see them, and they are left out of the active faculty count and all current figures. *Open (2026-11-16):* whether their approved work should still count in management's totals for past years; do not build on this until the team decides.
+**Former faculty** (retired, resigned, transferred, other; with the last working day): the Office of Research keeps their profile and records. They cannot sign in. Management does not see them, and they are left out of the active faculty count and all current figures. Decided 2026-11-17: this holds for every year and every role, including the Office of Research. Their records stay in the lists (the institution's database) but count in no figure, chart, report or ranking; a record shared with a current faculty member counts for that person only.
 
 ## 2. Records and the review workflow
 

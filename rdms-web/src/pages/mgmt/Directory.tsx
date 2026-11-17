@@ -5,9 +5,10 @@ import { activityByYear, ActivitySpark, Avatar, nameParts, SdgIcon, splitList } 
 import { creditedFaculty } from '../../lib/domain';
 import { downloadCsv } from '../../lib/csv';
 import { useStore } from '../../lib/store';
-import type { Biodata, Faculty } from '../../lib/types';
+import type { AnyRecord, Biodata, EntityKind, Faculty } from '../../lib/types';
 import { SDGS } from '../../lib/types';
 import { hasSchools, schoolOf } from '../../lib/org';
+import { forAnalysis } from '../../lib/analytics';
 
 const PAGE = 24;
 const SORTS = [
@@ -270,17 +271,18 @@ const PersonGlyph = () => <svg className="dir-glyph" viewBox="0 0 40 44" aria-hi
  */
 function PortalCounts() {
   const { db } = useStore();
-  const ok = <T extends { status: string }>(xs: T[] | undefined) => (xs ?? []).filter((r) => r.status === 'Approved').length;
+  // Approved records of current faculty: former faculty stay in the database but are not counted.
+  const ok = (kind: EntityKind) => forAnalysis(db, kind, (db[kind] as AnyRecord[]) ?? []).filter((r) => r.status === 'Approved').length;
   const active = new Set(db.faculty.filter((f) => f.active).map((f) => f.id));
   const people = (test: (b: Biodata) => boolean) => db.biodata.filter((b) => active.has(b.facultyId) && test(b)).length;
   const items: { label: string; n: number; to: string; d: string }[] = [
     { label: 'Profiles', n: active.size, to: '/faculty', d: 'M16 15a6 6 0 1 0 0-12 6 6 0 0 0 0 12Zm-11 15c1-6.5 5.4-10 11-10s10 3.5 11 10Z' },
     { label: 'Research units', n: db.settings.departments.length, to: '/analytics/departments', d: 'M2 15 16 3l14 12h-4v14h-7v-8h-6v8H6V15Z' },
-    { label: 'Outputs', n: ok(db.publications), to: '/publications?status=Approved', d: 'M3 6c4.5-1.6 8.6-1.4 12 1.2V28c-3.4-2.6-7.5-2.8-12-1.2Zm26 0c-4.5-1.6-8.6-1.4-12 1.2V28c3.4-2.6 7.5-2.8 12-1.2Z' },
-    { label: 'Grants', n: ok(db.grants), to: '/grants?status=Approved', d: 'm16 2 13 6v15l-13 7-13-7V8Zm0 3.3L6.6 9.6 16 14l9.4-4.4ZM5 11.4v10.4l10 5.4V15.8Z' },
-    { label: 'Intellectual property', n: ok(db.ipr), to: '/ipr?status=Approved', d: 'M16 2a10 10 0 0 0-6 18c1.3 1 2 2.3 2 3.8V25h8v-1.2c0-1.5.7-2.8 2-3.8A10 10 0 0 0 16 2Zm-4 25h8v2h-8Zm1 3h6v1h-6Z' },
-    { label: 'Prizes', n: ok(db.awards), to: '/awards?status=Approved', d: 'M9 3h14v8a7 7 0 0 1-14 0Zm0 2H3a6 6 0 0 0 6 7Zm14 0h6a6 6 0 0 1-6 7Zm-9 13h4v5h-4Zm-4 6h12v5H10Z' },
-    { label: 'Conferences', n: ok(db.conferences), to: '/conferences?status=Approved', d: 'M11 4h10v4h8v20H3V8h8Zm2 2v2h6V6ZM3 15h26v2H3Z' },
+    { label: 'Outputs', n: ok('publications'), to: '/publications?status=Approved', d: 'M3 6c4.5-1.6 8.6-1.4 12 1.2V28c-3.4-2.6-7.5-2.8-12-1.2Zm26 0c-4.5-1.6-8.6-1.4-12 1.2V28c3.4-2.6 7.5-2.8 12-1.2Z' },
+    { label: 'Grants', n: ok('grants'), to: '/grants?status=Approved', d: 'm16 2 13 6v15l-13 7-13-7V8Zm0 3.3L6.6 9.6 16 14l9.4-4.4ZM5 11.4v10.4l10 5.4V15.8Z' },
+    { label: 'Intellectual property', n: ok('ipr'), to: '/ipr?status=Approved', d: 'M16 2a10 10 0 0 0-6 18c1.3 1 2 2.3 2 3.8V25h8v-1.2c0-1.5.7-2.8 2-3.8A10 10 0 0 0 16 2Zm-4 25h8v2h-8Zm1 3h6v1h-6Z' },
+    { label: 'Prizes', n: ok('awards'), to: '/awards?status=Approved', d: 'M9 3h14v8a7 7 0 0 1-14 0Zm0 2H3a6 6 0 0 0 6 7Zm14 0h6a6 6 0 0 1-6 7Zm-9 13h4v5h-4Zm-4 6h12v5H10Z' },
+    { label: 'Conferences', n: ok('conferences'), to: '/conferences?status=Approved', d: 'M11 4h10v4h8v20H3V8h8Zm2 2v2h6V6ZM3 15h26v2H3Z' },
     { label: 'Research supervisors', n: people((b) => b.availableToSupervise), to: '/faculty?avail=supervise', d: 'M16 4 2 11l14 7 11-5.5V20h2v-9Zm-8 12.2V22c2.3 1.9 5.1 3 8 3s5.7-1.1 8-3v-5.8L16 20Z' },
     { label: 'In the press', n: people((b) => (b.media?.length ?? 0) > 0), to: '/faculty?avail=press', d: 'M4 6h20v20H6a2 2 0 0 1-2-2Zm20 6h4v12a2 2 0 0 1-4 0ZM8 10v6h6v-6Zm9 0v2h4v-2Zm0 4v2h4v-2Zm-9 4v2h13v-2Zm0 4v2h13v-2Z' },
   ];

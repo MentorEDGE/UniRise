@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it } from 'vitest';
-import { academicYearOf, academicYearRange, facultyStats, scoreRecord, uniqueCounts } from './analytics';
+import { academicYearOf, academicYearRange, facultyStats, forAnalysis, scoreRecord, uniqueCounts } from './analytics';
 import { toCsv } from './csv';
 import * as rules from './domain';
 import type { Actor } from './domain';
@@ -376,5 +376,24 @@ describe('schools of a university', () => {
     expect(parts.reduce((a, b) => a + b, 0)).toBeGreaterThanOrEqual(all);
     expect(unitOptions(s).filter((o) => typeof o !== 'string' && o.value.startsWith('school:')).length).toBe(3);
     expect(unitOptions(createSeed().settings)).toEqual(createSeed().settings.departments); // no schools: plain departments
+  });
+});
+
+describe('former faculty are in the database, not in any analysis', () => {
+  it('records count only when they credit a current faculty member', () => {
+    const db = createSeed();
+    const former = new Set(db.faculty.filter((f) => !f.active).map((f) => f.id));
+    expect(former.size).toBe(3); // retired, resigned, transferred in the sample data
+    const only = db.publications.filter((p) => rules.creditedFaculty('publications', p).every((id) => former.has(id)));
+    const shared = db.publications.filter((p) => { const ids = rules.creditedFaculty('publications', p); return ids.some((id) => former.has(id)) && ids.some((id) => !former.has(id)); });
+    expect(only.length).toBeGreaterThan(0);
+    const counted = forAnalysis(db, 'publications', db.publications);
+    expect(counted.some((p) => only.includes(p))).toBe(false);           // only former faculty: left out
+    expect(shared.every((p) => counted.includes(p))).toBe(true);           // shared with a current colleague: counts for them
+    expect(counted.length).toBe(db.publications.length - only.length);
+    // Reports run on the same rule: no row for a former faculty member.
+    const def = REPORTS.find((r) => r.id === 'pub-emp-count')!;
+    const res = runReport(def, forAnalysis(db, 'publications', db.publications.filter((p) => p.status === 'Approved')), { db, byId: new Map(db.faculty.map((f) => [f.id, f])) });
+    expect(JSON.stringify(res).includes('EMP1009')).toBe(false);
   });
 });

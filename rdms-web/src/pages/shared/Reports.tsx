@@ -3,7 +3,7 @@ import { Link, useParams, useSearchParams } from 'react-router-dom';
 import { Alert, DataTable, Field, Input, PageTitle, Panel, Select } from '../../components/ui';
 import type { Column } from '../../components/ui';
 import { downloadCsv } from '../../lib/csv';
-import { academicYearRange, dateOf, facultyStats, fmtDate, inr, lakh, uniqueCounts } from '../../lib/analytics';
+import { academicYearRange, dateOf, facultyStats, fmtDate, forAnalysis, inr, lakh, uniqueCounts } from '../../lib/analytics';
 import { REPORTS, runReport } from '../../lib/reports';
 import type { ReportDef } from '../../lib/reports';
 import { creditedFaculty, useStore } from '../../lib/store';
@@ -51,7 +51,7 @@ export function ReportsPage() {
       if (q.emp && !ids.some((id) => id.toLowerCase() === q.emp.trim().toLowerCase())) return false;
       return true;
     });
-    return runReport(def, recs, { db, byId });
+    return runReport(def, forAnalysis(db, def.kind, recs), { db, byId }); // former faculty: in the database, not in reports
   }, [def, db, applied, isFaculty, user]);
 
   if (!GROUP_TITLE[group]) return <Panel><Alert kind="error">Unknown report group.</Alert></Panel>;
@@ -114,7 +114,8 @@ export function SeedMoneyReport() {
   const [openId, setOpenId] = useState<string | null>(null);
   const rows = db.seedMoney.filter((s) => (!applied.from || s.appliedDate >= applied.from) && (!applied.to || s.appliedDate <= applied.to) && (!applied.status || s.status === applied.status))
     .sort((a, b) => b.appliedDate.localeCompare(a.appliedDate));
-  const total = rows.reduce((a, s) => a + s.sanctionedAmount, 0);
+  const counted = forAnalysis(db, 'seedMoney', rows); // figures leave out former faculty; the table lists every project
+  const total = counted.reduce((a, s) => a + s.sanctionedAmount, 0);
   const [focus, setFocus] = useState<Focus | null>(null);
   const match = useMemo(() => focusMatcher('seedMoney', db), [db]);
   const tableRows = focus ? rows.filter((r) => match(r, focus)) : rows;
@@ -125,12 +126,12 @@ export function SeedMoneyReport() {
         <form className="grid" onSubmit={(e) => { e.preventDefault(); setApplied(form); setFocus(null); }}>
           <Field label="From Date"><input type="date" value={form.from} onChange={(e) => setForm({ ...form, from: e.target.value })} /></Field>
           <Field label="To Date"><input type="date" value={form.to} onChange={(e) => setForm({ ...form, to: e.target.value })} /></Field>
-          <Field label="Status"><Select value={form.status} onChange={(v) => setForm({ ...form, status: v })} options={[{ value: 'Approved', label: 'Approved' }, { value: 'Draft', label: 'Yet to be Submitted' }, { value: 'Submitted', label: 'Submitted' }, { value: 'Rework', label: 'Rework / Revision Required' }, { value: 'Rejected', label: 'Reject' }]} placeholder="ALL" /></Field>
+          <Field label="Status"><Select value={form.status} onChange={(v) => setForm({ ...form, status: v })} options={STATUSES.map((x) => ({ value: x, label: STATUS_LABEL[x] }))} placeholder="ALL" /></Field>
           <div className="btn-row" style={{ alignSelf: 'end', marginTop: 0 }}><button className="btn" type="submit">View</button></div>
         </form>
         <p className="note">Seed money window is <b>{db.settings.seedMoneyWindowOpen ? 'open' : 'closed'}</b>. The Office of Research changes it under Institution → Institution &amp; Departments.</p>
       </Panel>
-      <RecordInsights kind="seedMoney" rows={rows} db={db} focus={focus} onFocus={setFocus} />
+      <RecordInsights kind="seedMoney" rows={counted} db={db} focus={focus} onFocus={setFocus} />
       <Panel size="wide">
         <DataTable rows={tableRows} columns={listColumns(db, 'seedMoney', { showOwner: true })} rowKey={(r) => r.id} onRowClick={(r) => setOpenId(r.id)} exportName="seed_money" />
         <p className="note">Total sanctioned in the selection: <b>{inr(total)}</b>.</p>
