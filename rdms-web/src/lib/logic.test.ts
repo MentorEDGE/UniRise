@@ -5,6 +5,9 @@ import * as rules from './domain';
 import type { Actor } from './domain';
 import { REPORTS, runReport } from './reports';
 import { createSeed, placeholderName } from './seed';
+import { inUnit, unitOptions } from './org';
+import { DEMO_INSTITUTIONS } from '../../server/demo';
+const createSeedXyz = () => DEMO_INSTITUTIONS.find((d) => d.inst.slug === 'xyz')!.seed;
 import type { DB, Fdp, Publication } from './types';
 
 let db: DB;
@@ -344,5 +347,34 @@ describe('management scope and researcher profiles', () => {
       if (f.title !== 'Dr.') expect(f.title).toBe(p.female ? 'Ms.' : 'Mr.');
     });
     expect(new Set(fresh.faculty.map((f) => f.email)).size).toBe(fresh.faculty.length);
+  });
+});
+
+describe('schools of a university', () => {
+  const depts = ['Physics', 'Chemistry', 'Commerce'];
+  it('every department belongs to exactly one school, and names are unique', () => {
+    expect(rules.cleanSchools([], depts)).toEqual([]);
+    expect(rules.cleanSchools([{ name: 'Sciences', departments: ['Chemistry', 'Physics'] }, { name: 'Commerce', departments: ['Commerce'] }], depts))
+      .toEqual([{ name: 'Sciences', departments: ['Physics', 'Chemistry'] }, { name: 'Commerce', departments: ['Commerce'] }]); // institution's order
+    expect(() => rules.cleanSchools([{ name: 'Sciences', departments: ['Physics', 'Chemistry'] }], depts)).toThrow(/Choose a school for “Commerce”/);
+    expect(() => rules.cleanSchools([{ name: 'A', departments: depts }, { name: 'B', departments: ['Physics'] }], depts)).toThrow(/belongs to one school/);
+    expect(() => rules.cleanSchools([{ name: 'A', departments: depts }, { name: 'a', departments: [] }], depts)).toThrow(/two schools/);
+    expect(() => rules.cleanSchools([{ name: '', departments: depts }], depts)).toThrow(/needs a name/);
+    expect(() => rules.cleanSchools([{ name: 'A', departments: [...depts, 'Law'] }], depts)).toThrow(/not one of the institution's departments/);
+  });
+  it('a filter can name a school: its departments count, others do not', () => {
+    const xyz = createSeed({ ...createSeedXyz() });
+    const s = xyz.settings;
+    expect(inUnit(s, '', 'Physics')).toBe(true);
+    expect(inUnit(s, 'school:School of Sciences', 'Chemistry')).toBe(true);
+    expect(inUnit(s, 'school:School of Sciences', 'Commerce')).toBe(false);
+    expect(inUnit(s, 'Physics', 'Chemistry')).toBe(false);
+    const all = uniqueCounts(xyz, { from: '', to: '', department: '' }).pubs.length;
+    const parts = s.schools!.map((x) => uniqueCounts(xyz, { from: '', to: '', department: `school:${x.name}` }).pubs.length);
+    // Each school's count is at most the whole; a paper co-authored across schools counts in each school, once overall.
+    parts.forEach((n) => expect(n).toBeLessThanOrEqual(all));
+    expect(parts.reduce((a, b) => a + b, 0)).toBeGreaterThanOrEqual(all);
+    expect(unitOptions(s).filter((o) => typeof o !== 'string' && o.value.startsWith('school:')).length).toBe(3);
+    expect(unitOptions(createSeed().settings)).toEqual(createSeed().settings.departments); // no schools: plain departments
   });
 });

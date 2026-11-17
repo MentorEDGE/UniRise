@@ -24,6 +24,11 @@ export const DEMO_INSTITUTIONS: DemoInstitution[] = [
     seed: {
       name: 'XYZ University', tagline: 'Research & Faculty Development Office', emailDomain: 'xyz.ac.in', seed: 777,
       departments: ['Physics', 'Chemistry', 'Mathematics', 'Commerce', 'English Literature', 'Computer Science & Engineering'], sizes: [5, 5, 4, 6, 4, 6],
+      schools: [
+        { name: 'School of Sciences', departments: ['Physics', 'Chemistry', 'Mathematics'] },
+        { name: 'School of Commerce & Humanities', departments: ['Commerce', 'English Literature'] },
+        { name: 'School of Engineering', departments: ['Computer Science & Engineering'] },
+      ],
       reviewerName: 'Office of Research',
     },
     office: { name: 'Office of Research, XYZ', email: 'office@xyz.ac.in' },

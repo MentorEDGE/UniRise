@@ -3,6 +3,7 @@ import type {
   AnyRecord, Biodata, Conference, DB, EntityKind, Faculty, Fdp, Grant, Honour, IntellectualProperty, Publication, SeedMoney, Weights,
 } from './types';
 import { MONTHS, ipIsGranted } from './types';
+import { inUnit } from './org';
 
 export const KINDS: EntityKind[] = ['publications', 'grants', 'seedMoney', 'fdps', 'conferences', 'awards', 'ipr'];
 
@@ -48,7 +49,7 @@ export function academicYears(db: DB, today = new Date().toISOString().slice(0, 
 
 // ---------- filters ----------
 
-export interface Filter { from: string; to: string; department: string } // department '' = all
+export interface Filter { from: string; to: string; department: string } // department '' = all; a department, or "school:<name>" (lib/org.ts)
 
 export function inRange(iso: string, f: { from: string; to: string }) {
   return (!f.from || iso >= f.from) && (!f.to || iso <= f.to);
@@ -128,7 +129,7 @@ export const isSanctioned = (g: Grant) => g.outcome === 'Sanctioned' || g.outcom
 
 export function facultyStats(db: DB, f: Filter): FacultyStats[] {
   const w = db.settings.weights;
-  const people = db.faculty.filter((x) => x.active && (!f.department || x.department === f.department));
+  const people = db.faculty.filter((x) => x.active && inUnit(db.settings, f.department, x.department));
   const map = new Map<string, FacultyStats>(people.map((p) => [p.id, {
     faculty: p, publications: 0, journals: 0, q1q2: 0, scopusWos: 0, grantsApplied: 0, grantsSanctioned: 0, sanctionedAmount: 0,
     seedMoney: 0, fdps: 0, fdpHours: 0, conferences: 0, confPresented: 0, awards: 0, ipr: 0, patents: 0, score: 0, pending: 0, lastActivity: '',
@@ -188,7 +189,7 @@ export function biodataCompleteness(b: Biodata | undefined, f: Faculty): number 
  */
 export function uniqueCounts(db: DB, f: Filter) {
   const deptOf = new Map(db.faculty.filter((x) => x.active).map((x) => [x.id, x.department]));
-  const inDept = (kind: EntityKind, r: AnyRecord) => creditedFaculty(kind, r).some((id) => deptOf.has(id) && (!f.department || deptOf.get(id) === f.department));
+  const inDept = (kind: EntityKind, r: AnyRecord) => creditedFaculty(kind, r).some((id) => deptOf.has(id) && inUnit(db.settings, f.department, deptOf.get(id)!));
   const pubs = approvedIn(db, 'publications', f).filter((r) => inDept('publications', r));
   const grants = approvedIn(db, 'grants', f).filter((r) => inDept('grants', r));
   const seed = approvedIn(db, 'seedMoney', f).filter((r) => inDept('seedMoney', r));
@@ -255,7 +256,7 @@ export function trend(db: DB, department: string, ays: string[], facultyId?: str
       fdps: fdps.length, fdpHours: fdps.reduce((a, x) => a + x.hours, 0), confs: confs.length,
       national: confs.filter((c) => c.level === 'National').length, international: confs.filter((c) => c.level === 'International').length,
       presented: confs.filter((c) => c.participation.includes('Presented')).length,
-      faculty: db.faculty.filter((x) => x.active && (!department || x.department === department)).length,
+      faculty: db.faculty.filter((x) => x.active && inUnit(db.settings, department, x.department)).length,
     };
   });
 }

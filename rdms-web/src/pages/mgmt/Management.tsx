@@ -1,7 +1,7 @@
 import { useMemo, useState } from 'react';
 import { Link, useParams } from 'react-router-dom';
 import { BarCard } from '../../components/charts';
-import { Alert, DataTable, PageTitle, Panel, StatusBadge, Tabs } from '../../components/ui';
+import { Alert, Attainment, DataTable, PageTitle, Panel, StatusBadge, Tabs } from '../../components/ui';
 import { dateOf, facultyStats, fmtDate, lakh, trend, plural } from '../../lib/analytics';
 import { listColumns } from '../../lib/entities';
 import { creditedFaculty, useStore } from '../../lib/store';
@@ -65,6 +65,7 @@ export function Faculty360({ facultyId: given }: { facultyId?: string }) {
             <Tile label="Conferences" value={s.conferences} sub={`${s.confPresented} presented`} />
             <Tile label="Honours & Awards" value={s.awards} sub="approved" />
             <Tile label="Intellectual Property" value={s.ipr} sub={`${plural(s.patents, 'patent')} · approved`} />
+            <Tile label="Seed Money" value={s.seedMoney} sub={`${plural(s.seedMoney, 'project')} approved`} />
             <Tile label="Profile" value={`${s.biodata}%`} sub="complete" />
           </div>
         </div>
@@ -73,6 +74,33 @@ export function Faculty360({ facultyId: given }: { facultyId?: string }) {
         <BarCard title="Publications by year" data={rows} xKey="ay" xLabel="Academic year" stacked series={[{ key: 'journal', label: 'Journal' }, { key: 'confPaper', label: 'Conference paper' }, { key: 'bookChapter', label: 'Book / chapter' }, { key: 'report', label: 'Tech report' }]} height={200} />
         <BarCard title="FDP hours by year" data={rows} xKey="ay" xLabel="Academic year" series={[{ key: 'fdpHours', label: 'FDP hours' }]} height={200} />
         <BarCard title="Conferences by year" data={rows} xKey="ay" xLabel="Academic year" stacked series={[{ key: 'national', label: 'National' }, { key: 'international', label: 'International' }]} height={200} />
+        {/* Progress against the institution's annual targets (Institution → Targets & Scoring), for the chosen year. */}
+        <section className="card targets-card" aria-label="Targets">
+          <h3>{isMgmt ? 'Targets' : 'My targets'}{ay === 'all' ? '' : ` · AY ${ay}`}</h3>
+          {ay === 'all' || !s ? <p className="sub">Targets are per academic year. Choose a year above to see progress.</p> : <>
+            <p className="sub">Approved records this academic year, against the institution's annual targets{isMgmt ? '; department average in brackets' : ''}</p>
+            <div className="tbl-wrap"><table className="tbl targets">
+              <tbody>
+                {([
+                  ['Publications', s.publications, t.publicationsPerFaculty, avg('publications')],
+                  ['FDP hours', s.fdpHours, t.fdpHoursPerFaculty, avg('fdpHours')],
+                  ['Conferences', s.conferences, t.conferencesPerFaculty, avg('conferences')],
+                  ['Grant proposals', s.grantsApplied, t.grantAppliedPerFaculty, null],
+                ] as const).map(([label, value, target, deptAvg]) => {
+                  const left = Math.max(0, Math.ceil(target - value));
+                  return (
+                    <tr key={label}>
+                      <td style={{ width: '34%' }}>{label}</td>
+                      <td><Attainment value={value} target={target} /></td>
+                      <td className="num" style={{ whiteSpace: 'nowrap' }}>{Math.round(value * 10) / 10} / {target}{isMgmt && deptAvg != null ? <span className="muted"> ({deptAvg.toFixed(1)})</span> : null}</td>
+                      <td className={left ? 'muted' : 'ok'} style={{ whiteSpace: 'nowrap' }}>{target <= 0 ? '' : left ? `${left} to go` : '✓ met'}</td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table></div>
+          </>}
+        </section>
       </div>
       <Panel size="wide" title={`Records${ay === 'all' ? '' : ` in AY ${ay}`}`}>
         <Tabs value={tab} onChange={setTab} tabs={kinds.map((k) => ({ id: k, label: ENTITY_LABEL[k] }))} />

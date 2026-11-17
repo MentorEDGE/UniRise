@@ -52,12 +52,19 @@ export function TextArea({ value, onChange, ...rest }: Omit<React.TextareaHTMLAt
   return <textarea {...rest} value={value ?? ''} onChange={(e) => onChange(e.target.value)} />;
 }
 export function Select({ value, onChange, options, placeholder, ...rest }: Omit<React.SelectHTMLAttributes<HTMLSelectElement>, 'onChange' | 'value'> & {
-  value: string; onChange: (v: string) => void; options: readonly (string | { value: string; label: string })[]; placeholder?: string;
+  value: string; onChange: (v: string) => void; options: readonly (string | { value: string; label: string; group?: string })[]; placeholder?: string;
 }) {
+  const opt = (o: string | { value: string; label: string }) => typeof o === 'string' ? <option key={o} value={o}>{o}</option> : <option key={o.value} value={o.value}>{o.label}</option>;
+  // Options with a group (for example departments under their school) are shown under that heading.
+  const groups: { name: string; items: typeof options[number][] }[] = [];
+  for (const o of options) {
+    const g = typeof o === 'string' ? '' : o.group ?? '';
+    if (groups.length && groups[groups.length - 1].name === g) groups[groups.length - 1].items.push(o); else groups.push({ name: g, items: [o] });
+  }
   return (
     <select {...rest} value={value} onChange={(e) => onChange(e.target.value)}>
       {placeholder !== undefined && <option value="">{placeholder}</option>}
-      {options.map((o) => typeof o === 'string' ? <option key={o} value={o}>{o}</option> : <option key={o.value} value={o.value}>{o.label}</option>)}
+      {groups.map((g, i) => g.name ? <optgroup key={g.name + i} label={g.name}>{g.items.map(opt)}</optgroup> : g.items.map(opt))}
     </select>
   );
 }

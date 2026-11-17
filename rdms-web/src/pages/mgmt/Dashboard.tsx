@@ -7,6 +7,7 @@ import { academicYearRange, facultyStats, lakh, pct, plural, trend, uniqueCounts
 import { useStore } from '../../lib/store';
 import { departmentRows, OverviewCharts, Tile } from './Analytics';
 import { useAnalyticsFilter } from './filters';
+import { hasSchools, unitLabel } from '../../lib/org';
 
 /** Change from the previous year, as "▲ 12% vs AY 2024-25" (or points for a percentage). */
 function Change({ now, before, prevAy, points }: { now: number; before: number; prevAy: string; points?: boolean }) {
@@ -80,7 +81,7 @@ export function InstitutionAtAGlance() {
       <Panel size="wide">{bar}</Panel>
       <div className="dash">
         <div className="tiles">
-          <Tile label="Active faculty" value={stats.length} sub={filter.department || `${db.settings.departments.length} departments`} to="/faculty" />
+          <Tile label="Active faculty" value={stats.length} sub={unitLabel(filter.department) || (hasSchools(db.settings) ? `${db.settings.schools!.length} schools · ${db.settings.departments.length} departments` : `${db.settings.departments.length} departments`)} to="/faculty" />
           <Tile label="Publications" value={u.pubs.length} sub={up ? <Change now={u.pubs.length} before={up.pubs.length} prevAy={prevAy} /> : `${(u.pubs.length / n).toFixed(1)} per faculty`} to="/publications?status=Approved" />
           <Tile label="Q1 + Q2 journals" value={`${q12(u)}%`} sub={up ? <Change now={q12(u)} before={q12(up)} prevAy={prevAy} points /> : 'of journal articles'} />
           <Tile label="Sanctioned funding" value={lakh(u.sanctionedAmount)} sub={up ? <Change now={u.sanctionedAmount} before={up.sanctionedAmount} prevAy={prevAy} /> : `${u.sanctioned.length} grants`} to="/grants?status=Approved" />
@@ -95,7 +96,7 @@ export function InstitutionAtAGlance() {
         <div className="dash-grid">
           <section className="card dash-insights" aria-label="Insights">
             <h3>Insights</h3>
-            <p className="sub">{ay === 'all' ? 'All years' : `AY ${ay}`}{filter.department ? ` · ${filter.department}` : ''}</p>
+            <p className="sub">{ay === 'all' ? 'All years' : `AY ${ay}`}{filter.department ? ` · ${unitLabel(filter.department)}` : ''}</p>
             <ul>
               {insights.map((x, i) => (
                 <li key={i} className={x.tone}>

@@ -1,5 +1,6 @@
 import { useState } from 'react';
-import { Alert, Field, Input, NumberInput, PageTitle, Panel, TextArea, useToast } from '../../components/ui';
+import { Alert, Field, Input, NumberInput, PageTitle, Panel, Select, TextArea, useToast } from '../../components/ui';
+import { schoolOf } from '../../lib/org';
 import { DEFAULT_WEIGHTS } from '../../lib/seed';
 import { addNotice, deleteNotice, saveSettings, useStore } from '../../lib/store';
 import type { Settings, Targets, Weights } from '../../lib/types';
@@ -19,10 +20,14 @@ function useSettingsDraft() {
 export function InstitutionSettings() {
   const { s, setS, save, error, db } = useSettingsDraft();
   const [newDept, setNewDept] = useState('');
+  const [newSchool, setNewSchool] = useState('');
   const inUse = (d: string) => db.faculty.some((f) => f.department === d);
+  const schools = s.schools ?? [];
+  /** Puts a department in a school (and takes it out of any other). */
+  const moveTo = (d: string, school: string) => setS({ ...s, schools: schools.map((x) => ({ ...x, departments: x.name === school ? [...x.departments.filter((y) => y !== d), d] : x.departments.filter((y) => y !== d) })) });
   return (
     <>
-      <PageTitle sub="The institution's name and its departments, as shown across UniRise.">Institution & Departments</PageTitle>
+      <PageTitle sub="The institution's name, its schools (for a university) and its departments, as shown across UniRise.">Institution & Departments</PageTitle>
       <Panel title="Institution" size="wide">
         {error && <Alert kind="error">{error}</Alert>}
         <div className="grid">
@@ -32,18 +37,40 @@ export function InstitutionSettings() {
           <Field label="Seed money window"><select value={s.seedMoneyWindowOpen ? 'open' : 'closed'} onChange={(e) => setS({ ...s, seedMoneyWindowOpen: e.target.value === 'open' })}><option value="open">Open – accepting proposals</option><option value="closed">Closed for this quarter</option></select></Field>
         </div>
       </Panel>
+      <Panel title="Schools" size="wide">
+        <p className="note" style={{ marginTop: 0 }}>For a university organised in schools (or faculties), each holding some of the departments. Leave this empty for an institute or college. With schools, every list that can be narrowed by department can also be narrowed to a whole school.</p>
+        {schools.length > 0 && (
+          <div className="tbl-wrap"><table className="tbl">
+            <thead><tr><th>School</th><th className="num">Departments</th><th className="num">Faculty</th><th /></tr></thead>
+            <tbody>{schools.map((sc) => (
+              <tr key={sc.name}><td>{sc.name}</td><td className="num">{sc.departments.length}</td>
+                <td className="num">{db.faculty.filter((f) => sc.departments.includes(f.department)).length}</td>
+                <td><button className="link-btn" disabled={sc.departments.length > 0} title={sc.departments.length ? 'Move its departments to another school first' : undefined}
+                  onClick={() => setS({ ...s, schools: schools.filter((x) => x.name !== sc.name) })}>Remove</button></td></tr>
+            ))}</tbody>
+          </table></div>
+        )}
+        <div style={{ display: 'flex', gap: 8, marginTop: 8 }}>
+          <div style={{ flex: 1 }}><Input value={newSchool} onChange={setNewSchool} placeholder="New school name, e.g. School of Engineering" aria-label="New school" /></div>
+          <button className="btn" onClick={() => { const n = newSchool.trim(); if (n && !schools.some((x) => x.name.toLowerCase() === n.toLowerCase())) { setS({ ...s, schools: [...schools, { name: n, departments: [] }] }); setNewSchool(''); } }}>Add school</button>
+        </div>
+      </Panel>
       <Panel title="Departments" size="wide">
-        <table className="tbl">
-          <thead><tr><th>Department</th><th className="num">Faculty</th><th /></tr></thead>
+        <div className="tbl-wrap"><table className="tbl">
+          <thead><tr><th>Department</th>{schools.length > 0 && <th>School</th>}<th className="num">Faculty</th><th /></tr></thead>
           <tbody>{s.departments.map((d) => (
-            <tr key={d}><td>{d}</td><td className="num">{db.faculty.filter((f) => f.department === d).length}</td>
-              <td><button className="link-btn" disabled={inUse(d)} title={inUse(d) ? 'Move its faculty to another department first' : undefined} onClick={() => setS({ ...s, departments: s.departments.filter((x) => x !== d) })}>Remove</button></td></tr>
+            <tr key={d}><td>{d}</td>
+              {schools.length > 0 && <td><Select value={schoolOf(s, d)} onChange={(v) => moveTo(d, v)} options={schools.map((x) => x.name)} placeholder="Choose a school…" aria-label={`School of ${d}`} /></td>}
+              <td className="num">{db.faculty.filter((f) => f.department === d).length}</td>
+              <td><button className="link-btn" disabled={inUse(d)} title={inUse(d) ? 'Move its faculty to another department first' : undefined}
+                onClick={() => setS({ ...s, departments: s.departments.filter((x) => x !== d), schools: schools.map((x) => ({ ...x, departments: x.departments.filter((y) => y !== d) })) })}>Remove</button></td></tr>
           ))}</tbody>
-        </table>
+        </table></div>
         <div style={{ display: 'flex', gap: 8, marginTop: 8 }}>
           <div style={{ flex: 1 }}><Input value={newDept} onChange={setNewDept} placeholder="New department name" aria-label="New department" /></div>
           <button className="btn" onClick={() => { const d = newDept.trim(); if (d && !s.departments.includes(d)) { setS({ ...s, departments: [...s.departments, d] }); setNewDept(''); } }}>Add</button>
         </div>
+        {schools.length > 0 && s.departments.some((d) => !schoolOf(s, d)) && <p className="note">Choose a school for every department before saving.</p>}
       </Panel>
       <div className="btn-row"><button className="btn ok" onClick={save}>Save settings</button></div>
     </>

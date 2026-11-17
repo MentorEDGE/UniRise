@@ -4,11 +4,12 @@ import { Link } from 'react-router-dom';
 import { NetworkGraph, SharedOutputs, forceLayout, outputsOf } from '../../components/network';
 import type { Edge, Output } from '../../components/network';
 import { SdgTile } from '../../components/sdg';
-import { PageTitle, Panel } from '../../components/ui';
+import { PageTitle, Panel, Select } from '../../components/ui';
 import { useStore } from '../../lib/store';
 import { SDGS } from '../../lib/types';
 import { Tile } from './Analytics';
 import { RecordDetail } from '../shared/RecordDetail';
+import { hasSchools, inUnit, unitFieldLabel, unitOptions } from '../../lib/org';
 
 const CollabMap = lazy(() => import('../../components/CollabMap'));
 const DEPT_COLORS = ['#7c3aed', '#db2777', '#d97706', '#0d9488', '#2563eb', '#65a30d', '#dc2626', '#0891b2', '#9333ea', '#ca8a04'];
@@ -55,7 +56,7 @@ export function InstitutionNetworks() {
     return [...m.values()];
   }, [outputs]);
 
-  const shown = edges.filter((e) => e.outputs.length >= min && (!dept || byId.get(e.a)?.department === dept || byId.get(e.b)?.department === dept));
+  const shown = edges.filter((e) => e.outputs.length >= min && (!dept || inUnit(db.settings, dept, byId.get(e.a)?.department ?? '') || inUnit(db.settings, dept, byId.get(e.b)?.department ?? '')));
   const nodes = [...new Set(shown.flatMap((e) => [e.a, e.b]))];
   const pos = useMemo(() => forceLayout(nodes, shown, '', 0.8), [nodes.join(), shown.length]); // eslint-disable-line react-hooks/exhaustive-deps
   const depts = db.settings.departments;
@@ -101,7 +102,7 @@ export function InstitutionNetworks() {
         {tab === 'graph' && (
           <>
             <div className="filters" style={{ marginBottom: 10 }}>
-              <label className="net-sel">Department <select value={dept} onChange={(e) => setDept(e.target.value)}><option value="">All departments</option>{depts.map((d) => <option key={d}>{d}</option>)}</select></label>
+              <label className="net-sel">{unitFieldLabel(db.settings)} <Select value={dept} onChange={setDept} options={unitOptions(db.settings)} placeholder={hasSchools(db.settings) ? 'All schools and departments' : 'All departments'} /></label>
               <label className="net-sel">Collaboration minimum <select value={min} onChange={(e) => setMin(Number(e.target.value))}>{[1, 2, 3, 4, 5].map((n) => <option key={n}>{n}</option>)}</select></label>
               <span className="muted">Each dot is a faculty member, coloured by department; a line joins two who share approved outputs.</span>
             </div>

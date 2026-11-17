@@ -2,6 +2,7 @@ import { academicYearOf, fmtDate, inr, isSanctioned } from './analytics';
 import { creditedFaculty } from './domain';
 import type { AnyRecord, Conference, DB, EntityKind, Faculty, Fdp, Grant, Honour, IntellectualProperty, Publication } from './types';
 import { ipIsGranted, ipTypeLabel } from './types';
+import { schoolOf } from './org';
 
 export interface Ctx { db: DB; byId: Map<string, Faculty> }
 export interface ListCol { label: string; get: (r: AnyRecord, ctx: Ctx) => string | number; num?: boolean }
@@ -20,6 +21,8 @@ export interface ReportDef {
   groupLabel?: string;
   keys?: (r: AnyRecord, ctx: Ctx) => string[];
   measures?: Measure[];
+  /** Only for institutions organised in schools. */
+  needsSchools?: boolean;
 }
 
 const pub = (r: AnyRecord) => r as Publication;
@@ -130,7 +133,7 @@ const GRANT_MEASURES: Measure[] = [count, countWhere('Sanctioned', (r) => isSanc
 const FDP_MEASURES: Measure[] = [count, sum('Hours', (r) => fdp(r).hours), countWhere('Attended', (r) => fdp(r).role === 'Attended'), countWhere('Organised', (r) => fdp(r).role === 'Organised'), countWhere('Resource person', (r) => fdp(r).role === 'Resource Person')];
 const CONF_MEASURES: Measure[] = [count, countWhere('Presented', (r) => conf(r).participation.includes('Presented')), countWhere('International', (r) => conf(r).level === 'International'), sum('Claimed (₹)', (r) => conf(r).amountClaimed, true)];
 
-export const REPORTS: ReportDef[] = [
+const BASE_REPORTS: ReportDef[] = [
   // Publications
   { id: 'pub-dept', group: 'publications', title: 'Institute-Department wise', kind: 'publications', mode: 'list', columns: PUB_LIST },
   { id: 'pub-emp', group: 'publications', title: 'Employee ID wise', kind: 'publications', mode: 'list', columns: [{ label: 'Emp. Codes', get: (r, c) => credited('publications')(r, c).join('; ') }, ...PUB_LIST] },
@@ -192,6 +195,14 @@ export const REPORTS: ReportDef[] = [
   { id: 'ipr-granted', group: 'ipr', title: 'Patents Granted', kind: 'ipr', mode: 'list', where: (r) => ip(r).ipType === 'Patent' && granted(r), columns: IP_LIST },
   { id: 'ipr-list', group: 'ipr', title: 'Intellectual Property Details – All', kind: 'ipr', mode: 'list', columns: IP_LIST },
 ];
+
+/** For a university: a school's departments counted together. A record shared by two departments of one school counts once for it. */
+const schoolKey = (kind: EntityKind) => (r: AnyRecord, c: Ctx) => [...new Set(credited(kind)(r, c).map((id) => schoolOf(c.db.settings, c.byId.get(id)!.department)).filter(Boolean))];
+
+/** Every "Department wise" summary also comes as "School wise", listed only for institutions organised in schools. */
+export const REPORTS: ReportDef[] = BASE_REPORTS.flatMap((d) => d.mode === 'group' && d.groupLabel === 'Department'
+  ? [d, { ...d, id: `${d.id}-school`, title: d.title.replace('Institute-Department wise', 'School wise').replace('Department wise', 'School wise'), groupLabel: 'School', keys: schoolKey(d.kind), needsSchools: true }]
+  : [d]);
 
 export interface ReportResult { header: string[]; rows: (string | number)[][]; numeric: boolean[]; money: boolean[]; total?: (string | number)[] }
 

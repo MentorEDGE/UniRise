@@ -2649,3 +2649,9 @@ fieldset { min-width: 0; }                       /* a fieldset otherwise grows t
 .dash-kinds .mini th a { color: var(--foreground); text-decoration: none; }
 .dash-kinds .mini th a:hover { color: var(--primary-text); text-decoration: underline; }
 @media (max-width: 520px) { .dash-queue li { grid-template-columns: minmax(0, 1fr) auto; } .dash-queue .q-days { grid-column: 1; } }
+
+/* My Performance: progress against the annual targets */
+.targets-card .tbl.targets td { padding: 10px 8px; border-bottom: 1px solid var(--border); }
+.targets-card .tbl.targets td.ok { color: var(--success); font-weight: 600; }
+.targets-card .tbl.targets td.num { text-align: right; font-variant-numeric: tabular-nums; }
+.tbl td.unit-cell { min-width: 210px; } /* school and department names on one or two lines */

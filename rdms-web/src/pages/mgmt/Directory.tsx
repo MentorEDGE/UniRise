@@ -7,6 +7,7 @@ import { downloadCsv } from '../../lib/csv';
 import { useStore } from '../../lib/store';
 import type { Biodata, Faculty } from '../../lib/types';
 import { SDGS } from '../../lib/types';
+import { hasSchools, schoolOf } from '../../lib/org';
 
 const PAGE = 24;
 const SORTS = [
@@ -40,6 +41,7 @@ export function FacultySearch() {
   const q = params.get('q') ?? '';
   const sdgs = (params.get('sdg') ?? '').split(',').map(Number).filter((n) => n >= 1 && n <= 17);
   const depts = params.getAll('dept');
+  const schoolsSel = params.getAll('school'); // universities organised in schools
   const desigs = params.getAll('desig');
   const avail = params.getAll('avail').filter((a) => a in AVAIL);
   const sort = (SORTS.some((s) => s.id === params.get('sort')) ? params.get('sort') : 'last') as SortId;
@@ -86,7 +88,7 @@ export function FacultySearch() {
   const terms = q.toLowerCase().split(/\s+/).filter(Boolean);
   const base = entries.filter((e) => (inactive || e.f.active) && terms.every((t) => e.text.includes(t)));
   const bySdg = (e: Entry) => !sdgs.length || sdgs.some((n) => e.b?.sdgs.includes(n));
-  const byDept = (e: Entry) => !depts.length || depts.includes(e.f.department);
+  const byDept = (e: Entry) => (!depts.length || depts.includes(e.f.department)) && (!schoolsSel.length || schoolsSel.includes(schoolOf(db.settings, e.f.department)));
   const byDesig = (e: Entry) => !desigs.length || desigs.includes(e.f.designation);
   const availCount = (a: string) => base.filter((e) => bySdg(e) && byDept(e) && byDesig(e) && AVAIL[a].test(e)).length;
   const byAvail = (e: Entry) => avail.every((a) => AVAIL[a].test(e));
@@ -94,6 +96,7 @@ export function FacultySearch() {
   // Each facet counts the faculty that would match if that option were ticked, given the other filters.
   const sdgCount = (n: number) => base.filter((e) => byDept(e) && byDesig(e) && byAvail(e) && e.b?.sdgs.includes(n)).length;
   const deptCount = (d: string) => base.filter((e) => bySdg(e) && byDesig(e) && byAvail(e) && e.f.department === d).length;
+  const schoolCount = (sc: string) => base.filter((e) => bySdg(e) && byDesig(e) && byAvail(e) && schoolOf(db.settings, e.f.department) === sc).length;
   const designations = [...new Set(db.faculty.map((f) => f.designation))].sort();
   const desigCount = (d: string) => base.filter((e) => bySdg(e) && byDept(e) && byAvail(e) && e.f.designation === d).length;
 
@@ -113,8 +116,8 @@ export function FacultySearch() {
   const pages = Math.max(1, Math.ceil(sorted.length / PAGE));
   const cur = Math.min(page, pages);
   const shown = sorted.slice((cur - 1) * PAGE, cur * PAGE);
-  const filtered = sdgs.length + depts.length + desigs.length + avail.length > 0 || inactive;
-  const activeCount = sdgs.length + depts.length + desigs.length + avail.length + (inactive ? 1 : 0);
+  const filtered = sdgs.length + depts.length + schoolsSel.length + desigs.length + avail.length > 0 || inactive;
+  const activeCount = sdgs.length + depts.length + schoolsSel.length + desigs.length + avail.length + (inactive ? 1 : 0);
   const sdgList = SDGS.map((g) => ({ ...g, count: sdgCount(g.n) })).sort((a, b) => b.count - a.count || a.n - b.n);
   const sdgShown = moreSdg ? sdgList : sdgList.filter((g, i) => i < 6 || sdgs.includes(g.n));
 
@@ -142,13 +145,14 @@ export function FacultySearch() {
         <aside className="dir-filters" aria-label="Filters">
           <div className="dir-filters-head">
             <h2>Filters{activeCount > 0 && <span className="facet-badge" aria-label={`${activeCount} selected`}>{activeCount}</span>}</h2>
-            {filtered && <button type="button" className="link-btn" onClick={() => update((p) => { ['sdg', 'dept', 'desig', 'inactive', 'avail'].forEach((k) => p.delete(k)); })}>Clear all</button>}
+            {filtered && <button type="button" className="link-btn" onClick={() => update((p) => { ['sdg', 'dept', 'school', 'desig', 'inactive', 'avail'].forEach((k) => p.delete(k)); })}>Clear all</button>}
           </div>
 
           {activeCount > 0 && (
             <ul className="facet-chips" aria-label="Selected filters">
               {avail.map((k) => <Chip key={`a${k}`} label={AVAIL[k].label} onRemove={() => toggle('avail', k)} />)}
               {sdgs.map((n) => <Chip key={`s${n}`} label={`SDG ${n}`} onRemove={() => toggleSdg(n)} />)}
+              {schoolsSel.map((x) => <Chip key={`s${x}`} label={x} onRemove={() => toggle('school', x)} />)}
               {depts.map((d) => <Chip key={`d${d}`} label={d} onRemove={() => toggle('dept', d)} />)}
               {desigs.map((d) => <Chip key={`g${d}`} label={d} onRemove={() => toggle('desig', d)} />)}
               {inactive && <Chip label="Including former faculty" onRemove={() => update((p) => p.delete('inactive'))} />}
@@ -160,6 +164,14 @@ export function FacultySearch() {
               <FacetOption key={k} checked={avail.includes(k)} onChange={() => toggle('avail', k)} count={availCount(k)} hint={a.hint}>{a.label}</FacetOption>
             ))}
           </FacetGroup>
+
+          {hasSchools(db.settings) && (
+            <FacetGroup title="School" selected={schoolsSel.length} defaultOpen>
+              {db.settings.schools!.map((x) => (
+                <FacetOption key={x.name} checked={schoolsSel.includes(x.name)} onChange={() => toggle('school', x.name)} count={schoolCount(x.name)}>{x.name}</FacetOption>
+              ))}
+            </FacetGroup>
+          )}
 
           <FacetGroup title="Department" selected={depts.length} defaultOpen>
             {db.settings.departments.map((d) => (

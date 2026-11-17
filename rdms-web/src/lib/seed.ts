@@ -1,6 +1,6 @@
 import type {
   IntellectualProperty,
-  Author, Biodata, Conference, DB, Faculty, Fdp, Grant, HistoryItem, Honour, Investigator, Publication, SeedMoney, Status,
+  Author, Biodata, Conference, DB, Faculty, Fdp, Grant, HistoryItem, Honour, Investigator, Publication, School, SeedMoney, Status,
 } from './types';
 import { AWARD_WEIGHT_DEFAULTS, EMPTY_LINKS, IP_WEIGHT_DEFAULTS, MONTHS } from './types';
 
@@ -137,6 +137,8 @@ export interface SeedOptions {
   departments: string[];
   /** Faculty per department, in department order. */
   sizes: number[];
+  /** A university's schools, each holding some of the departments (none for an institute). */
+  schools?: School[];
   reviewerName: string;
 }
 
@@ -490,6 +492,7 @@ export function createSeed(opts: SeedOptions = DEFAULT_SEED): DB {
       institutionName: INST,
       institutionTagline: opts.tagline,
       departments: [...opts.departments],
+      ...(opts.schools?.length ? { schools: opts.schools.map((x) => ({ name: x.name, departments: [...x.departments] })) } : {}),
       academicYearStartMonth: 6,
       seedMoneyWindowOpen: true,
       targets: { publicationsPerFaculty: 2, fdpHoursPerFaculty: 30, conferencesPerFaculty: 1, grantAppliedPerFaculty: 0.5 },

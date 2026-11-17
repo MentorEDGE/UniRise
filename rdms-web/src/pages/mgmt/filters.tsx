@@ -3,6 +3,7 @@ import { Field, Select } from '../../components/ui';
 import { academicYearOf, academicYearRange, academicYears } from '../../lib/analytics';
 import type { Filter } from '../../lib/analytics';
 import { useStore } from '../../lib/store';
+import { hasSchools, unitFieldLabel, unitOptions } from '../../lib/org';
 
 /** Academic year + department filter kept in the URL so views can be bookmarked and shared. Opens on the last complete year. */
 export function useAnalyticsFilter(opts: { allowDept?: boolean } = { allowDept: true }) {
@@ -23,7 +24,7 @@ export function useAnalyticsFilter(opts: { allowDept?: boolean } = { allowDept: 
       <Field label="Academic Year">
         <Select value={ay} onChange={(v) => set('ay', v)} options={[...years.map((y) => ({ value: y, label: `AY ${y}${y === current ? ' (in progress)' : y === previous ? ' (last complete)' : ''}` })), { value: 'all', label: 'All years' }]} />
       </Field>
-      {opts.allowDept !== false && <Field label="Department"><Select value={department} onChange={(v) => set('dept', v)} options={db.settings.departments} placeholder="All departments" /></Field>}
+      {opts.allowDept !== false && <Field label={unitFieldLabel(db.settings)}><Select value={department} onChange={(v) => set('dept', v)} options={unitOptions(db.settings)} placeholder={hasSchools(db.settings) ? 'All schools and departments' : 'All departments'} /></Field>}
       <span className="muted" style={{ paddingBottom: 6 }}>{ay === 'all' ? 'All recorded activity' : `${range.from.split('-').reverse().join('/')} to ${range.to.split('-').reverse().join('/')}`} · approved entries only</span>
     </div>
   );

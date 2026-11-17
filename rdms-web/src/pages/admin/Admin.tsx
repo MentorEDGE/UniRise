@@ -9,6 +9,7 @@ import { adminApi, reloadData, useStore } from '../../lib/store';
 import type { AnyRecord, Biodata, DB, EntityKind, Faculty, Grant, HistoryItem, ProfileChange, SeedMoney, Status } from '../../lib/types';
 import { DECISION_ACTIONS, ENTITY_LABEL, GRANT_OUTCOMES, STATUS_LABEL, isAwaitingOffice, statusLabel } from '../../lib/types';
 import { Conversation, ProgressTracker } from '../../components/workflow';
+import { hasSchools, inUnit, unitFieldLabel, unitOptions } from '../../lib/org';
 
 interface Account {
   id: string; email: string; name: string; title: string; role: 'office' | 'management' | 'faculty'; status: string; institutionId: string | null; facultyId: string | null;
@@ -68,7 +69,7 @@ export function AdminApprovals() {
   const counts = q ? Object.fromEntries([...KINDS.map((k) => [k, q.records[k].length]), ['profiles', q.profiles.length]]) as Record<QueueKind, number> : null;
   const k: QueueKind = kind || (counts && ([...KINDS, 'profiles'] as QueueKind[]).find((x) => counts[x])) || 'publications';
   const byId = new Map(full.faculty.map((f) => [f.id, f]));
-  const inDept = (facultyId: string) => !dept || byId.get(facultyId)?.department === dept;
+  const inDept = (facultyId: string) => inUnit(full.settings, dept, byId.get(facultyId)?.department ?? '');
   const order = <T extends { updatedAt: string }>(xs: T[]) => [...xs].sort((a, b) => (pending ? a.updatedAt.localeCompare(b.updatedAt) : b.updatedAt.localeCompare(a.updatedAt)));
   const rows = k === 'profiles' ? [] : order((q?.records[k] ?? []).filter((r) => inDept(r.facultyId)));
   const profileRows = order((q?.profiles ?? []).filter((c) => inDept(c.facultyId)));
@@ -107,7 +108,7 @@ export function AdminApprovals() {
         {queue.error && <Alert kind="error">{queue.error}</Alert>}
         <Tabs value={view} onChange={(v) => { setView(v); setKind(''); }} tabs={VIEWS.map((v) => ({ id: v.id, label: count(v.id) != null ? `${v.label} (${count(v.id)})` : v.label }))} />
         <div className="filters" style={{ marginBottom: 10 }}>
-          <Field label="Department"><Select value={dept} onChange={setDept} options={full.settings.departments} placeholder="All departments" /></Field>
+          <Field label={unitFieldLabel(full.settings)}><Select value={dept} onChange={setDept} options={unitOptions(full.settings)} placeholder={hasSchools(full.settings) ? 'All schools and departments' : 'All departments'} /></Field>
         </div>
         {counts && <Tabs value={k} onChange={setKind} tabs={([...KINDS, 'profiles'] as QueueKind[]).map((x) => ({ id: x, label: `${label(x)} (${counts[x]})` }))} />}
         {k === 'profiles'

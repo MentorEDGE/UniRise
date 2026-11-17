@@ -1,7 +1,7 @@
 import { useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { BarCard, LineCard, RankList, useQuartileColors } from '../../components/charts';
-import { Attainment, DataTable, Field, Input, PageTitle, Panel } from '../../components/ui';
+import { Attainment, DataTable, Field, Input, PageTitle, Panel, Tabs } from '../../components/ui';
 import type { Column } from '../../components/ui';
 import {
   dateOf, facultyStats, fmtDate, lakh, pct, plural, trend, uniqueCounts,
@@ -11,6 +11,7 @@ import { useStore } from '../../lib/store';
 import type { AnyRecord, EntityKind } from '../../lib/types';
 import { ENTITY_LABEL, SDGS } from '../../lib/types';
 import { useAnalyticsFilter } from './filters';
+import { SCHOOL, hasSchools, inUnit, unitLabel } from '../../lib/org';
 
 const nf = (n: number) => n.toLocaleString('en-IN', { maximumFractionDigits: 1 });
 
@@ -88,16 +89,22 @@ export function shortNames(depts: string[]): Record<string, string> {
   return out;
 }
 
-export function departmentRows(db: ReturnType<typeof useStore>['db'], filter: { from: string; to: string }): DeptRow[] {
+/**
+ * One row per department, or per school with by = 'school' (a university). A school's counts take each record once,
+ * however many of its departments share it; per-faculty figures divide by the school's active faculty.
+ */
+export function departmentRows(db: ReturnType<typeof useStore>['db'], filter: { from: string; to: string }, by: 'department' | 'school' = 'department'): DeptRow[] {
   const t = db.settings.targets;
-  return db.settings.departments.map((dept) => {
-    const f = { ...filter, department: dept };
+  const units = by === 'school' ? (db.settings.schools ?? []).map((x) => x.name) : db.settings.departments;
+  const short = by === 'school' ? Object.fromEntries(units.map((u) => [u, u.replace(/^(School|Faculty) of /i, '')])) : shortNames(db.settings.departments);
+  return units.map((dept) => {
+    const f = { ...filter, department: by === 'school' ? SCHOOL + dept : dept };
     const s = facultyStats(db, f);
     const u = uniqueCounts(db, f);
     const n = s.length || 1;
     const sum = (k: keyof FacultyStats) => s.reduce((a, x) => a + (x[k] as number), 0);
     return {
-      dept, short: shortNames(db.settings.departments)[dept], faculty: s.length,
+      dept, short: short[dept], faculty: s.length,
       pubs: u.pubs.length, pubsPF: u.pubs.length / n, q12: u.pubs.filter((p) => p.quartile === 'Q1' || p.quartile === 'Q2').length,
       proposals: u.grants.length, sanctioned: u.sanctionedAmount, fdpHoursPF: sum('fdpHours') / n, confPF: sum('conferences') / n,
       score: sum('score'), scorePF: sum('score') / n,
@@ -112,10 +119,12 @@ export function departmentRows(db: ReturnType<typeof useStore>['db'], filter: { 
 export function DepartmentAnalytics() {
   const { db } = useStore();
   const { filter, bar } = useAnalyticsFilter({ allowDept: false });
-  const rows = useMemo(() => departmentRows(db, filter), [db, filter]);
+  const [by, setBy] = useState<'department' | 'school'>(hasSchools(db.settings) ? 'school' : 'department');
+  const unit = by === 'school' ? 'School' : 'Department';
+  const rows = useMemo(() => departmentRows(db, filter, by), [db, filter, by]);
   const chart = rows.map((r) => ({ ...r, pubsPF: Math.round(r.pubsPF * 10) / 10, fdpHoursPF: Math.round(r.fdpHoursPF), confPF: Math.round(r.confPF * 10) / 10, scorePF: Math.round(r.scorePF * 10) / 10, sanctionedL: Math.round(r.sanctioned / 1e4) / 10 }));
   const cols: Column<DeptRow>[] = [
-    { key: 'dept', label: 'Department', render: (r) => <Link to={`/analytics/faculty?dept=${encodeURIComponent(r.dept)}`}>{r.dept}</Link>, value: (r) => r.dept },
+    { key: 'dept', label: unit, render: (r) => <Link to={`/analytics/faculty?dept=${encodeURIComponent(by === 'school' ? SCHOOL + r.dept : r.dept)}`}>{r.dept}</Link>, value: (r) => r.dept, className: 'unit-cell' },
     { key: 'faculty', label: 'Faculty', value: (r) => r.faculty, num: true },
     { key: 'pubs', label: 'Publications', value: (r) => r.pubs, num: true },
     { key: 'pubsPF', label: 'Per faculty', value: (r) => Math.round(r.pubsPF * 10) / 10, num: true },
@@ -128,23 +137,24 @@ export function DepartmentAnalytics() {
   ];
   return (
     <>
-      <PageTitle sub="Departments side by side, per faculty member, from approved records.">Department Comparison</PageTitle>
+      <PageTitle sub={hasSchools(db.settings) ? 'Schools and departments side by side, per faculty member, from approved records.' : 'Departments side by side, per faculty member, from approved records.'}>Department Comparison</PageTitle>
       <Panel size="wide">{bar}</Panel>
-      <Panel size="wide" title="Department summary">
-        <DataTable rows={rows} columns={cols} rowKey={(r) => r.dept} exportName="department_comparison" pageSize={20} />
-        <p className="note">Per-faculty figures divide by active faculty in the department, so departments of different sizes can be compared. Grant amounts credit the whole grant to every department with an investigator on it.</p>
+      <Panel size="wide" title={`${unit} summary`}>
+        {hasSchools(db.settings) && <Tabs value={by} onChange={setBy} tabs={[{ id: 'school', label: 'By school' }, { id: 'department', label: 'By department' }]} />}
+        <DataTable rows={rows} columns={cols} rowKey={(r) => r.dept} exportName={by === 'school' ? 'school_comparison' : 'department_comparison'} pageSize={20} />
+        <p className="note">Per-faculty figures divide by active faculty in the {unit.toLowerCase()}, so {by === 'school' ? 'schools' : 'departments'} of different sizes can be compared. Grant amounts credit the whole grant to every {unit.toLowerCase()} with an investigator on it{by === 'school' ? '; a record shared by departments of one school counts once for it' : ''}.</p>
       </Panel>
       <div className="cards">
-        <BarCard title="Publications per faculty" data={chart} xKey="short" xLabel="Department" series={[{ key: 'pubsPF', label: 'Publications per faculty' }]} fmt={nf} />
-        <BarCard title="Performance score per faculty" sub="Weighted score (see Settings → Targets & Scoring)" data={chart} xKey="short" xLabel="Department" series={[{ key: 'scorePF', label: 'Score per faculty' }]} fmt={nf} />
-        <BarCard title="FDP hours per faculty" data={chart} xKey="short" xLabel="Department" series={[{ key: 'fdpHoursPF', label: 'FDP hours per faculty' }]} />
-        <BarCard title="Sanctioned grant funding (₹ lakh)" data={chart} xKey="short" xLabel="Department" series={[{ key: 'sanctionedL', label: 'Sanctioned (₹ lakh)' }]} fmt={nf} />
+        <BarCard title="Publications per faculty" data={chart} xKey="short" xLabel={unit} series={[{ key: 'pubsPF', label: 'Publications per faculty' }]} fmt={nf} />
+        <BarCard title="Performance score per faculty" sub="Weighted score (see Settings → Targets & Scoring)" data={chart} xKey="short" xLabel={unit} series={[{ key: 'scorePF', label: 'Score per faculty' }]} fmt={nf} />
+        <BarCard title="FDP hours per faculty" data={chart} xKey="short" xLabel={unit} series={[{ key: 'fdpHoursPF', label: 'FDP hours per faculty' }]} />
+        <BarCard title="Sanctioned grant funding (₹ lakh)" data={chart} xKey="short" xLabel={unit} series={[{ key: 'sanctionedL', label: 'Sanctioned (₹ lakh)' }]} fmt={nf} />
         <section className="card span-all">
           <h3>Target attainment</h3>
           <p className="sub">Share of faculty in each department who met the per-faculty targets for the period ({db.settings.targets.publicationsPerFaculty} publications, {db.settings.targets.fdpHoursPerFaculty} FDP hours, {db.settings.targets.conferencesPerFaculty} conference)</p>
           <div className="tbl-wrap">
             <table className="tbl">
-              <thead><tr><th>Department</th><th>Publications target</th><th>FDP hours target</th><th>Conference target</th><th>Profile complete</th></tr></thead>
+              <thead><tr><th>{unit}</th><th>Publications target</th><th>FDP hours target</th><th>Conference target</th><th>Profile complete</th></tr></thead>
               <tbody>{rows.map((r) => (
                 <tr key={r.dept}><td>{r.dept} <span className="muted">({r.short})</span></td><td><Attainment value={r.pubAtt} target={100} /></td><td><Attainment value={r.fdpAtt} target={100} /></td><td><Attainment value={r.confAtt} target={100} /></td><td><Attainment value={r.biodata} target={100} /></td></tr>
               ))}</tbody>
@@ -195,7 +205,7 @@ export function FacultyPerformance() {
   const avg = (xs: FacultyStats[], k: 'score' | 'publications' | 'fdpHours' | 'conferences') => Math.round((xs.reduce((a, x) => a + x[k], 0) / (xs.length || 1)) * 10) / 10;
   const buckets = [0, 10, 20, 30, 40, 60].map((lo, i, a) => ({ range: i === a.length - 1 ? `${lo}+` : `${lo}–${a[i + 1] - 1}`, faculty: stats.filter((s) => s.score >= lo && (i === a.length - 1 || s.score < a[i + 1])).length }));
   const byDesig = ['Professor', 'Associate Professor', 'Assistant Professor'].map((d) => { const s = stats.filter((x) => x.faculty.designation === d); return { d: d.replace(' Professor', ' Prof.'), score: avg(s, 'score'), pubs: avg(s, 'publications') }; });
-  const byDept = db.settings.departments.filter((d) => !filter.department || d === filter.department).map((d) => { const s = stats.filter((x) => x.faculty.department === d); return { d: shortDept(d), score: avg(s, 'score'), pubs: avg(s, 'publications'), funding: Math.round(s.reduce((a, x) => a + x.sanctionedAmount, 0) / 100000 * 10) / 10 }; });
+  const byDept = db.settings.departments.filter((d) => inUnit(db.settings, filter.department, d)).map((d) => { const s = stats.filter((x) => x.faculty.department === d); return { d: shortDept(d), score: avg(s, 'score'), pubs: avg(s, 'publications'), funding: Math.round(s.reduce((a, x) => a + x.sanctionedAmount, 0) / 100000 * 10) / 10 }; });
   const top = [...stats].sort((a, b) => b.score - a.score).slice(0, 10).map((s) => ({ name: s.faculty.name, score: s.score, pubs: s.publications }));
   const ids = new Set(stats.map((s) => s.faculty.id));
   const byYear = useMemo(() => trend(db, filter.department, [...years].sort().slice(-6)), [db, filter.department, years]);
@@ -224,7 +234,7 @@ export function FacultyPerformance() {
         <div className="ins-cards">
           {view === 'dept' && <BarCard title="Departments compared" sub={`Average per faculty${ay === 'all' ? '' : ` in AY ${ay}`}; funding in ₹ lakh`} data={byDept} xKey="d" xLabel="Department" series={[{ key: 'score', label: 'Avg score' }, { key: 'pubs', label: 'Avg publications' }, { key: 'funding', label: 'Funding (₹ L)' }]} fmt={nf} height={280} />}
           {view === 'top' && <BarCard title="Top 10 faculty by weighted score" data={top} xKey="name" xLabel="Faculty" series={[{ key: 'score', label: 'Score' }, { key: 'pubs', label: 'Publications' }]} height={280} />}
-          {view === 'year' && <BarCard title="Research output by academic year" sub={filter.department || 'All departments'} data={byYear} xKey="ay" xLabel="Academic year" stacked series={[{ key: 'journal', label: 'Journal' }, { key: 'confPaper', label: 'Conference paper' }, { key: 'bookChapter', label: 'Book / chapter' }, { key: 'proposals', label: 'Grant proposals' }]} height={280} />}
+          {view === 'year' && <BarCard title="Research output by academic year" sub={unitLabel(filter.department) || 'All departments'} data={byYear} xKey="ay" xLabel="Academic year" stacked series={[{ key: 'journal', label: 'Journal' }, { key: 'confPaper', label: 'Conference paper' }, { key: 'bookChapter', label: 'Book / chapter' }, { key: 'proposals', label: 'Grant proposals' }]} height={280} />}
           {view === 'dist' && <BarCard title="Score distribution" sub="Number of faculty in each score band" data={buckets} xKey="range" xLabel="Score band" series={[{ key: 'faculty', label: 'Faculty' }]} height={280} />}
           {view === 'desig' && <BarCard title="Average by designation" data={byDesig} xKey="d" xLabel="Designation" series={[{ key: 'score', label: 'Avg score' }, { key: 'pubs', label: 'Avg publications' }]} fmt={nf} height={280} />}
           {view === 'sdg' && (sdg.length ? <BarCard title="SDG-wise research contribution" sub="Faculty listing each goal on their approved profile, and their publications in the period" data={sdg} xKey="g" xLabel="Goal" series={[{ key: 'faculty', label: 'Faculty' }, { key: 'pubs', label: 'Publications' }]} height={280} /> : <p className="muted ins-empty">No faculty in this selection list an SDG on their approved profile.</p>)}

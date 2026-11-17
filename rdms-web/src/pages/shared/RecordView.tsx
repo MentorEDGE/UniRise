@@ -10,6 +10,7 @@ import { RecordDetail } from './RecordDetail';
 import { focusMatcher, RecordInsights } from '../../components/insights';
 import type { Focus } from '../../components/insights';
 import type { Conference } from '../../lib/types';
+import { inUnit, unitFieldLabel, unitOptions } from '../../lib/org';
 
 const ConferenceMap = lazy(() => import('../../components/ConferenceMap'));
 
@@ -48,7 +49,7 @@ export function RecordView({ kind }: { kind: EntityKind }) {
         const s = q.person.trim().toLowerCase();
         if (!credited.some((f) => f!.id.toLowerCase() === s || f!.name.toLowerCase().includes(s))) return false;
       }
-      if (q.dept && !credited.some((f) => f!.department === q.dept)) return false;
+      if (q.dept && !credited.some((f) => inUnit(db.settings, q.dept, f!.department))) return false;
       if (q.level && kind === 'conferences' && ((r as Conference).level === 'International' ? 'International' : 'National') !== q.level) return false;
       const d = dateOf(kind, r);
       if (q.from && d < q.from) return false;
@@ -86,7 +87,7 @@ export function RecordView({ kind }: { kind: EntityKind }) {
           {(isFaculty || user?.role === 'office') && <Field label={`${cfg.label} Status`}><Select value={form.status} onChange={set('status')} options={STATUSES.map((x) => ({ value: x, label: STATUS_LABEL[x] }))} placeholder="ALL" /></Field>}
           <Field label="Title"><Input value={form.title} onChange={set('title')} /></Field>
           {(!isFaculty || scope === 'all') && <Field label="Author / Faculty" hint="Name or employee code"><Input value={form.person} onChange={set('person')} /></Field>}
-          {(!isFaculty || scope === 'all') && <Field label="Department"><Select value={form.dept} onChange={set('dept')} options={db.settings.departments} placeholder="ALL" /></Field>}
+          {(!isFaculty || scope === 'all') && <Field label={unitFieldLabel(db.settings)}><Select value={form.dept} onChange={set('dept')} options={unitOptions(db.settings)} placeholder="ALL" /></Field>}
           {kind === 'conferences' && <Field label="Conference type"><Select value={form.level} onChange={set('level')} options={['National', 'International']} placeholder="ALL" /></Field>}
           {more && <>
             <Field label={`${cfg.label} ID`}><Input value={form.id} onChange={set('id')} /></Field>

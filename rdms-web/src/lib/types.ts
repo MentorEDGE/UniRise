@@ -398,10 +398,15 @@ export interface Targets {
   grantAppliedPerFaculty: number; // count of proposals
 }
 
+/** A school (or faculty) of a university, holding some of the institution's departments. */
+export interface School { name: string; departments: string[] }
+
 export interface Settings {
   institutionName: string;
   institutionTagline: string;
   departments: string[];
+  /** Universities organised in schools: every department belongs to exactly one. Empty or missing for an institute or college. */
+  schools?: School[];
   academicYearStartMonth: number; // 1-12; 6 = June
   seedMoneyWindowOpen: boolean;
   targets: Targets;

@@ -4,7 +4,7 @@
  * actor's own institution database, so nothing here can reach another institution.
  */
 import type {
-  AnyRecord, Author, Biodata, Course, Engagement, HistoryItem, MediaItem, ProfileLinks, Supervisee, DB, EntityKind, Faculty, Grant, Investigator, Notice, ProfileChange, Publication, Settings, Status,
+  AnyRecord, Author, Biodata, Course, Engagement, HistoryItem, MediaItem, ProfileLinks, Supervisee, DB, EntityKind, Faculty, Grant, Investigator, Notice, ProfileChange, Publication, School, Settings, Status,
 } from './types';
 import { EXIT_REASONS, PROFILE_LINKS, linkAllowed, AUTHOR_KINDS, AWARD_CATEGORIES, EMPTY_LINKS, EMPTY_SCHOLAR, ENGAGEMENT_TYPES, MAX_HIGHLIGHTS, SUPERVISION_DEGREES, SUPERVISION_STATUS, IP_DESCRIPTION_WORDS, IP_OWNERS, IP_STATUSES, IP_TYPES, LEVELS, PUB_TYPES, wordCount } from './types';
 import type { IntellectualProperty } from './types';
@@ -475,6 +475,32 @@ export function ensureFacultyProfile(db: DB, p: { id: string; title: string; nam
   return p.id;
 }
 
+/**
+ * Schools of a university (none for an institute or college). Each needs a unique name; every department belongs to
+ * exactly one school, and only to departments the institution has. The Java API applies the same rules.
+ */
+export function cleanSchools(input: unknown, departments: string[]): School[] {
+  const schools = list(input, 50, (x) => x as unknown).map((x) => {
+    const o = (x ?? {}) as Record<string, unknown>;
+    return { name: str(o.name, 200).trim(), departments: list(o.departments, 100, (d) => d as unknown).map((d) => str(d, 200).trim()).filter(Boolean) };
+  });
+  if (!schools.length) return [];
+  const names = new Set<string>(), placed = new Map<string, string>();
+  for (const sc of schools) {
+    if (!sc.name) throw invalid('Every school needs a name.');
+    if (names.has(sc.name.toLowerCase())) throw invalid(`There are two schools called “${sc.name}”.`);
+    names.add(sc.name.toLowerCase());
+    for (const d of sc.departments) {
+      if (!departments.includes(d)) throw invalid(`“${d}” is not one of the institution's departments.`);
+      if (placed.has(d)) throw invalid(`“${d}” is in both “${placed.get(d)}” and “${sc.name}”; a department belongs to one school.`);
+      placed.set(d, sc.name);
+    }
+  }
+  const unplaced = departments.filter((d) => !placed.has(d));
+  if (unplaced.length) throw invalid(`Choose a school for ${unplaced.map((d) => `“${d}”`).join(', ')}.`);
+  return schools.map((sc) => ({ name: sc.name, departments: departments.filter((d) => sc.departments.includes(d)) })); // departments in the institution's order
+}
+
 export function saveSettings(db: DB, actor: Actor, s: Settings) {
   requireOffice(actor); // institution settings and notices are not managed by Top-Level Management
   if (!str(s.institutionName).trim()) throw invalid('Institution name is required.');
@@ -482,9 +508,10 @@ export function saveSettings(db: DB, actor: Actor, s: Settings) {
   if (!departments.length) throw invalid('Keep at least one department.');
   const used = new Set(db.faculty.map((f) => f.department));
   for (const d of db.settings.departments) if (used.has(d) && !departments.includes(d)) throw invalid(`“${d}” still has faculty; move them first.`);
+  const schools = cleanSchools(s.schools, departments);
   const nums = <T extends object>(o: T, ref: T) => Object.fromEntries(Object.keys(ref).map((k) => [k, Math.max(0, num((o as Record<string, unknown>)?.[k]))])) as T;
   db.settings = {
-    institutionName: str(s.institutionName, 200).trim(), institutionTagline: str(s.institutionTagline, 200), departments,
+    institutionName: str(s.institutionName, 200).trim(), institutionTagline: str(s.institutionTagline, 200), departments, ...(schools.length ? { schools } : {}),
     academicYearStartMonth: Math.min(12, Math.max(1, Math.round(num(s.academicYearStartMonth)) || 6)), seedMoneyWindowOpen: s.seedMoneyWindowOpen === true,
     targets: nums(s.targets, db.settings.targets), weights: nums(s.weights, db.settings.weights),
   };
