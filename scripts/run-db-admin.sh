@@ -6,7 +6,8 @@ slug="${2:-}"
 case "$action" in
   bootstrap) [[ -z "$slug" ]] || { echo "bootstrap takes no slug" >&2; exit 2; } ;;
   backup-restore) [[ "$slug" =~ ^[a-z][a-z0-9_]{2,30}$ ]] || { echo "invalid slug" >&2; exit 2; } ;;
-  *) echo "usage: scripts/run-db-admin.sh bootstrap | backup-restore <slug>" >&2; exit 2 ;;
+  backup-all) [[ -z "$slug" ]] || { echo "backup-all takes no slug" >&2; exit 2; } ;;
+  *) echo "usage: scripts/run-db-admin.sh bootstrap | backup-restore <slug> | backup-all" >&2; exit 2 ;;
 esac
 root="$(cd "$(dirname "$0")/.." && pwd)"
 read -r region cluster definition subnets group < <(
@@ -19,7 +20,7 @@ task="$(aws ecs run-task --region "$region" --cluster "$cluster" --launch-type F
   --propagate-tags TASK_DEFINITION \
   --task-definition "$definition" \
   --network-configuration "awsvpcConfiguration={subnets=[$subnets],securityGroups=[$group],assignPublicIp=ENABLED}" \
-  --overrides "{\"containerOverrides\":[{\"name\":\"admin\",\"command\":[\"$action\",\"$slug\"]}]}" \
+  --overrides "{\"containerOverrides\":[{\"name\":\"admin\",\"command\":[\"$action\"${slug:+,\"$slug\"}]}]}" \
   --output json | python3 -c '
 import json,sys
 r=json.load(sys.stdin)

@@ -42,7 +42,21 @@ docker run --rm --network "$network" --entrypoint bash -e PGHOST="$db" -e PGUSER
 work="$(mktemp -d)"
 /scripts/tenant-backup.sh demo "$work"
 /scripts/restore-drill.sh demo "$work"/*.dump'
+# backup-all: every live institution in the control plane, none of the others; S3 replaced by a local stand-in.
+docker exec "$db" createdb -U unirise_admin tenant_second
+docker exec "$db" psql -Xq -v ON_ERROR_STOP=1 -U unirise_admin -d unirise -c "
+  CREATE TABLE institution(slug text PRIMARY KEY, status text NOT NULL);
+  INSERT INTO institution VALUES ('demo','sandbox'), ('second','active'), ('gone','closed'), ('half','provisioning');"
+mkdir -p "$HOME/.cache"; uploads="$(mktemp -d "$HOME/.cache/db-admin-check.XXXXXX")"; chmod 777 "$uploads" # under HOME: Colima shares only the home folder with Docker
+printf '%s\n' '#!/bin/sh' '# stand-in for: aws s3 cp <file> s3://bucket/backups/<slug>/<name> --sse AES256' 'cp "$3" "/uploads/$(basename "$(dirname "$4")")-$(basename "$4")"' > "$uploads/aws"
+chmod 755 "$uploads/aws"
+docker run --rm --network "$network" -v "$uploads:/uploads" -v "$uploads/aws:/usr/local/bin/aws:ro" -e PGHOST="$db" -e PGUSER=unirise_admin \
+  -e PGDATABASE=unirise -e PGSSLMODE=disable -e PGPASSWORD -e BACKUP_S3_URI=s3://example/backups "$image" backup-all
+ls "$uploads" | grep -q '^demo-tenant_demo-.*\.dump$' || { echo "backup-all missed demo" >&2; exit 1; }
+ls "$uploads" | grep -q '^second-tenant_second-.*\.dump$' || { echo "backup-all missed second" >&2; exit 1; }
+[[ "$(ls "$uploads" | grep -c '\.dump$')" == 2 ]] || { echo "backup-all backed up closed or unfinished institutions" >&2; exit 1; }
+rm -rf "$uploads"
 if run_admin invalid >/dev/null 2>&1; then echo "invalid action accepted" >&2; exit 1; fi
 root="$(cd "$(dirname "$0")/../.." && pwd)"
 if "$root/scripts/run-db-admin.sh" backup-restore '../../invalid' >/dev/null 2>&1; then echo "invalid slug accepted" >&2; exit 1; fi
-echo "admin image checks OK (non-superuser bootstrap, idempotence, credentials, role permissions and restore)"
+echo "admin image checks OK (non-superuser bootstrap, idempotence, credentials, role permissions, restore and backup-all)"
