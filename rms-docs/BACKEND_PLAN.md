@@ -232,7 +232,7 @@ Account `417441726165`, `ap-south-1`, shared with MentorEDGE. Only UniRise resou
 
 Each phase ends with tests passing and the docs updated. Order matters: phases 2 to 5 depend on phase 1.
 
-**Phase 0. Housekeeping.** Pending infra and API changes committed on 2026-11-14 (A11). Still to do: refresh `RDMS_WEB_FEATURES.md` (7 record types, 54 reports, closed registration, review states).
+**Phase 0. Housekeeping.** Pending infra and API changes committed on 2026-11-14 (A11). `RDMS_WEB_FEATURES.md` rewritten from the code on 2026-11-17 (three roles, 7 record types, review states, schools, 60 reports).
 
 **Phase 1. Decisions.** D1 to D4 were decided on 2026-11-14 (section 8). D5 to D8 follow the recommendations unless changed.
 

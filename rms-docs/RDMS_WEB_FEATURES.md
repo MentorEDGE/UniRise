@@ -1,135 +1,84 @@
 # rdms-web: feature reference
 
-> **Update 2026-11-06 (after merge of d764653):** this snapshot predates commit d764653. Confirmed by the product owner: **each institution has its own Office of Research** (admins for that institution only), and many institutions share the platform. So wherever this doc says Office of Research is platform-wide or cross-institution, or describes public self-registration and platform-level institution management, it is superseded: accounts are now created by the institution's Office of Research, and institutions are provisioned by the UniRise team with `npm run provision`. Sections 1, 6 and 10 need a full rewrite once the team's changes settle.
+**Snapshot:** 2026-11-17, `dev` at 586d345. Rewritten from the code; it replaces the 2026-11-06 snapshot, whose role model (platform-wide Office of Research, self-registration, management approving records) no longer applies. The code is the source of truth; file references point to it.
 
-**Snapshot:** 2026-11-06, `dev` at a844b6b (includes origin/main 40612cd). The team has changes in progress, so treat this as the current state and update it once those land. Source of truth for behaviour is the code; file references below point to it.
+**Where it runs:** `https://dev-unirise.mentoredge.co.in` (pages on Hostinger, published from `dev`) calling the Java API `https://api.dev-unirise.mentoredge.co.in` (`unirise-api` on AWS). The Node/SQLite server in `rdms-web/server/` still runs the same app locally and is the executable specification of the rules (`src/lib/domain.ts`); the Java API answers the same requests. See `BACKEND_PLAN.md`.
 
-**Decided by the product owner (2026-11-06):**
-- Roles are final: **Top-Level Management**, **Faculty**, **Office of Research**. Earlier roles (scholar, supervisor, HoD, Dean, Executive, IT Admin, Guest) do not exist.
-- **Office of Research is the full platform admin**: it oversees everything in the RMS (accounts, roles, permissions, records, approvals, dashboards), and everything is audited. The prototype implements only the account and institution part; sections 1 and 10 mark the difference.
-- `rdms-web` is the product frontend. Production uses `unirise-api` as the backend on PostgreSQL. The SQLite server in `rdms-web/server/` is a prototype whose rules serve as the specification.
-- Production sign-in will be OIDC. Design is deferred. The password sign-in described below is the prototype's behaviour.
+## 1. Roles
 
-Companion doc: `RDMS_WEB_UNPLANNED_FEATURES.md` (gap analysis against the original plan). Deferred.
+Three roles, fixed (decided 2026-11-06 and 2026-11-14). Each institution has its own accounts; the UniRise team provisions institutions.
 
----
+| Role | Sees | Does |
+|---|---|---|
+| **Office of Research** | Everything in its institution, in every state, including former faculty | Reviews every entry and profile update (the only role that does); records grant outcomes and sanctioned seed money; creates and manages accounts; marks faculty as former; institution settings (schools, departments, targets, score weights, seed money window), notices; reads the audit log |
+| **Top-Level Management** | Approved records of current faculty only, without review comments; current faculty's profiles | Read only: dashboards, analytics, reports, profiles |
+| **Faculty** | Own records in every state; colleagues' names and departments only (to pick co-authors) | Enter records, submit them for review, answer comments and resubmit; propose profile updates |
 
-## 1. Roles and who sees what
+Rules in `scopeFor` and `canView` (`src/lib/domain.ts`); the Java API applies the same (`DataSlice`, `AccessService`).
 
-| Role | Scope | Can do | Cannot do |
-|---|---|---|---|
-| **Office of Research** (code value `it_admin`) | Platform | **Target (product owner, 2026-11-06):** the platform administrator that oversees everything in the RMS. Creates accounts; grants roles, permissions and the data access each role needs; approves records (publications, grants, seed money, FDPs, conferences, honours); sees all dashboards, analytics and reports; every action is audited and retained. **Prototype today:** approves/rejects access requests, assigns institution and role, activates/suspends/deactivates accounts, resets passwords, adds and suspends institutions, reads the audit log. | Nothing is outside its remit, but all actions are logged. Prototype cannot read research data, which differs from the target. |
-| **Top-Level Management** | One institution | **Target (product owner, 2026-11-06): view only.** Sees the institution's data, dashboards, analytics and reports. **Prototype today** also approves records, records grant outcomes, manages the faculty directory, settings and notices; those move to Office of Research or are re-decided (see section 4 and 10). | Approve or reject anything; see other institutions; make entries on behalf of faculty |
-| **Faculty** | One institution | Create and edit own entries, submit for approval, own biodata, own reports and statistics | See colleagues' biodata, FDPs, conferences, honours, grants, seed money or contact details |
+**Former faculty** (retired, resigned, transferred, other; with the last working day): the Office of Research keeps their profile and records. They cannot sign in. Management does not see them, and they are left out of the active faculty count and all current figures. *Open (2026-11-16):* whether their approved work should still count in management's totals for past years; do not build on this until the team decides.
 
-Faculty visibility (`canView`, `scopeFor` in `src/lib/domain.ts`):
-- Records on which they are credited (owner, or internal co-author/co-investigator), in any state.
-- Other faculty's **approved publications** only.
-- Colleagues' directory entries show name, department and research IDs. Phone and joining date are blanked.
-- Faculty cannot open or search another faculty member's profile. Profile search is management-only.
+## 2. Records and the review workflow
 
-## 2. Record types (all use the same workflow)
+Seven record types: **Publications, Grants & Fellowships, Seed Money, FDPs, Conferences, Honours & Awards, Intellectual Property** (patent, design, copyright, trademark). Display ids come from one counter per institution: `PUB`, `GRT`, `SM`, `FDP`, `CNF`, `AWD`, `IPR`.
 
-Workflow: **Draft → Submitted → Approved / Rework / Rejected**. Rework returns to the owner, who edits and resubmits. Only Draft and Rework entries are editable. Only Drafts can be deleted. Each record keeps a history (who, when, action, remark). IDs are prefixed per type (`PUB`, `GRT`, `SM`, `FDP`, `CNF`, `AWD`) from one counter per institution.
+Statuses: **Draft → Submitted → Under Review → Approved / Changes Requested / Rejected**. Opening a submission starts the review. Changes Requested goes back to the faculty member, who corrects it and resubmits (shown as **Resubmitted**). Every record keeps a history (who, when, action, comment); management sees only creation and approval, never comments. Rejecting or requesting changes needs a comment.
 
-Reviewing is **Office of Research only** (target; the prototype lets management review). Reject and Rework need a remark. Approval needs no remark.
+Credit: a record counts for its owner and internal co-authors or co-investigators. Institution, school and department totals count a shared record once.
 
-### 2.1 Publications
-Types: Journal Article, Book, Book Chapter, Conference Paper, Technical Report. Fields: category, title, DOI, month/year, ISSN, venue, indexing (Scopus, Web of Science, both, UGC CARE, none), quartile (Q1–Q4, NA), impact factor, ERF-related, project reference, open access, authors, PDF name.
-Authors have a kind: Faculty, Student, External, Ex-Faculty, Ex-Student.
-Rules: the owner must be an author; year between 1950 and the current year; duplicate DOI is rejected with a pointer to the existing entry; PDF required to submit except for books.
+Field rules per type (DOI uniqueness, investigator shares adding up to 100%, seed money ₹1 to ₹5,00,000, dates not in the future, PDF required to submit except for books, and so on) are in `domain.ts`; the Java API ports them (`Records.java`).
 
-### 2.2 Grants
-Fields: unit (Indian/International/Consultancy), type, UTN, title, description, call title/source, source, agency, applied date/amount, duration, ERF-related, matching grant, contact, investigators, enclosures, remarks.
-Set by Office of Research after approval (prototype: management): **outcome** (Applied, Sanctioned, Not Sanctioned, Completed), sanction date, sanctioned amount, received amount. Received cannot exceed sanctioned.
-Rules: owner must be an investigator; shares add up to 100%; exactly one PI; applied amount > 0.
+## 3. Schools and departments
 
-### 2.3 Seed money
-Fields: applied date, category (Faculty/Student), title, abstract, requested amount, investigators. Requested amount ₹1 to ₹5,00,000. The reviewer sets the sanctioned amount when approving (Office of Research in the target). New applications are blocked when the **seed money window** setting is closed.
+An institute or college has departments. A **university** can also have **schools** (Institution → Institution & Departments): every department belongs to exactly one school. With schools:
+- every "Department" filter becomes **School / Department**, with departments grouped under their school and an "All of <school>" choice (dashboards, analytics, record lists, report pages, Approvals, Research Networks);
+- Find Profiles has a School filter;
+- Department Comparison has **By school** and **By department**;
+- every "Department wise" summary report also comes as **School wise**;
+- the annual report shows each department's school.
 
-### 2.4 FDPs
-Role (Attended, Organised, Resource Person), programme type (FDP, Workshop, STTP, Refresher Course, Orientation Programme, MOOC), title, organiser, sponsor, mode (Offline/Online/Hybrid), level (Institutional/State/National/International), from/to dates, hours, outcome, certificate name. Must have taken place already; to-date not before from-date.
+Institutions without schools see none of this. Helpers: `src/lib/org.ts`. Sample data: XYZ University has three schools; ABC Institute of Technology has none.
 
-### 2.5 Conferences
-Participation (Paper/Poster Presented, Invited Talk/Keynote, Session Chair, Attended, Organised), conference name, paper title, organiser, venue, country, level, mode, dates, proceedings indexing, funding (Institution/Self/External Agency), registration fee, amount claimed, award, certificate name. Same date rules as FDPs.
+## 4. Office of Research
 
-### 2.6 Honours & Awards
-Category (Award, Honour/Distinction, Fellowship of a Learned Society, Best Paper/Presentation, Academic or Editorial Recognition, Scholarship/Travel Grant), title, conferred by, level, date received, citation, prize amount, certificate name. Date cannot be in the future. Prize cannot be negative.
-Counted in dashboards, analytics, scores and the annual report; shown on the faculty profile/CV. Distinct from "awards" in the original PRD (funder awards).
+- **Dashboard** (home): what is waiting (new and resubmitted, under review, profile updates, changes requested, oldest waiting), an oldest-first list with Review links, counts by type, then the institution at a glance (as management sees it).
+- **Approval:** tabs New and resubmitted, Under review, Changes requested, Approved, Rejected; per record type and profile updates; school/department filter. Review window with the conversation, decision and comment; grant outcome and seed money sanction.
+- **User Management:** create Faculty and Top-Level Management accounts (temporary password shown once), suspend, deactivate, reset passwords, change role. **Audit Log** of sign-ins and every change.
+- **Institution:** name, tagline, academic-year start month, seed money window, schools, departments (one with faculty cannot be removed); **Targets & Scoring**; **Notices** shown to faculty.
+- Everything management sees (below), across all statuses.
 
-### 2.7 Credit
-A record counts for its owner plus internal Faculty co-authors/co-investigators. Institution-level totals count a co-authored item once.
+## 5. Top-Level Management (read only)
 
-## 3. Faculty features
-- **Home:** own summary tiles and the institution's notices.
-- **Entry screens** per record type (draft, save, submit, resubmit after rework).
-- **Biodata / CV** view and edit: DOB, gender, address, summary, research interests, Google Scholar, PhD guided/ongoing, qualifications, experience, awards, memberships. Printable.
-- **Own profile:** faculty may update only their own phone, email, ORCID and Scopus ID.
-- **Self performance:** own statistics against the institution's targets, from own records only.
-- **Reports:** the faculty's own slice of the report catalogue.
+- **Dashboard:** academic year and school/department filter; figures with change against the year before (active faculty, publications, Q1 + Q2, sanctioned funding, grant proposals, FDP hours, conferences, honours & IP, seed money, collaboration); insights; top researchers; charts (output over six years, by department, journal quality, grant funding, FDP hours, conference participation, monthly activity); top journals and funding agencies. The former "Institution Overview" page is part of it.
+- **Faculty:** Find Profiles (search and filters: expertise, SDG, school, department, designation, availability), research profiles, Faculty Performance.
+- **Record views** per type, and **report pages** per type with a sidebar of ready-made reports.
+- **Seed Money**, **Research Networks** (collaboration network, between departments, countries, SDGs).
+- **Reports menu:** Annual Activity Report (printable), Department Comparison, Participation & Compliance.
 
-## 4. Top-Level Management features
+## 6. Faculty
 
-**Target: Top-Level Management only views data and analytics and approves nothing.** Items marked *(prototype)* are things the prototype lets management do that now need a new owner (probably Office of Research); see section 10.
+- **My Workspace** (home): what needs action, figures for the year, notices, quick add buttons.
+- **My Profile:** research profile (biodata, expertise, SDGs, supervision, teaching, engagement, Follow Me links checked per site: LinkedIn, X, ResearchGate, GitHub, YouTube, SSRN, website); updates go to the Office of Research for approval. **My Performance:** figures, score, **My targets** for the year, charts by year, records. **CV** to print or save as PDF.
+- A menu per record type (My Publications, My Grants, **My Seed Money**, My FDPs, My Conferences, My Awards, My IP) with add screens; **My Collaborations**; **My Submissions** (All, Needs your action, Submitted, Under Review, Changes Requested, Approved, Rejected, Draft).
 
-- **Dashboard:** counts, awaiting-approval list, target attainment by department, activity by department, top performers by weighted score, notices.
-- *(prototype)* **Approvals queue** for all six record types, with grant outcome entry. Target: moves to Office of Research.
-- **Faculty directory:** view. *(prototype)* also add, edit, deactivate faculty profiles ahead of sign-up. Employee code is 3–20 letters/digits and unique. Department must be one of the institution's departments.
-- **Profile search** and a per-faculty profile with biodata.
-- **Analytics:** institution, departments, faculty performance, participation. Filters: academic year or date range, department. Charts for publications, FDP hours and conferences by year.
-- **Annual report:** compiled, printable (Print / Save as PDF).
-- *(prototype)* **Settings:** institution name and tagline, departments (cannot remove one that still has faculty), academic-year start month (default June), seed money window, **targets**, **score weights**.
-- *(prototype)* **Notices:** post and delete; faculty see them on their home page.
+## 7. Reports
 
-### Targets (per faculty, per academic year; seed defaults)
-Publications 2, FDP hours 30, conferences 1, grant proposals 0.5.
+**60 reports** in six groups, as a list (one row per record) or a summary (one row per key, with totals), each with filters, **Export CSV** and **Print**:
+- Publications 12, Grants 10, FDPs 8, Conferences 8, Honours & Awards 8, Intellectual Property 8 (54 in all);
+- plus a **School wise** version of each group's department summary (6), listed only for universities with schools.
 
-### Score weights (seed defaults)
-Journal by quartile Q1 10, Q2 8, Q3 6, Q4 4, other 3. Book 8, chapter 4, conference paper 3, technical report 2. Grant sanctioned 10 plus 0.5 per ₹1 lakh (capped at 20 extra); an unsanctioned grant scores 1. Seed money 3. FDP attended 2, organised 4, resource person 3. Conference presented 3, invited 4, chair 2, attended 1, organised 4. Honours: international 6, national 4, other 2. Only Approved records score. Weights are per institution and editable.
+Management reports use approved records of current faculty; the Office can choose any status. Faculty see the same catalogue computed from their own records. Definitions: `src/lib/reports.ts`.
 
-### Profile completeness
-14 checks (email, phone, ORCID, Scopus ID, DOB, gender, address, summary, interests, Google Scholar, qualification present, PhD listed, experience, memberships) give a percentage. Management dashboards report the average and how many are at 80% or more.
+**Targets** (per faculty, per academic year; defaults): publications 2, FDP hours 30, conferences 1, grant proposals 0.5. **Score weights** are per institution (Targets & Scoring); only approved records score.
 
-## 5. Reports
-46 reports in five groups, each as a list or a group-by table with totals, filters, **Export CSV** and **Print**:
-- Publications (12): institute-department, employee, journal, quartile, indexing, year, faculty-/student-authored journal, inter-institution, open access, department and employee counts.
-- Grants (10): project type, department, agency, source, year, sanctioned details, all proposals, employee, percentage sharing, institution count.
-- FDPs (8): faculty hours, department, programme type, mode, level, organiser, organised/resource person, all.
-- Conferences (8): faculty, department, participation type, level, country, funding and claims, awards received, all.
-- Honours & Awards (8): faculty, department, level, category, conferring body, year, international recognition, all.
-Definitions: `src/lib/reports.ts`. Faculty see the same catalogue computed from their own records.
+## 8. Sign-in and security
 
-## 6. Access flow and Office of Research (prototype behaviour)
-1. Public pages list active institutions and their departments.
-2. A person **requests access** (`/register`): institution, role (Faculty or Top-Level Management), name, email, password, plus employee code and department for faculty. The response is the same whether or not the email exists. Rate-limited per IP.
-3. The request is **pending**. The person cannot sign in.
-4. Office of Research reviews it. The email domain is compared with the institution's; a mismatch is flagged. Approval requires ticking "affiliation verified". On approval a faculty account is linked to the faculty profile with that employee code, or the profile is created. A profile can be linked to only one account. Rejection requires a reason.
-5. Account states: pending, active, rejected, suspended, deactivated. Suspending a user or institution ends sessions immediately. Role changes end sessions.
-6. Office of Research also: reset passwords (one-time password shown once), create/suspend institutions (name, short code, email domain, departments), read the audit log.
-7. Every admin action is written to an audit log.
+Email and password (decision D1; OIDC later). Java API: PBKDF2 hashes; HttpOnly, SameSite=Strict, Secure session cookie; 8-hour idle timeout (30 minutes for the Office of Research), 12 hours at most; `X-RDMS` header on every change; 5 failed sign-ins lock an email for 15 minutes, 20 lock an address; former, suspended or deactivated accounts cannot sign in. On the AWS dev site the sample accounts on the sign-in page only fill in the email; one demo password, held by the team, is used for all of them (`scripts/load-demo.sh`).
 
-Security behaviour worth keeping as acceptance tests against the API: scrypt hashing, 5 failed sign-ins lock an email for 15 minutes, HttpOnly SameSite=Strict cookie, CSRF header on state changes, 8-hour idle timeout for users and 30 minutes for Office of Research, separate sign-in route for Office of Research (`/admin`), the server (not the client) chooses the institution database, fields are whitelisted so a client cannot approve its own entry or set sanctioned amounts.
+## 9. Presentation
 
-## 7. Presentation
-- **Landing page:** slogan "Every contribution counted. Every institution elevated.", proof points, RISE framework (Record, Insight, Stewardship, Elevate), audience cards, closing statement, scroll reveal, mobile layout.
-- **Dark mode:** sun/moon toggle in the menu bar (top right on sign-in pages), remembered per browser, follows the OS by default, dark logo, themed charts, print stays light.
-- **Co-branding:** "UniRise by MentorEdge" with the institution's name and tagline beside it. Simplified header, Profile menu, dropdowns that stay open while moving into the list.
-- **Print/PDF** via the browser for reports, the annual report and biodata.
+Landing page; dark and light themes (remembered per browser); UniRise by MentorEdge with the institution's name; one menu bar that folds into a Menu button on phones; print stays light; pages tested on desktop and phone for every role.
 
-## 8. Data model summary (prototype)
-Per institution: settings (name, tagline, departments, academic-year start month, seed money window, targets, weights), faculty, biodata, publications, grants, seed money, FDPs, conferences, honours, notices, and one ID counter. Platform level: institutions, accounts, sessions, audit log. Types: `src/lib/types.ts`.
+## 10. Not built yet
 
-## 9. Not built in the prototype
-Email delivery (registration/approval notices, password reset), real file uploads (only file names are stored), OIDC/SAML, two-factor for Office of Research, per-institution backup/export, scale-out beyond one process.
-
-## 10. Open questions to confirm
-1. **Office of Research: decided, details open.** Product owner (2026-11-06): it is the admin that oversees the whole RMS, from account creation to research records and every dashboard, with everything audited. This replaces the prototype's "no research data" rule and means the code needs: record view and review rights, cross-institution dashboards and reports, a permission model (who gets which role, feature and data scope), and a complete audit trail of reads as well as changes. Still to settle:
-   - ~~Who approves?~~ **Decided:** only Office of Research approves. Top-Level Management approves nothing and only sees data and analytics.
-   - Who owns what management did in the prototype: faculty directory add/edit, settings (departments, targets, score weights, seed money window), notices, grant outcome entry? Proposed: Office of Research for all of these; management read-only.
-   - Are permissions a fixed set per role, or can Office of Research grant individual features and data scopes to a person? What is the list of grantable permissions?
-   - Is it one team seeing all institutions, or can a member be limited to some institutions?
-   - Should reads of records by Office of Research be audited, not just changes?
-2. Should Top-Level Management be able to see honours of faculty? The prototype shows management everything in its institution; the commit message says honours are "private to the owner", which holds only for other faculty.
-3. Are score weights and targets per institution (as built) or platform defaults with overrides?
-4. Seed-money window: a single institution-wide switch (as built) or dated cycles?
-5. Is "Top-Level Management" one level, or do some institutions need department-level heads later?
+Email (enquiry notifications, invitations, password reset), real file uploads (only file names are stored), OIDC, configurable approval chains, per-institution report selection. Tracked in `BACKEND_PLAN.md` (phase 7 and 8).
