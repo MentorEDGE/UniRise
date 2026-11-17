@@ -1,11 +1,15 @@
 import { useState } from 'react';
 import { Alert, Field, Input, NumberInput, PageTitle, Panel, Select, TextArea, useToast } from '../../components/ui';
 import { schoolOf } from '../../lib/org';
+import { ENTITY_LABEL, kindOn } from '../../lib/types';
+import type { AnyRecord, EntityKind } from '../../lib/types';
+
+const RECORD_KINDS: EntityKind[] = ['publications', 'grants', 'seedMoney', 'fdps', 'conferences', 'awards', 'ipr'];
 import { DEFAULT_WEIGHTS } from '../../lib/seed';
 import { addNotice, deleteNotice, saveSettings, useStore } from '../../lib/store';
 import type { Settings, Targets, Weights } from '../../lib/types';
 import { MONTHS } from '../../lib/types';
-import { fmtDate } from '../../lib/analytics';
+import { fmtDate, plural } from '../../lib/analytics';
 
 /** Institution & Departments, Targets & Scoring and Notices: administered by the institution's Office of Research. */
 function useSettingsDraft() {
@@ -35,6 +39,17 @@ export function InstitutionSettings() {
           <Field label="Tagline" className="span2"><Input value={s.institutionTagline} onChange={(v) => setS({ ...s, institutionTagline: v })} /></Field>
           <Field label="Academic year starts in"><select value={s.academicYearStartMonth} onChange={(e) => setS({ ...s, academicYearStartMonth: Number(e.target.value) })}>{MONTHS.map((m, i) => <option key={m} value={i + 1}>{m}</option>)}</select></Field>
           <Field label="Seed money window"><select value={s.seedMoneyWindowOpen ? 'open' : 'closed'} onChange={(e) => setS({ ...s, seedMoneyWindowOpen: e.target.value === 'open' })}><option value="open">Open – accepting proposals</option><option value="closed">Closed for this quarter</option></select></Field>
+        </div>
+      </Panel>
+      <Panel title="Record types" size="wide">
+        <p className="note" style={{ marginTop: 0 }}>The kinds of research activity your institution records. A type that is switched off disappears from every menu and form, and no new entries of it can be made. Entries already made stay in the records.</p>
+        <div className="grid" style={{ gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))' }}>
+          {RECORD_KINDS.map((k) => (
+            <label key={k} className="check-row">
+              <input type="checkbox" checked={kindOn(s, k)} onChange={(e) => setS({ ...s, features: { ...(s.features ?? {}), [k]: e.target.checked } })} />
+              <span><b>{ENTITY_LABEL[k]}</b> <span className="muted">· {plural((db[k] as AnyRecord[]).length, 'entry', 'entries')}</span></span>
+            </label>
+          ))}
         </div>
       </Panel>
       <Panel title="Schools" size="wide">

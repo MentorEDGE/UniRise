@@ -2,6 +2,7 @@ import { useRef, useState } from 'react';
 import { Link, Navigate } from 'react-router-dom';
 import { Alert, Field, Input, PageTitle, Panel, useToast } from '../../components/ui';
 import { API_BASE, changePassword, login, useStore } from '../../lib/store';
+import { DEMO_PASSWORD } from '../../lib/demo';
 import { Logo } from '../../components/Logo';
 import { ThemeToggle } from '../../components/ThemeToggle';
 
@@ -62,14 +63,14 @@ function AuthPage({ children, wide = false }: { children: React.ReactNode; wide?
 }
 
 const DEMO = [
-  { email: 'office@abc.edu.in', pw: 'Office@1234', label: 'Office of Research, ABC', note: 'Office of Research · ABC Institute of Technology' },
-  { email: 'director@abc.edu.in', pw: 'Admin@1234', label: 'Director, ABC', note: 'Top-Level Management · ABC Institute of Technology' },
-  { email: 'john.doe@abc.edu.in', pw: 'Faculty@123', label: 'Dr. John Doe, Professor', note: 'Faculty · ABC Institute of Technology' },
-  { email: 'vc@xyz.ac.in', pw: 'Admin@1234', label: 'Vice-Chancellor, XYZ', note: 'Top-Level Management · XYZ University' },
+  { email: 'office@abc.edu.in', pw: DEMO_PASSWORD, label: 'Office of Research, ABC', note: 'Office of Research · ABC Institute of Technology' },
+  { email: 'director@abc.edu.in', pw: DEMO_PASSWORD, label: 'Director, ABC', note: 'Top-Level Management · ABC Institute of Technology' },
+  { email: 'john.doe@abc.edu.in', pw: DEMO_PASSWORD, label: 'Dr. John Doe, Professor', note: 'Faculty · ABC Institute of Technology' },
+  { email: 'vc@xyz.ac.in', pw: DEMO_PASSWORD, label: 'Vice-Chancellor, XYZ', note: 'Top-Level Management · XYZ University' },
 ];
 /**
- * The passwords above are the local prototype's, printed in the README. A shared server (the Java API) has its own demo
- * password that is never in the code: there the buttons only fill in the email, and the person types the password.
+ * On a page served from its own API (a local run) a sample account signs in at once. On the shared dev site the buttons
+ * only fill in the email and the person types the demo password.
  */
 const DEMO_FILLS_PASSWORD = !API_BASE;
 

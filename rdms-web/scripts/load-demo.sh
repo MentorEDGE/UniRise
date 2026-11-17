@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # Loads the sample institutions (ABC Institute of Technology, XYZ University) into a UniRise Java API as sandbox
-# institutions, with ONE new random password for every account. The password is printed once, here in the terminal;
-# it is not stored anywhere else. Operator only: needs the platform operator key in RMS_ADMIN_KEY.
+# institutions. Every account gets the demo password (src/lib/demo.ts), or with RANDOM_PASSWORD=1 one new random
+# password, printed once here in the terminal. Operator only: needs the platform operator key in RMS_ADMIN_KEY.
 #
 #   RMS_ADMIN_KEY=... scripts/load-demo.sh https://api.dev-unirise.mentoredge.co.in
 #
@@ -16,7 +16,7 @@ cleanup() { rm -f "$work"/*.json; rmdir "$work"; }
 trap cleanup EXIT
 
 # The demo password goes to the terminal (stderr); the data, which also contains it, stays in the temporary folder.
-(cd "$here" && npx tsx scripts/export-demo.ts --random-password) > "$work/all.json"
+(cd "$here" && npx tsx scripts/export-demo.ts ${RANDOM_PASSWORD:+--random-password}) > "$work/all.json"
 python3 - "$work" <<'PY'
 import json, sys, os
 work = sys.argv[1]

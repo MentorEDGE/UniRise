@@ -5,7 +5,7 @@ import { academicYearOf, academicYearRange, biodataCompleteness, facultyStats, f
 import { ENTITIES } from '../../lib/entities';
 import { creditedFaculty, useStore } from '../../lib/store';
 import type { AnyRecord, EntityKind } from '../../lib/types';
-import { ENTITY_LABEL } from '../../lib/types';
+import { ENTITY_LABEL, kindOn } from '../../lib/types';
 import { RecordDetail } from '../shared/RecordDetail';
 import { Tile } from '../mgmt/Analytics';
 
@@ -13,6 +13,7 @@ const KINDS: EntityKind[] = ['publications', 'grants', 'seedMoney', 'fdps', 'con
 
 export function FacultyHome() {
   const { db, user } = useStore();
+  const on = (k: EntityKind) => kindOn(db.settings, k); // record types the institution uses (G28)
   const me = db.faculty.find((f) => f.id === user!.facultyId)!;
   const [open, setOpen] = useState<{ k: EntityKind; id: string } | null>(null);
   const ay = academicYearOf(new Date().toISOString().slice(0, 10), db.settings.academicYearStartMonth);
@@ -32,13 +33,13 @@ export function FacultyHome() {
         <div style={{ display: 'flex', justifyContent: 'space-between', flexWrap: 'wrap', gap: 10 }}>
           <div><b>Welcome, {me.title} {me.name}</b><div className="muted">{me.designation}, {me.department} · {me.id}</div></div>
           <div className="row-actions">
-            <Link className="btn sm" to="/publications/entry">+ Publication</Link>
-            <Link className="btn sm" to="/grants/entry">+ Grant</Link>
-            <Link className="btn sm" to="/fdp/entry">+ FDP</Link>
-            <Link className="btn sm" to="/conferences/entry">+ Conference</Link>
-            <Link className="btn sm" to="/awards/entry">+ Honour / Award</Link>
-            <Link className="btn sm" to="/ipr/entry">+ Intellectual Property</Link>
-            {db.settings.seedMoneyWindowOpen && <Link className="btn sm" to="/seed-money/entry">+ Seed Money</Link>}
+            {on('publications') && <Link className="btn sm" to="/publications/entry">+ Publication</Link>}
+            {on('grants') && <Link className="btn sm" to="/grants/entry">+ Grant</Link>}
+            {on('fdps') && <Link className="btn sm" to="/fdp/entry">+ FDP</Link>}
+            {on('conferences') && <Link className="btn sm" to="/conferences/entry">+ Conference</Link>}
+            {on('awards') && <Link className="btn sm" to="/awards/entry">+ Honour / Award</Link>}
+            {on('ipr') && <Link className="btn sm" to="/ipr/entry">+ Intellectual Property</Link>}
+            {on('seedMoney') && db.settings.seedMoneyWindowOpen && <Link className="btn sm" to="/seed-money/entry">+ Seed Money</Link>}
           </div>
         </div>
       </Panel>

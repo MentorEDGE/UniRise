@@ -5,7 +5,7 @@ import { ENQUIRY_EMAIL, PublicFooter, PublicHeader } from './Landing';
 
 /**
  * "Talk to Our Team" (UniRise site): same layout and wording as mentoredge.co.in/contact, with the enquiry going to
- * corporate@mentoredge.co.in. The server stores and emails each enquiry (server/mail.ts); no credentials in the browser.
+ * corporate@mentoredge.co.in. The Java API stores and emails each enquiry (unirise-api EnquiryMail); no credentials in the browser.
  */
 
 const svg = (d: ReactNode) => <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" aria-hidden>{d}</svg>;

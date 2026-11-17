@@ -4,10 +4,11 @@ import type { ReactNode } from 'react';
 import { adminApi, logout, useStore } from '../lib/store';
 import { Logo } from './Logo';
 import { ThemeToggle } from './ThemeToggle';
-import type { Role } from '../lib/types';
+import type { EntityKind, Role, Settings } from '../lib/types';
+import { kindOn } from '../lib/types';
 
 type MenuEntry = { label: string; to: string } | { label: string; action: 'logout' } | 'sep';
-interface MenuDef { label: string; to?: string; items?: MenuEntry[]; icon?: keyof typeof NAV_ICONS }
+interface MenuDef { label: string; to?: string; items?: MenuEntry[]; icon?: keyof typeof NAV_ICONS; /** hidden when the institution does not use this record type (G28) */ kind?: EntityKind }
 
 const nic = (d: ReactNode) => <svg className="nav-ic" viewBox="0 0 24 24" aria-hidden>{d}</svg>;
 const NAV_ICONS = {
@@ -33,28 +34,34 @@ const LOGOUT: MenuEntry = { label: 'Logout', action: 'logout' };
 const SETTINGS: MenuDef = { label: 'Settings', icon: 'settings', items: [{ label: 'Change Password', to: '/account' }, 'sep', LOGOUT] };
 /** Research record views shared by Top-Level Management and the Office of Research (read-only lists and reports). */
 const RECORD_MENUS: MenuDef[] = [
-  { label: 'Publications', icon: 'publications', items: [{ label: 'Publication View', to: '/publications' }, { label: 'Publication Reports', to: '/reports/publications' }] },
-  { label: 'Grants and Fellowships', icon: 'grants', items: [{ label: 'Grant View', to: '/grants' }, { label: 'Grant Reports', to: '/reports/grants' }] },
-  { label: 'Seed Money', icon: 'seed', to: '/seed-money' },
-  { label: 'Faculty Development Programmes', icon: 'fdp', items: [{ label: 'FDP View', to: '/fdp' }, { label: 'FDP Reports', to: '/reports/fdps' }] },
-  { label: 'Conferences', icon: 'conferences', items: [{ label: 'Conference View', to: '/conferences' }, { label: 'Conference Reports', to: '/reports/conferences' }] },
-  { label: 'Honours & Awards', icon: 'awards', items: [{ label: 'Honours & Awards View', to: '/awards' }, { label: 'Honours & Awards Reports', to: '/reports/awards' }] },
-  { label: 'Intellectual Property', icon: 'ipr', items: [{ label: 'Intellectual Property View', to: '/ipr' }, { label: 'Intellectual Property Reports', to: '/reports/ipr' }] },
+  { label: 'Publications', icon: 'publications', kind: 'publications', items: [{ label: 'Publication View', to: '/publications' }, { label: 'Publication Reports', to: '/reports/publications' }] },
+  { label: 'Grants and Fellowships', icon: 'grants', kind: 'grants', items: [{ label: 'Grant View', to: '/grants' }, { label: 'Grant Reports', to: '/reports/grants' }] },
+  { label: 'Seed Money', icon: 'seed', kind: 'seedMoney', to: '/seed-money' },
+  { label: 'Faculty Development Programmes', icon: 'fdp', kind: 'fdps', items: [{ label: 'FDP View', to: '/fdp' }, { label: 'FDP Reports', to: '/reports/fdps' }] },
+  { label: 'Conferences', icon: 'conferences', kind: 'conferences', items: [{ label: 'Conference View', to: '/conferences' }, { label: 'Conference Reports', to: '/reports/conferences' }] },
+  { label: 'Honours & Awards', icon: 'awards', kind: 'awards', items: [{ label: 'Honours & Awards View', to: '/awards' }, { label: 'Honours & Awards Reports', to: '/reports/awards' }] },
+  { label: 'Intellectual Property', icon: 'ipr', kind: 'ipr', items: [{ label: 'Intellectual Property View', to: '/ipr' }, { label: 'Intellectual Property Reports', to: '/reports/ipr' }] },
 ];
 const REPORTS: MenuDef = { label: 'Reports', icon: 'reports', items: [{ label: 'Annual Activity Report', to: '/reports/annual' }, 'sep', { label: 'Department Comparison', to: '/analytics/departments' }, { label: 'Participation & Compliance', to: '/analytics/participation' }] };
 
-export function menusFor(role: Role, pending: number): MenuDef[] {
+/** The menu bar for a role, without the record types the institution does not use (G28). */
+export function menusFor(role: Role, pending: number, settings?: Settings): MenuDef[] {
+  const used = (m: MenuDef) => !m.kind || !settings || kindOn(settings, m.kind);
+  return roleMenus(role, pending).filter(used);
+}
+
+function roleMenus(role: Role, pending: number): MenuDef[] {
   if (role === 'faculty') {
     // Faculty work only with their own profile and records.
     return [
       { label: 'My Profile', icon: 'profile', items: [{ label: 'My Research Profile', to: '/my-profile' }, { label: 'My Workspace', to: '/' }, { label: 'My Performance', to: '/performance' }, 'sep', { label: 'Print / Download CV', to: '/biodata' }] },
-      { label: 'My Publications', icon: 'publications', items: [{ label: 'My Publications', to: '/publications' }, { label: 'Add Publication', to: '/publications/entry' }] },
-      { label: 'My Grants', icon: 'grants', items: [{ label: 'My Grants and Fellowships', to: '/grants' }, { label: 'Add Grant / Fellowship', to: '/grants/entry' }] },
-      { label: 'My Seed Money', icon: 'seed', items: [{ label: 'My Seed Money Projects', to: '/seed-money' }, { label: 'Apply for Seed Money', to: '/seed-money/entry' }] },
-      { label: 'My FDPs', icon: 'fdp', items: [{ label: 'My Faculty Development Programmes', to: '/fdp' }, { label: 'Add FDP', to: '/fdp/entry' }] },
-      { label: 'My Conferences', icon: 'conferences', items: [{ label: 'My Conferences', to: '/conferences' }, { label: 'Add Conference', to: '/conferences/entry' }] },
-      { label: 'My Awards', icon: 'awards', items: [{ label: 'My Honours & Awards', to: '/awards' }, { label: 'Add Honour / Award', to: '/awards/entry' }] },
-      { label: 'My IP', icon: 'ipr', items: [{ label: 'My Intellectual Property', to: '/ipr' }, { label: 'Add Patent / Copyright / Trademark', to: '/ipr/entry' }] },
+      { label: 'My Publications', icon: 'publications', kind: 'publications', items: [{ label: 'My Publications', to: '/publications' }, { label: 'Add Publication', to: '/publications/entry' }] },
+      { label: 'My Grants', icon: 'grants', kind: 'grants', items: [{ label: 'My Grants and Fellowships', to: '/grants' }, { label: 'Add Grant / Fellowship', to: '/grants/entry' }] },
+      { label: 'My Seed Money', icon: 'seed', kind: 'seedMoney', items: [{ label: 'My Seed Money Projects', to: '/seed-money' }, { label: 'Apply for Seed Money', to: '/seed-money/entry' }] },
+      { label: 'My FDPs', icon: 'fdp', kind: 'fdps', items: [{ label: 'My Faculty Development Programmes', to: '/fdp' }, { label: 'Add FDP', to: '/fdp/entry' }] },
+      { label: 'My Conferences', icon: 'conferences', kind: 'conferences', items: [{ label: 'My Conferences', to: '/conferences' }, { label: 'Add Conference', to: '/conferences/entry' }] },
+      { label: 'My Awards', icon: 'awards', kind: 'awards', items: [{ label: 'My Honours & Awards', to: '/awards' }, { label: 'Add Honour / Award', to: '/awards/entry' }] },
+      { label: 'My IP', icon: 'ipr', kind: 'ipr', items: [{ label: 'My Intellectual Property', to: '/ipr' }, { label: 'Add Patent / Copyright / Trademark', to: '/ipr/entry' }] },
       { label: 'My Collaborations', icon: 'network', to: '/collaborations' },
       { label: 'My Submissions', icon: 'approvals', to: '/submissions' },
       SETTINGS,
@@ -167,7 +174,7 @@ function useOfficePending(enabled: boolean) {
 }
 
 export function Layout() {
-  const { user, institution } = useStore();
+  const { user, institution, db } = useStore();
   const pending = useOfficePending(user?.role === 'office');
   if (!user) return null;
   return (
@@ -182,7 +189,7 @@ export function Layout() {
           </span>
         </div>
       </header>
-      <NavBar menus={menusFor(user.role, user.role === 'office' ? pending : 0)} />
+      <NavBar menus={menusFor(user.role, user.role === 'office' ? pending : 0, db.settings)} />
       <main><Outlet /></main>
     </div>
   );

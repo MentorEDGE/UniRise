@@ -6,7 +6,7 @@ import type { Actor } from './domain';
 import { REPORTS, runReport } from './reports';
 import { createSeed, placeholderName } from './seed';
 import { inUnit, unitOptions } from './org';
-import { DEMO_INSTITUTIONS } from '../../server/demo';
+import { DEMO_INSTITUTIONS } from './demo';
 const createSeedXyz = () => DEMO_INSTITUTIONS.find((d) => d.inst.slug === 'xyz')!.seed;
 import type { DB, Fdp, Publication } from './types';
 

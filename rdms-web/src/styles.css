@@ -2655,3 +2655,8 @@ fieldset { min-width: 0; }                       /* a fieldset otherwise grows t
 .targets-card .tbl.targets td.ok { color: var(--success); font-weight: 600; }
 .targets-card .tbl.targets td.num { text-align: right; font-variant-numeric: tabular-nums; }
 .tbl td.unit-cell { min-width: 210px; } /* school and department names on one or two lines */
+
+/* Institution → Record types (G28): one switch per record type */
+.check-row { display: flex; gap: 10px; align-items: center; padding: 10px 12px; border: 1px solid var(--border); border-radius: 10px; cursor: pointer; }
+.check-row input { width: 18px; height: 18px; accent-color: var(--primary); flex: none; }
+.check-row:has(input:not(:checked)) { opacity: .7; }

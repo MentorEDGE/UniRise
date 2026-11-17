@@ -1,97 +1,89 @@
 # UniRise RMS – multi-institution Research Data Management System
 
 One UniRise platform serving many colleges and universities. Each institution signs in to its own environment, sees
-its own name next to the UniRise brand, and works only with its own data. It keeps the classic RMS layout (header
-band, dropdown menu bar, form panels, link-list reports) with the UniRise visual identity and introduction page.
+its own name next to the UniRise brand, and works only with its own data. This folder is the website (React, Vite,
+TypeScript). The backend is the Java API in `../unirise-api`; the old Node/SQLite prototype server was removed on
+2026-11-17 and its API tests were ported to the Java test suite.
 
 > **Location:** this project lives in `~/Projects/rdms-web`, outside iCloud Drive. Do not move it into Desktop or
-> Documents while iCloud's "Optimize Mac Storage" is on: offloaded files make npm, Vite and SQLite fail with `ETIMEDOUT`.
+> Documents while iCloud's "Optimize Mac Storage" is on: offloaded files make npm and Vite fail with `ETIMEDOUT`.
 
-## Run
-```bash
-npm install
-npm run dev        # API on 127.0.0.1:5190 + web on http://localhost:5180
-npm test           # rule tests + HTTP API tests (isolation, roles, approvals, sessions)
-npm run build      # type-check and build the web app into dist/
-npm start          # production: one server on :8080 serving the API and dist/ (secure cookies; put HTTPS in front)
-```
-On first start the server creates the demo platform in `data/` (two institutions, each with its own database).
-`npm run seed` deletes everything in `data/` and recreates the demo. Everyone signs in at `/#/login`; the role and
-institution come from the account. There is no public sign-up.
+## Where it runs
+- **Dev site:** https://dev-unirise.mentoredge.co.in (Hostinger, published from the `dev` branch). It calls the Java API
+  at https://api.dev-unirise.mentoredge.co.in (AWS) — see `src/lib/store.ts` (`KNOWN_APIS`).
+- **Demo accounts:** every sample account uses the demo password **`Unirise123`**.
 
-| Account | Password |
+| Account | Role |
 |---|---|
-| `office@abc.edu.in`, `office@xyz.ac.in` (Office of Research of each institution) | `Office@1234` |
-| `director@abc.edu.in`, `dean@abc.edu.in`, `vc@xyz.ac.in`, `registrar@xyz.ac.in` (Top-Level Management) | `Admin@1234` |
-| any faculty email, e.g. `john.doe@abc.edu.in` | `Faculty@123` |
+| `office@abc.edu.in`, `office@xyz.ac.in` | Office of Research of each institution |
+| `director@abc.edu.in`, `dean@abc.edu.in`, `vc@xyz.ac.in`, `registrar@xyz.ac.in` | Top-Level Management |
+| any faculty email, e.g. `john.doe@abc.edu.in`, `jane.doe@xyz.ac.in` | Faculty |
 
-## Running against the Java API (unirise-api)
-The Java backend in `../unirise-api` answers the same requests as the server in `server/`, so the pages work against
-either one (BACKEND_PLAN phase 6).
-- `VITE_API_BASE` (build time): the API's address, for example `https://api.dev-unirise.mentoredge.co.in` when the pages
-  are hosted separately. Empty (the default) means the same origin that serves the pages.
-- `node scripts/api-proxy.mjs` (after `npm run build`): serves `dist/` and forwards `/api` to `API` (default
-  `http://127.0.0.1:8181`) on one origin, for local testing.
-- `npx tsx scripts/export-demo.ts [--small] [--random-password] > demo.json`: the sample institutions and demo
-  accounts, for the API's `POST /api/platform/tenants/{slug}/demo-data`. Without `--random-password` the accounts use
-  the demo passwords in this README, so use that only on your own machine. For any server others can reach, always
-  pass `--random-password`: every account gets one new password, printed once to the terminal.
-- `RMS_ADMIN_KEY=... scripts/load-demo.sh <api address>`: creates the two sample institutions on a Java API and loads
-  them with one new random password for every account (the way to load the AWS dev API). For AWS dev:
+## Run on your own machine
+Needs Node 20, Java 21 and Docker (Colima on a Mac).
+
+```bash
+# 1. a database (any PostgreSQL 16 works)
+docker run -d --name unirise-local-pg -e POSTGRES_DB=unirise -e POSTGRES_USER=unirise \
+  -e POSTGRES_PASSWORD=local-dev-only -p 127.0.0.1:55432:5432 postgres:16
+
+# 2. the API (in ../unirise-api)
+./mvnw -q -DskipTests package
+CONTROL_DB_URL=jdbc:postgresql://127.0.0.1:55432/unirise CONTROL_DB_USER=unirise RMS_DB_PASSWORD=local-dev-only \
+TENANT_DB_HOST=127.0.0.1 TENANT_DB_PORT=55432 RMS_ADMIN_KEY=local-admin-key SESSION_SECURE_COOKIE=false \
+SERVER_PORT=8181 java -jar target/unirise-api-0.0.1-SNAPSHOT.jar
+
+# 3. the sample institutions (here)
+npm install
+RMS_ADMIN_KEY=local-admin-key scripts/load-demo.sh http://127.0.0.1:8181
+
+# 4. the website: http://localhost:5180 (Vite forwards /api to the API; API=... to point elsewhere)
+npm run dev
+```
+Locally there is no S3 bucket or email: file fields keep the file name only, and enquiries are stored without being
+emailed. Both work on AWS.
+
+Other commands: `npm test` (rules, analytics, reports, CSV), `npm run build` (type-check and build into `dist/`),
+`node scripts/api-proxy.mjs` (serves `dist/` and forwards `/api` to `API`, default `http://127.0.0.1:8181`, on port 8201).
+
+## Sample data
+- `scripts/load-demo.sh <api address>`: creates the two sample institutions on a Java API (operator key in
+  `RMS_ADMIN_KEY`) and loads them; every account gets the demo password, or with `RANDOM_PASSWORD=1` one new random
+  password printed once. An institution that already exists is refused and left as it is. For AWS dev:
 
   ```bash
   RMS_ADMIN_KEY="$(aws secretsmanager get-secret-value --region ap-south-1 --secret-id unirise/dev/admin-key \
     --query SecretString --output text)" scripts/load-demo.sh https://api.dev-unirise.mentoredge.co.in
   ```
-
-  On a page served from a shared server, the sign-in page's sample accounts only fill in the email; the person types
-  the demo password.
+- `npm run demo:export -- [--small] [--random-password] > demo.json`: the same data as JSON, for the API's
+  `POST /api/platform/tenants/{slug}/demo-data`. ABC Institute of Technology has departments only; XYZ University has
+  three schools. Names are placeholders (John Doe, Jane Doe, …), defined in `src/lib/seed.ts` and `src/lib/demo.ts`.
 
 ## Onboarding a new institution
-1. The institution fills in **Talk to Our Team** (`/#/talk-to-our-team`). The enquiry is stored and emailed to corporate@mentoredge.co.in.
-2. The UniRise team provisions it on the server:
-   `npm run provision -- institution <id> "<Name>" <email-domain> "<Dept 1; Dept 2>"` (creates its own database), then
-   `npm run provision -- office <id> <email> "<Full name>"` (Office of Research account; prints a one-time password).
-   Also: `provision -- reset <office-email>`, `suspend <id>`, `activate <id>`, `list`, `enquiries`.
-3. The Office of Research signs in and creates faculty and Top-Level Management accounts under **User Management → Users → + Add user**
-   (role, name, institutional email, department, designation, status). Each gets a temporary password to hand over.
+1. The institution fills in **Talk to Our Team** (`/#/talk-to-our-team`). The API stores the enquiry and emails it to
+   corporate@mentoredge.co.in, with Reply-To the person who enquired.
+2. The UniRise team provisions it with the operator API (`POST /api/platform/tenants`, see `../unirise-api/README.md`);
+   it gets its own database and its first Office of Research account.
+3. The Office of Research creates faculty and Top-Level Management accounts under **User Management → Users → + Add
+   user**; each gets a temporary password to hand over.
 4. Faculty maintain their profiles and submit entries; the Office of Research approves them; management sees approved data.
 
 ## Roles
 | Role | Can |
 |---|---|
-| **Faculty** | Only their own profile and records: profile updates, publications, grants and fellowships, seed money, FDPs, conferences, honours and awards, collaborations, own metrics and CV, own submission history. Every new entry and every profile change waits for the Office of Research. Cannot see other faculty's profiles or statistics (colleagues appear only as name and department, for picking co-authors). |
-| **Top-Level Management** | Read-only view of the institution: Find Profiles (search, SDG filters), full approved profiles with Google Scholar metrics, networks and maps, Research Networks, analytics and reports. Cannot create or edit accounts, profiles or records, approve, or change institution settings, targets or notices. Sees approved data only. |
-| **Office of Research** (one or more per institution) | Everything management sees, plus: Approval (entries and profile updates: approve, return for correction, reject, history, grant outcomes), User Management (create, activate, deactivate, reset passwords, change faculty/management role), official faculty details and deactivation, Institution & Departments, Targets & Scoring, Notices, audit log. Only for its own institution. 30-minute idle timeout. |
+| **Faculty** | Only their own profile and records: profile updates, the seven record types (publications, grants and fellowships, seed money, FDPs, conferences, honours and awards, intellectual property), files, collaborations, own performance and targets, CV, submission history. Every entry and profile change waits for the Office of Research. Colleagues appear only as name and department, for picking co-authors. |
+| **Top-Level Management** | Read-only view of the institution: dashboard, Find Profiles, profiles, record views and reports, Research Networks, analytics. Approved records of current faculty only. |
+| **Office of Research** | Dashboard with the approval queue; Approval (review, return for correction, reject, grant outcomes); User Management and audit log; official faculty details and former faculty; Institution (name, record types, schools, departments), Targets & Scoring, Notices. Everything management sees. 30-minute idle timeout. |
 
-## Email (enquiries)
-Enquiries are always stored (`npm run provision -- enquiries` lists them). To email them, set on the server:
-`SMTP_HOST`, `SMTP_PORT` (587), `SMTP_USER`, `SMTP_PASS`, `SMTP_SECURE` (`true` for 465), optionally `MAIL_FROM` and `ENQUIRY_TO`
-(default corporate@mentoredge.co.in). Credentials stay on the server; see `server/mail.ts`.
-
-## How data is kept apart
-Following `rms-docs/MULTI_TENANCY_DESIGN.md`, at small scale:
-- `data/platform.sqlite` (control plane): institutions, accounts (every account belongs to one institution; scrypt password hashes), sessions (hashed tokens), audit log, website enquiries. No research data.
-- `data/tenants/<institution>.sqlite`: **one database per institution** with its departments, faculty, biodata, publications, grants, seed money, FDPs, conferences, honours & awards, notices and settings.
-- The server picks the institution database **only from the signed-in account**. Nothing in the request can choose it; an id from another institution is a plain 404.
-- Every permission rule runs on the server (`src/lib/domain.ts`), which also whitelists fields: a client cannot approve its own entry, change its owner, or set sanctioned amounts. The browser receives only the slice its role may see (`scopeFor`), so analytics for faculty are computed from their own records only.
-- Sessions: HttpOnly, SameSite=Strict cookie (Secure in production); every state-changing call needs an `X-RDMS` header (CSRF); 5 failed sign-ins lock an email for 15 minutes; suspending a user or institution ends their sessions immediately.
-
-## Tests
-`server/api.test.ts` runs the real API on a temporary data directory: institution isolation (data, foreign ids, the client cannot pick the institution, one database file each), faculty privacy, Office of Research separation (cannot use the regular sign-in, cannot read data), registration → approval → sign-in, rejection, suspension of users and institutions, CSRF header, login lockout, persistence across restart. `src/lib/logic.test.ts` covers the rules, analytics counting, reports and CSV.
-
-## Not built yet
-- **Email to users:** account invitations and password reset by email. The Office of Research hands over temporary passwords.
-- **File uploads:** only file names are stored. PDFs and certificates need object storage with virus scanning.
-- **SSO** (SAML/OIDC) per institution, and two-factor sign-in for the Office of Research.
-- **Scale-out:** SQLite with one server process (login throttling and the tenant cache live in memory). The design in `rms-docs` moves this to PostgreSQL per tenant behind a tenant router.
-- **Backups and export** per institution, and break-glass support access.
-- React Router has two moderate advisories (`npm audit --omit=dev`) fixed only in v7; neither applies to how this app uses it, but upgrade when convenient.
+Former faculty (retired, resigned, transferred) stay in the database but count in no figure, chart, report or ranking.
 
 ## Layout
 ```
-server/         app.ts (API and permission checks), storage.ts (platform DB + one DB per institution), auth.ts, mail.ts, demo.ts, seed.ts, provision.ts (UniRise CLI)
-src/lib/        domain.ts (rules, shared with the server), store.ts (API client), types, seed (sample data), analytics, reports, entities, csv
-src/components/ Layout (header, menu bar), ui, charts, Logo
-src/pages/      admin/ (Office of Research console), faculty/, mgmt/, shared/ (views, biodata, reports, settings, sign-in, request access)
+src/lib/        store.ts (API client, uploads), domain.ts (record rules, also the reference for the Java API), types,
+                seed.ts and demo.ts (sample data), analytics (incl. forAnalysis), reports, org.ts (schools), entities, csv
+src/components/ Layout (header, menu bar), ui (incl. the file picker), charts, Logo
+src/pages/      admin/ (Office of Research console), office/ (dashboard, settings), faculty/, mgmt/, shared/
+scripts/        load-demo.sh, export-demo.ts, api-proxy.mjs
+public/         images, .htaccess (Hostinger: the page itself is never cached)
 ```
+See `../rms-docs/RDMS_WEB_FEATURES.md` for every feature and `../rms-docs/BACKEND_PLAN.md` for what is built and what is left.

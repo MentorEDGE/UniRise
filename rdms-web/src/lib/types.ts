@@ -412,6 +412,8 @@ export interface Settings {
   departments: string[];
   /** Universities organised in schools: every department belongs to exactly one. Empty or missing for an institute or college. */
   schools?: School[];
+  /** Record types the institution uses (G28); a type set to false is hidden and the API refuses new entries. Missing means on. */
+  features?: Partial<Record<EntityKind, boolean>>;
   academicYearStartMonth: number; // 1-12; 6 = June
   seedMoneyWindowOpen: boolean;
   targets: Targets;
@@ -462,3 +464,5 @@ export interface DB {
 
 export type AnyRecord = Publication | Grant | SeedMoney | Fdp | Conference | Honour | IntellectualProperty;
 
+/** Is this record type used at the institution (G28)? */
+export const kindOn = (s: Settings, kind: EntityKind) => s.features?.[kind] !== false;

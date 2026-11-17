@@ -2,7 +2,7 @@
 
 **Snapshot:** 2026-11-17, `dev` at 586d345. Rewritten from the code; it replaces the 2026-11-06 snapshot, whose role model (platform-wide Office of Research, self-registration, management approving records) no longer applies. The code is the source of truth; file references point to it.
 
-**Where it runs:** `https://dev-unirise.mentoredge.co.in` (pages on Hostinger, published from `dev`) calling the Java API `https://api.dev-unirise.mentoredge.co.in` (`unirise-api` on AWS). The Node/SQLite server in `rdms-web/server/` still runs the same app locally and is the executable specification of the rules (`src/lib/domain.ts`); the Java API answers the same requests. See `BACKEND_PLAN.md`.
+**Where it runs:** `https://dev-unirise.mentoredge.co.in` (pages on Hostinger, published from `dev`) calling the Java API `https://api.dev-unirise.mentoredge.co.in` (`unirise-api` on AWS). The old Node/SQLite prototype server was removed on 2026-11-17 (its API tests now run against the Java API); locally the website runs against the Java API (see `rdms-web/README.md`). `src/lib/domain.ts` stays as the reference for the record rules. See `BACKEND_PLAN.md`.
 
 ## 1. Roles
 
@@ -73,7 +73,7 @@ Management reports use approved records of current faculty; the Office can choos
 
 ## 8. Sign-in and security
 
-Email and password (decision D1; OIDC later). Java API: PBKDF2 hashes; HttpOnly, SameSite=Strict, Secure session cookie; 8-hour idle timeout (30 minutes for the Office of Research), 12 hours at most; `X-RDMS` header on every change; 5 failed sign-ins lock an email for 15 minutes, 20 lock an address; former, suspended or deactivated accounts cannot sign in. On the AWS dev site the sample accounts on the sign-in page only fill in the email; one demo password, held by the team, is used for all of them (`scripts/load-demo.sh`).
+Email and password (decision D1; OIDC later). Java API: PBKDF2 hashes; HttpOnly, SameSite=Strict, Secure session cookie; 8-hour idle timeout (30 minutes for the Office of Research), 12 hours at most; `X-RDMS` header on every change; 5 failed sign-ins lock an email for 15 minutes, 20 lock an address; former, suspended or deactivated accounts cannot sign in. On the AWS dev site the sample accounts on the sign-in page only fill in the email; every sample account uses the demo password `Unirise123` (`scripts/load-demo.sh`).
 
 ## 9. Presentation
 

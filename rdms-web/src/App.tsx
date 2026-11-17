@@ -6,7 +6,8 @@ import { HashRouter, Navigate, Route, Routes, useLocation, useParams } from 'rea
 import { Layout } from './components/Layout';
 import { Alert, Panel, ToastProvider } from './components/ui';
 import { bootstrap, useStore } from './lib/store';
-import type { Role } from './lib/types';
+import type { EntityKind, Role } from './lib/types';
+import { ENTITY_LABEL, kindOn } from './lib/types';
 import { AwardEntry, ConferenceEntry, FdpEntry, GrantEntry, IpEntry, PublicationEntry, SeedMoneyEntry } from './pages/faculty/Entries';
 import { FacultyHome } from './pages/faculty/FacultyHome';
 import { MySubmissions } from './pages/faculty/Submissions';
@@ -76,6 +77,13 @@ const ALL: Role[] = ['management', 'faculty', 'office'];
 /** Institution-wide viewing: Top-Level Management (read-only) and the Office of Research. */
 const VIEWERS: Role[] = ['management', 'office'];
 
+/** A form for a record type the institution does not use (G28) says so instead of opening. */
+function KindOn({ kind, children }: { kind: EntityKind; children: ReactNode }) {
+  const { db } = useStore();
+  if (kindOn(db.settings, kind)) return <>{children}</>;
+  return <Panel><Alert kind="info">{ENTITY_LABEL[kind]} entries are not used at your institution. Ask your Office of Research if you think they should be.</Alert></Panel>;
+}
+
 /** After sign-in everyone lands on "/": the faculty workspace, the Dashboard for management and for the Office of Research. */
 function Home() {
   const { user } = useStore();
@@ -130,13 +138,13 @@ export default function App() {
             <Route path="account" element={<Account />} />
 
             {/* faculty: own profile and records only */}
-            <Route path="publications/entry" element={<Only role="faculty"><PublicationEntry /></Only>} />
-            <Route path="grants/entry" element={<Only role="faculty"><GrantEntry /></Only>} />
-            <Route path="seed-money/entry" element={<Only role="faculty"><SeedMoneyEntry /></Only>} />
-            <Route path="fdp/entry" element={<Only role="faculty"><FdpEntry /></Only>} />
-            <Route path="conferences/entry" element={<Only role="faculty"><ConferenceEntry /></Only>} />
-            <Route path="awards/entry" element={<Only role="faculty"><AwardEntry /></Only>} />
-            <Route path="ipr/entry" element={<Only role="faculty"><IpEntry /></Only>} />
+            <Route path="publications/entry" element={<Only role="faculty"><KindOn kind="publications"><PublicationEntry /></KindOn></Only>} />
+            <Route path="grants/entry" element={<Only role="faculty"><KindOn kind="grants"><GrantEntry /></KindOn></Only>} />
+            <Route path="seed-money/entry" element={<Only role="faculty"><KindOn kind="seedMoney"><SeedMoneyEntry /></KindOn></Only>} />
+            <Route path="fdp/entry" element={<Only role="faculty"><KindOn kind="fdps"><FdpEntry /></KindOn></Only>} />
+            <Route path="conferences/entry" element={<Only role="faculty"><KindOn kind="conferences"><ConferenceEntry /></KindOn></Only>} />
+            <Route path="awards/entry" element={<Only role="faculty"><KindOn kind="awards"><AwardEntry /></KindOn></Only>} />
+            <Route path="ipr/entry" element={<Only role="faculty"><KindOn kind="ipr"><IpEntry /></KindOn></Only>} />
             <Route path="biodata" element={<Only role="faculty"><BiodataView /></Only>} />
             <Route path="biodata/edit" element={<Only role="faculty"><BiodataEdit /></Only>} />
             <Route path="performance" element={<Only role="faculty"><SelfPerformance /></Only>} />
