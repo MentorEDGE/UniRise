@@ -269,16 +269,16 @@ function AddUser({ onClose, onDone }: { onClose: () => void; onDone: () => void 
   const toast = useToast();
   const { db, institution } = useStore();
   const departments = db.settings.departments;
-  const [f, setF] = useState({ role: 'faculty' as 'faculty' | 'management', title: 'Dr.', name: '', email: '', employeeCode: '', department: departments[0] ?? '', designation: 'Assistant Professor', status: 'active' });
+  const [f, setF] = useState({ role: 'faculty' as 'faculty' | 'management', title: 'Dr.', name: '', email: '', employeeCode: '', department: departments[0] ?? '', designation: 'Assistant Professor', status: 'active', invite: true });
   const [error, setError] = useState('');
   const [busy, setBusy] = useState(false);
-  const [created, setCreated] = useState<{ email: string; password: string; name: string; active: boolean } | null>(null);
+  const [created, setCreated] = useState<{ email: string; password: string; name: string; active: boolean; invited: boolean; problem: string } | null>(null);
   const u = (p: Partial<typeof f>) => setF({ ...f, ...p });
   const save = async () => {
     setBusy(true);
     try {
-      const r = await adminApi<{ temporaryPassword: string }>('POST', '/office/users', f);
-      setCreated({ email: f.email.trim().toLowerCase(), password: r.temporaryPassword, name: f.name, active: f.status === 'active' });
+      const r = await adminApi<{ temporaryPassword?: string; invited?: boolean; inviteProblem?: string }>('POST', '/office/users', { ...f, invite: f.invite && f.status === 'active' });
+      setCreated({ email: f.email.trim().toLowerCase(), password: r.temporaryPassword ?? '', name: f.name, active: f.status === 'active', invited: !!r.invited, problem: r.inviteProblem ?? '' });
       toast(`Account created for ${f.name}.`); setError(''); onDone(); void reloadData();
     } catch (e) { setError((e as Error).message); } finally { setBusy(false); }
   };
@@ -286,8 +286,13 @@ function AddUser({ onClose, onDone }: { onClose: () => void; onDone: () => void 
     <Modal title={`Add user · ${institution?.name ?? ''}`} onClose={onClose}>
       {created ? (
         <>
-          <Alert kind="success">Account created for <b>{created.name}</b>{created.active ? '' : ' (not active yet; activate it under Users when they should start)'}. Give them these sign-in details through a trusted channel. The password is shown only once; they can change it under Settings → Change Password.</Alert>
-          <dl className="kv"><dt>Email</dt><dd>{created.email}</dd><dt>Temporary password</dt><dd><b style={{ fontFamily: 'monospace', fontSize: 16 }}>{created.password}</b></dd></dl>
+          {created.invited
+            ? <Alert kind="success">Account created for <b>{created.name}</b>. We emailed <b>{created.email}</b> a link to set their own password; it works for 7 days. If it does not arrive, open the user and choose “Email a password link” again.</Alert>
+            : <>
+                {created.problem && <Alert kind="info">{created.problem} Give them the temporary password below instead.</Alert>}
+                <Alert kind="success">Account created for <b>{created.name}</b>{created.active ? '' : ' (not active yet; activate it under Users when they should start)'}. Give them these sign-in details through a trusted channel. The password is shown only once; they can change it under Settings → Change Password.</Alert>
+                <dl className="kv"><dt>Email</dt><dd>{created.email}</dd><dt>Temporary password</dt><dd><b style={{ fontFamily: 'monospace', fontSize: 16 }}>{created.password}</b></dd></dl>
+              </>}
           <div className="btn-row"><button className="btn secondary" onClick={() => { setCreated(null); setF({ ...f, name: '', email: '', employeeCode: '' }); }}>Add another</button><button className="btn" onClick={onClose}>Done</button></div>
         </>
       ) : (
@@ -309,7 +314,8 @@ function AddUser({ onClose, onDone }: { onClose: () => void; onDone: () => void 
                 : <Input value={f.designation} onChange={(v) => u({ designation: v })} placeholder="e.g. Director, Dean (Research), Registrar" />}
             </Field>
           </div>
-          <p className="note">A temporary password is generated and shown once. For faculty, the employee code links the account to their faculty profile (created if it does not exist yet).</p>
+          {f.status === 'active' && <label className="check-inline" style={{ marginTop: 12 }}><input type="checkbox" checked={f.invite} onChange={(e) => u({ invite: e.target.checked })} /> Email them a link to set their own password</label>}
+          <p className="note">{f.invite && f.status === 'active' ? 'They get an email with a link that works for 7 days; nobody else sees their password.' : 'A temporary password is generated and shown once.'} For faculty, the employee code links the account to their faculty profile (created if it does not exist yet).</p>
           <div className="btn-row"><button className="btn secondary" onClick={onClose}>Cancel</button><button className="btn ok" disabled={busy} onClick={save}>{busy ? 'Creating…' : 'Create account'}</button></div>
         </>
       )}
@@ -370,7 +376,7 @@ export function AdminUsers() {
         </div>
         {users.error && <Alert kind="error">{users.error}</Alert>}
         <DataTable rows={rows} columns={cols} rowKey={(a) => a.id} onRowClick={(a) => { setOpen(a); setTemp(''); setError(''); }} exportName="platform_users" pageSize={20} />
-        <p className="note">Add faculty and Top-Level Management accounts here and give each person their email and temporary password. Open a user to suspend, deactivate, reactivate, change role or reset their password. Suspending signs them out at once. Office of Research accounts are provisioned by the UniRise team.</p>
+        <p className="note">Add faculty and Top-Level Management accounts here; each person is emailed a link to set their own password (or you give them a temporary one). Open a user to suspend, deactivate, reactivate, change role, email them a new password link or create a temporary password. Suspending signs them out at once. Office of Research accounts are provisioned by the UniRise team.</p>
       </Panel>
       {adding && <AddUser onClose={() => setAdding(false)} onDone={() => users.reload()} />}
       {open && (
@@ -393,7 +399,8 @@ export function AdminUsers() {
                 {open.role === 'faculty'
                   ? <button className="btn secondary" onClick={() => act(`/office/users/${open.id}/role`, { role: 'management' }, `${open.name} is now Top-Level Management.`)}>Make Top-Level Management</button>
                   : open.facultyId && <button className="btn secondary" onClick={() => act(`/office/users/${open.id}/role`, { role: 'faculty' }, `${open.name} is now Faculty.`)}>Make Faculty</button>}
-                <button className="btn secondary" onClick={() => act(`/office/users/${open.id}/reset-password`, {}, 'Temporary password created.')}>Reset password</button>
+                {open.status === 'active' && <button className="btn secondary" onClick={() => act(`/office/users/${open.id}/invite`, {}, `Password link emailed to ${open.email}.`)}>Email a password link</button>}
+                <button className="btn secondary" onClick={() => act(`/office/users/${open.id}/reset-password`, {}, 'Temporary password created.')}>Create temporary password</button>
               </div>
               {temp && <Alert kind="success">Temporary password: <b style={{ fontFamily: 'monospace' }}>{temp}</b>. Give it to {open.name} through a trusted channel; it is shown only once. They should change it after signing in.</Alert>}
             </div>

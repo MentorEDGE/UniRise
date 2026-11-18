@@ -1,7 +1,7 @@
-import { useRef, useState } from 'react';
-import { Link, Navigate } from 'react-router-dom';
+import { useEffect, useRef, useState } from 'react';
+import { Link, Navigate, useNavigate, useSearchParams } from 'react-router-dom';
 import { Alert, Field, Input, PageTitle, Panel, useToast } from '../../components/ui';
-import { API_BASE, changePassword, login, useStore } from '../../lib/store';
+import { API_BASE, changePassword, checkPasswordLink, forgotPassword, login, setPasswordFromLink, useStore } from '../../lib/store';
 import { DEMO_PASSWORD } from '../../lib/demo';
 import { Logo } from '../../components/Logo';
 import { ThemeToggle } from '../../components/ThemeToggle';
@@ -81,6 +81,7 @@ export function Login() {
   const [pw, setPw] = useState('');
   const [show, setShow] = useState(false);
   const [forgot, setForgot] = useState(false);
+  const [sent, setSent] = useState('');
   const [error, setError] = useState('');
   const [busy, setBusy] = useState(false);
   const pwRef = useRef<HTMLInputElement>(null);
@@ -111,9 +112,23 @@ export function Login() {
           </Field>
           <div className="auth-row">
             <span className="auth-new">New to UniRise? <Link to="/talk-to-our-team">Talk to our team</Link></span>
-            <button type="button" className="link-btn" onClick={() => setForgot(!forgot)} aria-expanded={forgot}>Forgot password?</button>
+            <button type="button" className="link-btn" onClick={() => { setForgot(!forgot); setSent(''); }} aria-expanded={forgot}>Forgot password?</button>
           </div>
-          {forgot && <Alert kind="info">Ask your Office of Research to reset it (Office of Research staff: ask the UniRise team). They will give you a temporary password, which you can change under Account → Change Password after signing in.</Alert>}
+          {forgot && (
+            <div className="forgot-box">
+              {sent
+                ? <Alert kind="success">{sent} Check your inbox (and spam folder).</Alert>
+                : <>
+                    <p className="note" style={{ margin: '0 0 8px' }}>Enter your institutional email above and we will email you a link to choose a new password.</p>
+                    <button type="button" className="btn secondary sm" disabled={busy} onClick={async () => {
+                      if (!email.trim()) { setError('Enter your email first.'); return; }
+                      setBusy(true); setError('');
+                      try { setSent(await forgotPassword(email.trim())); } catch (err) { setError((err as Error).message); } finally { setBusy(false); }
+                    }}>Email me a link</button>
+                  </>}
+              <p className="note" style={{ margin: '8px 0 0' }}>No email? Your Office of Research can also give you a temporary password.</p>
+            </div>
+          )}
           <button className="btn auth-submit" type="submit" disabled={busy}>{busy ? <><span className="spinner" aria-hidden /> Signing in…</> : 'Sign In'}</button>
         </form>
         <div className="demo-list">
@@ -127,6 +142,68 @@ export function Login() {
             </button>
           ))}
         </div>
+      </div>
+    </AuthPage>
+  );
+}
+
+/**
+ * The page an emailed password link opens: an invitation from the Office of Research ("Set your password") or a reset
+ * the person asked for ("Choose a new password"). The link's secret is in the URL fragment, so it never reaches the
+ * web host; the API checks it, sets the password, and the person is signed in straight away.
+ */
+export function SetPassword() {
+  const [params] = useSearchParams();
+  const token = params.get('t') ?? '';
+  const navigate = useNavigate();
+  const [link, setLink] = useState<{ purpose: 'invite' | 'reset'; email: string; name: string; institution: string } | null>(null);
+  const [gone, setGone] = useState('');
+  const [pw, setPw] = useState({ next: '', again: '' });
+  const [show, setShow] = useState(false);
+  const [error, setError] = useState('');
+  const [busy, setBusy] = useState(false);
+  useEffect(() => {
+    let live = true;
+    checkPasswordLink(token).then((l) => { if (live) setLink(l); }).catch((e) => { if (live) setGone((e as Error).message); });
+    return () => { live = false; };
+  }, [token]);
+  const submit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (pw.next !== pw.again) { setError('The two passwords do not match.'); return; }
+    setBusy(true); setError('');
+    const err = await setPasswordFromLink(token, pw.next);
+    setBusy(false);
+    if (err) setError(err); else navigate('/', { replace: true });
+  };
+  const invite = link?.purpose === 'invite';
+  return (
+    <AuthPage>
+      <div className="panel auth-card">
+        <h1 className="auth-title">{invite ? 'Set your password' : 'Choose a new password'}</h1>
+        {!link && !gone && <p className="muted">Checking your link…</p>}
+        {gone && <>
+          <Alert kind="error">{gone}</Alert>
+          <Link to="/login" className="btn secondary">Go to sign in</Link>
+        </>}
+        {link && (
+          <>
+            <p className="login-sub">{invite ? `Welcome, ${link.name}. ` : ''}This sets the password for <b>{link.email}</b> at {link.institution}.</p>
+            {error && <Alert kind="error">{error}</Alert>}
+            <form onSubmit={submit} noValidate>
+              <input type="email" value={link.email} autoComplete="username" readOnly hidden />
+              <Field label="New password" hint="At least 8 characters, with letters and a number">
+                <div className="pw-wrap">
+                  <input type={show ? 'text' : 'password'} value={pw.next} onChange={(e) => { setPw({ ...pw, next: e.target.value }); setError(''); }} autoComplete="new-password" autoFocus />
+                  <button type="button" className="pw-toggle" onClick={() => setShow(!show)} aria-pressed={show} aria-label={show ? 'Hide password' : 'Show password'}>{show ? 'Hide' : 'Show'}</button>
+                </div>
+              </Field>
+              <div style={{ height: 14 }} />
+              <Field label="Repeat new password"><input type={show ? 'text' : 'password'} value={pw.again} onChange={(e) => { setPw({ ...pw, again: e.target.value }); setError(''); }} autoComplete="new-password" /></Field>
+              <button className="btn auth-submit" type="submit" disabled={busy}>{busy ? <><span className="spinner" aria-hidden /> Saving…</> : invite ? 'Set password and sign in' : 'Save and sign in'}</button>
+            </form>
+            <p className="note">Saving signs this account out on every other device.</p>
+          </>
+        )}
       </div>
     </AuthPage>
   );

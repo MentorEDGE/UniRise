@@ -13,8 +13,12 @@ public record AppProperties(Control control, Tenants tenants, String adminKey, @
 	/** Record files (A1b): the private S3 bucket. Empty: uploads are switched off and the UI keeps file names only. */
 	public record Uploads(@DefaultValue("") String bucket, @DefaultValue("10485760") long maxBytes, /** A9: open only files GuardDuty tagged clean */ @DefaultValue("false") boolean malwareScan) {}
 
-	/** Email (A1a): sender, where enquiries go, SES configuration set. Empty sender or recipient: no email (enquiries are only stored). */
-	public record Mail(@DefaultValue("") String from, @DefaultValue("") String enquiriesTo, @DefaultValue("") String configurationSet) {}
+	/**
+	 * Email (A1a): sender, where enquiries go, SES configuration set, and the website address that password links point
+	 * to. Empty sender or recipient: no enquiry email (enquiries are only stored). Empty sender or site: no password
+	 * emails (the Office of Research hands out temporary passwords instead).
+	 */
+	public record Mail(@DefaultValue("") String from, @DefaultValue("") String enquiriesTo, @DefaultValue("") String configurationSet, @DefaultValue("") String siteUrl) {}
 
 	public record Tenants(String host, int port, int maxPoolSize, int maxOpenPools, int migrateConcurrency, @DefaultValue("30") int retentionDays, @DefaultValue("") String jdbcParams) {}
 }

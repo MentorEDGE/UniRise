@@ -737,6 +737,8 @@ a.rp-title:hover, button.rp-title:hover { text-decoration: underline; }
 .pw-toggle { position: absolute; right: 6px; top: 50%; transform: translateY(-50%); background: none; border: 0; padding: 6px 10px; border-radius: 8px; font: inherit; font-size: 14px; font-weight: 600; color: var(--primary-text); cursor: pointer; }
 .pw-toggle:hover { background: var(--secondary); }
 .auth-row { display: flex; justify-content: flex-end; margin: 10px 0 4px; font-size: 14.5px; }
+.forgot-box { margin: 6px 0 4px; padding: 12px 14px; border: 1px solid var(--violet-200); border-radius: 12px; background: var(--secondary); color: var(--secondary-fg); }
+.forgot-box .alert { margin: 0; }
 .auth-submit { width: 100%; margin-top: 14px; padding: 12px 18px; font-size: 16px; display: inline-flex; align-items: center; justify-content: center; gap: 10px; }
 .spinner { width: 16px; height: 16px; border-radius: 50%; border: 2px solid rgb(255 255 255 / 0.4); border-top-color: #fff; animation: spin .8s linear infinite; }
 @keyframes spin { to { transform: rotate(360deg); } }

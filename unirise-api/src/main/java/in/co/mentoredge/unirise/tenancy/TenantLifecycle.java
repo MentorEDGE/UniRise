@@ -118,6 +118,7 @@ public class TenantLifecycle {
 		control.sql("DROP ROLE \"" + r.dbUser() + "\"").update();
 		secrets.delete(slug); // on AWS the secret can be restored for 7 days
 		control.sql("DELETE FROM user_token WHERE institution_id = :i").param("i", r.id()).update();
+		control.sql("DELETE FROM password_link WHERE institution_id = :i").param("i", r.id()).update();
 		control.sql("UPDATE institution_credential SET revoked_at = now() WHERE institution_id = :i AND revoked_at IS NULL").param("i", r.id()).update();
 		control.sql("UPDATE institution SET status = 'closed', closed_at = now() WHERE id = :i").param("i", r.id()).update();
 		log("tenant.delete", r.id(), "database " + r.dbName() + " dropped");

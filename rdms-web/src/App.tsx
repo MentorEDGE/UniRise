@@ -17,7 +17,7 @@ import { FacultySearch } from './pages/mgmt/Directory';
 import { MyResearchProfile, ResearcherProfileRoute } from './pages/shared/ResearcherProfile';
 import { ShortProfile } from './pages/shared/ShortProfile';
 import { BiodataEdit, BiodataView } from './pages/shared/Biodata';
-import { Account, Login } from './pages/shared/Misc';
+import { Account, Login, SetPassword } from './pages/shared/Misc';
 import { IntroLanding } from './pages/shared/Landing';
 import { AdminApprovals, AdminAudit, AdminUsers } from './pages/admin/Admin';
 import { CustomFieldSettings, InstitutionSettings, NoticeSettings, OptionListSettings, TargetSettings } from './pages/office/Settings';
@@ -117,6 +117,7 @@ export default function App() {
         <ScrollToTop />
         <Routes>
           <Route path="/login" element={<Login />} />
+          <Route path="/set-password" element={<SetPassword />} />
           <Route path="/talk-to-our-team" element={<TalkToOurTeam />} />
           <Route path="/contact" element={<Navigate to="/talk-to-our-team" replace />} />
           {/* Accounts are created by the Office of Research; there is no self-registration. */}

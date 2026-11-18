@@ -43,7 +43,7 @@ Institutions without schools see none of this. Helpers: `src/lib/org.ts`. Sample
 
 - **Dashboard** (home): what is waiting (new and resubmitted, under review, profile updates, changes requested, oldest waiting), an oldest-first list with Review links, counts by type, then the institution at a glance (as management sees it).
 - **Approval:** tabs New and resubmitted, Under review, Changes requested, Approved, Rejected; per record type and profile updates; school/department filter. Review window with the conversation, decision and comment; grant outcome and seed money sanction.
-- **User Management:** create Faculty and Top-Level Management accounts (temporary password shown once), suspend, deactivate, reset passwords, change role. **Audit Log** of sign-ins and every change.
+- **User Management:** create Faculty and Top-Level Management accounts (the person is emailed a link to set their own password, or the Office gives them a temporary password shown once), suspend, deactivate, email a new password link or create a temporary password, change role. **Audit Log** of sign-ins and every change.
 - **Institution:** name, tagline, academic-year start month, seed money window, schools, departments (one with faculty cannot be removed); **Targets & Scoring**; **Notices** shown to faculty.
 - Everything management sees (below), across all statuses.
 
@@ -73,7 +73,7 @@ Management reports use approved records of current faculty; the Office can choos
 
 ## 8. Sign-in and security
 
-Email and password (decision D1; OIDC later). Java API: PBKDF2 hashes; HttpOnly, SameSite=Strict, Secure session cookie; 8-hour idle timeout (30 minutes for the Office of Research), 12 hours at most; `X-RDMS` header on every change; 5 failed sign-ins lock an email for 15 minutes, 20 lock an address; former, suspended or deactivated accounts cannot sign in. On the AWS dev site the sample accounts on the sign-in page only fill in the email; every sample account uses the demo password `Unirise123` (`scripts/load-demo.sh`).
+Email and password (decision D1; OIDC later). Java API: PBKDF2 hashes; HttpOnly, SameSite=Strict, Secure session cookie; 8-hour idle timeout (30 minutes for the Office of Research), 12 hours at most; `X-RDMS` header on every change; 5 failed sign-ins lock an email for 15 minutes, 20 lock an address; former, suspended or deactivated accounts cannot sign in. **Password links by email** (added 2026-11-18): "Forgot password?" on the sign-in page emails a reset link (1 hour; the answer is the same whether or not the account exists; 3 requests per email in 15 minutes), and the Office's invitations email a link to set a password (7 days). Links open `#/set-password`, work once, are replaced by a newer link, stop working if the account is suspended, and setting the password signs the account out everywhere and signs the person in. Without email (local runs) the Office hands out temporary passwords as before. On the AWS dev site the sample accounts on the sign-in page only fill in the email; every sample account uses the demo password `Unirise123` (`scripts/load-demo.sh`).
 
 ## 9. Presentation
 
@@ -81,4 +81,4 @@ Landing page; dark and light themes (remembered per browser); UniRise by MentorE
 
 ## 10. Not built yet
 
-Email (enquiry notifications, invitations, password reset), real file uploads (only file names are stored), OIDC, configurable approval chains, per-institution report selection. Tracked in `BACKEND_PLAN.md` (phase 7 and 8).
+OIDC (university single sign-on), configurable approval chains, per-institution report selection. Tracked in `BACKEND_PLAN.md` (phase 8). Built since the first version of this list: enquiry email, file uploads with virus scanning, invitations and password reset by email.

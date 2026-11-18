@@ -229,6 +229,8 @@ resource "aws_ecs_task_definition" "api" {
       MAIL_FROM              = local.domain_on ? "UniRise <no-reply@${var.domain_name}>" : ""
       MAIL_ENQUIRIES_TO      = var.enquiries_to
       MAIL_CONFIGURATION_SET = local.ses_on ? aws_sesv2_configuration_set.main[0].configuration_set_name : ""
+      # Password emails (invitations, "Forgot password?") link to the website, which is served on the same domain.
+      MAIL_SITE_URL = local.domain_on ? "https://${var.domain_name}" : ""
     } : { name = name, value = value }]
     secrets = [
       { name = "RMS_DB_PASSWORD", valueFrom = data.aws_secretsmanager_secret.app_db.arn },

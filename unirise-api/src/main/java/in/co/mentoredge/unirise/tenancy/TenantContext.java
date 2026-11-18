@@ -10,6 +10,9 @@ public final class TenantContext {
 
 	public static void clear() { CURRENT.remove(); }
 
+	/** The current tenant, or null outside a tenant request. */
+	public static String current() { return CURRENT.get(); }
+
 	/** Fails closed: any code path that reaches a tenant database without a tenant is a bug, not a default. */
 	public static String require() {
 		String slug = CURRENT.get();

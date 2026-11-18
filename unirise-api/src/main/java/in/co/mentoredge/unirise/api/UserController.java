@@ -15,13 +15,14 @@ import org.springframework.web.bind.annotation.*;
 
 /**
  * User management by the institution's Office of Research (BACKEND_PLAN G19, G23). The Office creates faculty and
- * Top-Level Management accounts and gives each person a temporary password; there is no self-registration. Office of
- * Research accounts are provisioned by the UniRise team. Same requests and responses as rdms-web/server/app.ts.
+ * Top-Level Management accounts; each person either gets an emailed link to set their own password (where email is set
+ * up) or a temporary password from the Office. There is no self-registration. Office of Research accounts are
+ * provisioned by the UniRise team. Same requests and responses as rdms-web/server/app.ts.
  */
 @RestController
 @RequestMapping("/api/office")
 public class UserController {
-	public record NewUser(String role, String title, String name, String email, String employeeCode, String department, String designation, String status) {}
+	public record NewUser(String role, String title, String name, String email, String employeeCode, String department, String designation, String status, Boolean invite) {}
 	public record StatusChange(String status, String reason) {}
 	public record RoleChange(String role) {}
 
@@ -33,9 +34,11 @@ public class UserController {
 	private final AdminLog log;
 	private final InstitutionSettings settings;
 	private final Profiles profiles;
+	private final PasswordLinks links;
 
 	public UserController(@Qualifier("tenantJdbc") JdbcClient db, @Qualifier("controlJdbc") JdbcClient control, AccessService access, TenantDirectory directory, Sessions sessions, AdminLog log,
-		InstitutionSettings settings, Profiles profiles) {
+		InstitutionSettings settings, Profiles profiles, PasswordLinks links) {
+		this.links = links;
 		this.settings = settings;
 		this.profiles = profiles;
 		this.db = db;
@@ -74,7 +77,11 @@ public class UserController {
 		}).list();
 	}
 
-	/** Creates a faculty or Top-Level Management account and returns its temporary password, shown once. */
+	/**
+	 * Creates a faculty or Top-Level Management account. With "invite" (and email set up, and the account active) the
+	 * person is emailed a link to set their own password; otherwise, or if the email fails, the answer carries a
+	 * temporary password, shown once.
+	 */
 	@PostMapping("/users")
 	ResponseEntity<?> create(@RequestBody(required = false) NewUser b, HttpServletRequest req) {
 		Actor office = access.actor(req);
@@ -120,7 +127,40 @@ public class UserController {
 			return AuthController.error(HttpStatus.BAD_REQUEST, "An account with this email already exists.");
 		}
 		log.record(office, "Account created", email, role + (role.equals(Actor.FACULTY) ? " · profile " + code : ""));
-		return ResponseEntity.ok(Map.of("id", String.valueOf(userId), "temporaryPassword", temp));
+		Map<String, Object> out = new LinkedHashMap<>();
+		out.put("id", String.valueOf(userId));
+		if (Boolean.TRUE.equals(b.invite())) {
+			String why = invite(userId, office);
+			if (why == null) { out.put("invited", true); return ResponseEntity.ok(out); }
+			out.put("inviteProblem", why);
+		}
+		out.put("invited", false);
+		out.put("temporaryPassword", temp);
+		return ResponseEntity.ok(out);
+	}
+
+	/** Emails the person a link to set their password (7 days). The current password keeps working until they use it. */
+	@PostMapping("/users/{id}/invite")
+	ResponseEntity<?> sendInvite(@PathVariable long id, HttpServletRequest req) {
+		Actor office = access.actor(req);
+		access.requireAdmin(office);
+		target(id, office);
+		String why = invite(id, office);
+		return why == null ? ResponseEntity.ok(Map.of("ok", true)) : AuthController.error(HttpStatus.CONFLICT, why);
+	}
+
+	/** Null when the invitation was emailed, otherwise why not (in words for the Office). */
+	private String invite(long userId, Actor office) {
+		if (!links.on()) return "Email is not set up here, so no invitation was sent.";
+		var account = links.account(institutionId(), userId);
+		if (account.isEmpty()) return "The account is not active, so no invitation was sent. Activate it first.";
+		try {
+			links.send(account.get(), PasswordLinks.INVITE);
+		} catch (RuntimeException e) {
+			return "The invitation email could not be sent.";
+		}
+		log.record(office, "Password link emailed", account.get().email(), "invitation, works for 7 days");
+		return null;
 	}
 
 	/** Activate, suspend or deactivate. Suspending or deactivating ends the person's sessions at once. */

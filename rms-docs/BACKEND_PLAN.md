@@ -19,10 +19,10 @@ Date: 2026-11-14, brought up to date 2026-11-18. Branch `dev`. Sources: `unirise
 | Architecture | One deployable service (modular monolith). Packages `tenancy` and `api` | Built |
 | Database | PostgreSQL 16. One control-plane database plus one database per institution (ADR 11) | Built |
 | Data access | Routing `DataSource` with `JdbcClient`, LRU connection pools per tenant. No JPA or Hibernate | Built |
-| Migrations | Flyway, run in code: control plane at start, tenants by the migrator | Built (control V1-V6, tenant V1-V7) |
+| Migrations | Flyway, run in code: control plane at start, tenants by the migrator | Built (control V1-V7, tenant V1-V7) |
 | Access rules | One `AccessService` checked on the server for every read and write | Built for the three roles (phase 2, 2026-11-14) |
 | Sign-in | Email and password with a cookie session (phase 2), tenant API key for integrations, operator key. Target: OIDC in phase 8 | Built (phase 2, 2026-11-14) |
-| Tests | JUnit with Testcontainers (real PostgreSQL 16). 64 tests on 2026-11-17 (5 skipped, parked by D3) | Built |
+| Tests | JUnit with Testcontainers (real PostgreSQL 16). 68 tests on 2026-11-18 (5 skipped, parked by D3) | Built |
 | Packaging | Docker image, ARM64, non-root user | Built |
 | CI | GitHub Actions: `mvnw verify` and image build (`api.yml`); deploy to AWS dev on push to `dev` (`deploy-dev.yml`, A4) | Built |
 | Infrastructure as code | OpenTofu under `infra/`, state in an encrypted S3 bucket | Built for dev |
@@ -185,7 +185,7 @@ Updated 2026-11-18. "Browser" means computed in the website from the scoped data
 | Record types on/off (G28), custom fields (G29), option lists (G30) | Built | Built |
 | Enquiry form, emailed to the team (G24) | Built | Built (A1a; SES production access since 2026-11-18) |
 | File uploads with virus scanning (G25) | Built | Built (A1b, A9) |
-| Email to users (invitations, password reset) | Not built | Not built (unblocked: SES production access granted 2026-11-18, A3) |
+| Email to users (invitations, password reset) | Built (2026-11-18) | Built (2026-11-18): `PasswordLinks`, `PasswordController` (`/api/password/forgot`, `check`, `set`), `POST /api/office/users/{id}/invite`; control V7 `password_link` (hashed, one use, invite 7 days, reset 1 hour) |
 | Landing page, dark mode, branding, print | Built | Not applicable |
 | Milestones, meeting logs, projects, periods, CSV import (old model) | No screen | Built, parked (D3) |
 | Backups | Not applicable | Nightly (A5), restore drill tested |

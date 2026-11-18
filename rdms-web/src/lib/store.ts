@@ -156,6 +156,21 @@ export async function changePassword(current: string, next: string): Promise<str
   try { await api('POST', '/account/password', { current, next }); return null; } catch (e) { return (e as Error).message; }
 }
 
+/** "Forgot password?": the API emails a reset link if the account exists. Returns the message to show, or throws. */
+export const forgotPassword = async (email: string) => (await api<{ message: string }>('POST', '/password/forgot', { email })).message;
+
+/** What an emailed password link is for and whose it is; throws (with the message to show) if it no longer works. */
+export const checkPasswordLink = (token: string) =>
+  api<{ purpose: 'invite' | 'reset'; email: string; name: string; institution: string }>('POST', '/password/check', { token });
+
+/** Sets the password from an emailed link, then signs in with it. Returns an error message, or null. */
+export async function setPasswordFromLink(token: string, password: string): Promise<string | null> {
+  try {
+    const r = await api<{ email: string }>('POST', '/password/set', { token, password });
+    return await login(r.email, password);
+  } catch (e) { return (e as Error).message; }
+}
+
 /** Public "Talk to Our Team" enquiry from an institution. */
 export const sendEnquiry = (e: Record<string, string>) => api('POST', '/enquiries', e);
 

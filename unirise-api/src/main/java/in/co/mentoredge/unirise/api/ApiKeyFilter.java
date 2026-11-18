@@ -23,11 +23,11 @@ import org.springframework.web.filter.OncePerRequestFilter;
  * - Integrations use the institution's API key (X-API-Key), which acts as the Office of Research.
  * - Browsers use the session cookie set at sign-in. Every change from a browser must carry "X-RDMS: 1": a cross-site form
  *   cannot set that header, so together with the SameSite=Strict cookie it stops cross-site request forgery.
- * - The sign-in endpoints are the only public ones; they find the institution from the account themselves.
+ * - The sign-in and password-link endpoints are the only public ones; they find the institution from the account themselves.
  */
 public class ApiKeyFilter extends OncePerRequestFilter {
 	/** Public: no session yet. The handlers find the tenant from the account. */
-	static final Set<String> PUBLIC = Set.of("/api/login", "/api/admin/login", "/api/logout", "/api/enquiries");
+	static final Set<String> PUBLIC = Set.of("/api/login", "/api/admin/login", "/api/logout", "/api/enquiries", "/api/password/forgot", "/api/password/check", "/api/password/set");
 	/** Old-model modules with no screen, parked by decision D3 (2026-11-14): tables kept, endpoints not exposed. */
 	static final List<String> PARKED = List.of("/api/milestones", "/api/meeting-logs", "/api/reminders", "/api/progress-settings", "/api/projects", "/api/periods", "/api/relationships", "/api/role-grants", "/api/auth/");
 
