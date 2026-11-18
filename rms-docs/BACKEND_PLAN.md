@@ -1,15 +1,15 @@
 # UniRise backend plan
 
-Date: 2026-11-14. Branch `dev` at 649ee73. Sources: `unirise-api/` (code and migrations), `rdms-web/` (server, types, rules, reports), `infra/`, `rms-docs/`, and the decisions recorded on 2026-11-02 to 2026-11-06.
+Date: 2026-11-14, brought up to date 2026-11-18. Branch `dev`. Sources: `unirise-api/` (code and migrations), `rdms-web/` (server, types, rules, reports), `infra/`, `rms-docs/`, and the decisions recorded on 2026-11-02 to 2026-11-06.
 
 ## 1. Where we stand
 
-- **Deployed 2026-11-16:** `unirise-api` image `5b0d224` (phases 2 to 6 and a health page that tests the control-plane database) runs on AWS dev at `https://api.dev-unirise.mentoredge.co.in`. The control plane migrated from v4 to v6 on start-up. Sample institutions `abc` (ABC Institute of Technology) and `xyz` (XYZ University) are loaded as sandboxes with `rdms-web/scripts/load-demo.sh`: one random demo password for every account, held by the team and in no file. Sign-in, scoping per role and the refusal of former faculty were checked against the live API. The old `demo` sandbox from 2026-11-04 keeps its older tenant schema until `POST /api/platform/migrations` is run.
-- **Dev database restored 2026-11-16.** It was in `inaccessible-encryption-credentials` from 2026-11-04 (KMS access lost at 17:08 UTC, stopped at 19:03 UTC, terminal on 2026-11-11; the key `alias/aws/rds` is enabled and CloudTrail shows no change that explains it, so the cause is unknown). Restored from the 2026-11-11 final snapshot into a new instance, checked, the broken instance deleted, the new one renamed to `unirise-dev` (same endpoint) and the managed master password turned on; OpenTofu then updated the admin task and two IAM policies for the new secret and resource id, and the plan is clean. Kept: manual snapshots `unirise-dev-keep-2026-11-11`, `unirise-dev-keep-2026-11-04` (7 minutes before the fault) and `unirise-dev-before-phase2-6`. `backend.hcl` and `terraform.tfvars` were rebuilt from the state on 2026-11-16 (git-ignored, not in the repo).
-- `rdms-web` is the product frontend (decided 2026-11-06). Served from `dev-unirise.mentoredge.co.in` it calls the AWS API (`store.ts`, `KNOWN_APIS`); elsewhere it uses the same site, so the prototype Node/SQLite server still works locally. On the AWS site the sign-in page's sample accounts only fill in the email. The SQLite server is removed once the team has used the AWS site.
+- **Running on AWS dev (2026-11-18):** the API at `https://api.dev-unirise.mentoredge.co.in` is deployed from GitHub on every push to `dev` that changes `unirise-api/` (A4; first deploy `5f7be0e`, task definition revision 9). Sample institutions `abc` (ABC Institute of Technology) and `xyz` (XYZ University, three schools) are loaded as sandboxes with `rdms-web/scripts/load-demo.sh`; every demo account uses the one demo password `Unirise123` (decided 2026-11-17). Sign-in, scoping per role and the refusal of former faculty were checked against the live API. The old `demo` sandbox (Demo University) was deleted on 2026-11-17.
+- **Dev database restored 2026-11-16.** It was in `inaccessible-encryption-credentials` from 2026-11-04 (KMS access lost at 17:08 UTC, stopped at 19:03 UTC, terminal on 2026-11-11; the key `alias/aws/rds` is enabled and CloudTrail shows no change that explains it, so the cause is unknown). Restored from the 2026-11-11 final snapshot into a new instance, checked, the broken instance deleted, the new one renamed to `unirise-dev` (same endpoint) and the managed master password turned on; OpenTofu then updated the admin task and two IAM policies for the new secret and resource id, and the plan is clean. The two snapshots from before the restore (`unirise-dev-keep-2026-11-04`, `unirise-dev-keep-2026-11-11`) were deleted on 2026-11-18; kept: `unirise-dev-before-phase2-6` and `unirise-dev-before-a2-secrets`, plus the nightly backups (A5). `backend.hcl` and `terraform.tfvars` were rebuilt from the state on 2026-11-16 (git-ignored, not in the repo).
+- `rdms-web` is the product frontend (decided 2026-11-06). Served from `dev-unirise.mentoredge.co.in` it calls the AWS API (`store.ts`, `KNOWN_APIS`); for local work, `npm run dev` passes `/api` to a local Java API. On the AWS site the sign-in page's sample accounts only fill in the email. The SQLite prototype server was removed on 2026-11-17.
 - The backend was first built for the older model (researcher, scholar, supervisor, HoD, Dean, Executive). Phases 2 to 6 moved it to the final model (Faculty, Top-Level Management, Office of Research); the old-model tables stay, and their endpoints are parked (D3).
 - **Former faculty: decided 2026-11-17 by the product owner.** They are kept in the database only: their work is used in no performance figure, analysis or report, for any role and any year. A record shared with a current faculty member still counts for that person (`forAnalysis` in `rdms-web/src/lib/analytics.ts`; reports credit current faculty only). Management's data slice already leaves them out; the Office keeps them in its lists.
-- The UI has kept moving since the last feature snapshot: it now has 7 record types and 54 reports. `RDMS_WEB_FEATURES.md` still says 6 and 46.
+- The UI has 7 record types and 60 reports; `RDMS_WEB_FEATURES.md` was rewritten from the code on 2026-11-17.
 
 ## 2. Agreed tech stack
 
@@ -19,15 +19,15 @@ Date: 2026-11-14. Branch `dev` at 649ee73. Sources: `unirise-api/` (code and mig
 | Architecture | One deployable service (modular monolith). Packages `tenancy` and `api` | Built |
 | Database | PostgreSQL 16. One control-plane database plus one database per institution (ADR 11) | Built |
 | Data access | Routing `DataSource` with `JdbcClient`, LRU connection pools per tenant. No JPA or Hibernate | Built |
-| Migrations | Flyway, run in code: control plane at start, tenants by the migrator | Built (control V1-V4, tenant V1-V5) |
+| Migrations | Flyway, run in code: control plane at start, tenants by the migrator | Built (control V1-V6, tenant V1-V7) |
 | Access rules | One `AccessService` checked on the server for every read and write | Built for the three roles (phase 2, 2026-11-14) |
 | Sign-in | Email and password with a cookie session (phase 2), tenant API key for integrations, operator key. Target: OIDC in phase 8 | Built (phase 2, 2026-11-14) |
-| Tests | JUnit with Testcontainers (real PostgreSQL 16). 36 tests on 2026-11-04 | Built |
+| Tests | JUnit with Testcontainers (real PostgreSQL 16). 64 tests on 2026-11-17 (5 skipped, parked by D3) | Built |
 | Packaging | Docker image, ARM64, non-root user | Built |
-| CI | GitHub Actions: `mvnw verify` and image build. No deploy step | Built |
+| CI | GitHub Actions: `mvnw verify` and image build (`api.yml`); deploy to AWS dev on push to `dev` (`deploy-dev.yml`, A4) | Built |
 | Infrastructure as code | OpenTofu under `infra/`, state in an encrypted S3 bucket | Built for dev |
 | Hosting | AWS `ap-south-1`: ECS Fargate, private RDS, ALB with ACM certificate, ECR, S3, SES, Secrets Manager | See section 6 |
-| Frontend | `rdms-web`: React 18, Vite, TypeScript, React Router 6, Recharts | Built on a prototype server |
+| Frontend | `rdms-web`: React 18, Vite, TypeScript, React Router 6, Recharts | Built; calls the Java API |
 
 Decisions already made that the plan keeps: database per institution, no Hibernate multi-tenancy, three roles only, every institution has its own Office of Research, only the Office of Research approves, Top-Level Management is read-only and sees approved data only, no public sign-up, institutions are provisioned by the UniRise team.
 
@@ -45,7 +45,7 @@ Decisions already made that the plan keeps: database per institution, no Hiberna
 | Progress | milestones, meeting logs, reminders, settings | No screen |
 | Projects | restricted projects | No screen |
 | Periods | create, close, frozen snapshot | No screen |
-| Reports | 19 reports (publications and grants), CSV export | UI has 54, computed in the browser |
+| Reports | 19 reports (publications and grants), CSV export | UI has 60, computed in the browser |
 | Import | CSV onboarding (preview, commit) | No screen, useful for onboarding |
 
 ## 4. Gaps between the UI and the backend
@@ -104,7 +104,7 @@ Status: **Missing** = nothing in the API. **Partial** = exists but the contract 
 | G23 | Audit log of every Office action, per institution, readable by the Office | **Done 2026-11-14 (phase 2) for accounts and sign-ins.** `admin_log` in each institution's database, `GET /api/office/audit`. Entry decisions are added in phase 4 | Partial |
 | G24 | Talk to Our Team enquiry: stored, emailed to corporate, rate-limited, honeypot | None | Missing. Control-plane table plus SES |
 | G25 | File uploads: only file names are stored today (PDF, certificates, IP documents, photo as a data URL) | None. S3 uploads bucket exists | Missing. Presigned upload and download |
-| G26 | Reports: 54 definitions in 6 groups, list and group modes, CSV and print | 19 SQL reports for publications and grants | See D2. If reports stay in the browser, no port is needed for the pilot |
+| G26 | Reports: 60 definitions (54 on 2026-11-14) in 6 groups, list and group modes, CSV and print | 19 SQL reports for publications and grants | See D2. If reports stay in the browser, no port is needed for the pilot |
 | G27 | Analytics, scores, target attainment, profile completeness, Research Networks, collaboration and conference maps, Find Profiles with SDG filters | None | No server work if the data slice is served (D2). Server-side only when data size needs it |
 
 ### 4.4 Per-institution differences (added 2026-11-14)
@@ -119,7 +119,7 @@ Every institution will ask for something different. The answer is one codebase t
 | G29 | Extra fields on a form | **Custom fields**: the Office of Research defines fields per record type (label, type, required, options). Values are stored in a `custom` JSONB column on each record table and validated on the server | "NAAC criterion" on publications, "Sanction letter number" on grants | Missing in both |
 | G30 | Different options or labels | **Configurable lists** stored in settings, seeded from the current defaults in `rdms-web/src/lib/types.ts` | Their own grant types, designations, FDP programme types, department names | Missing. Lists are constants in the UI today; departments are already per institution |
 | G31 | Different rules or scoring | **Settings with numbers and choices**, not code | Score weights and targets, seed-money limit, whether a PDF is required to submit | Partial. Weights, targets, academic-year start and the seed-money window are settings in the UI; limits and "PDF required" are fixed in `domain.ts` |
-| G32 | Different reports or formats | **Report definitions as data**, plus CSV export for anything unusual | A NIRF or NAAC-format report enabled for those who need it | Partial. The UI's 54 reports are already declared as data in `reports.ts`, but the list is the same for every institution |
+| G32 | Different reports or formats | **Report definitions as data**, plus CSV export for anything unusual | A NIRF or NAAC-format report enabled for those who need it | Partial. The UI's 60 reports are already declared as data in `reports.ts`, but the list is the same for every institution |
 
 Custom fields and configurable lists cover most requests in practice, because they are usually "we also track X" or "we call it Y".
 
@@ -164,7 +164,7 @@ Milestones, meeting logs, reminders, restricted projects, mentor relationships, 
 
 ## 5. All features and their state
 
-Updated 2026-11-17. "Browser" means computed in the website from the scoped data slice the API sends (decision D2).
+Updated 2026-11-18. "Browser" means computed in the website from the scoped data slice the API sends (decision D2).
 
 | Feature | Website | Java API (AWS dev) |
 |---|---|---|
@@ -183,9 +183,9 @@ Updated 2026-11-17. "Browser" means computed in the website from the scoped data
 | User management, audit log | Built | Built |
 | Institution, departments, targets, weights, notices | Built | Built |
 | Record types on/off (G28), custom fields (G29), option lists (G30) | Built | Built |
-| Enquiry form, emailed to the team (G24) | Built | Built (A1a; delivery after the team address is verified) |
+| Enquiry form, emailed to the team (G24) | Built | Built (A1a; SES production access since 2026-11-18) |
 | File uploads with virus scanning (G25) | Built | Built (A1b, A9) |
-| Email to users (invitations, password reset) | Not built | Not built (needs SES production access, A3) |
+| Email to users (invitations, password reset) | Not built | Not built (unblocked: SES production access granted 2026-11-18, A3) |
 | Landing page, dark mode, branding, print | Built | Not applicable |
 | Milestones, meeting logs, projects, periods, CSV import (old model) | No screen | Built, parked (D3) |
 | Backups | Not applicable | Nightly (A5), restore drill tested |
@@ -211,11 +211,11 @@ Account `417441726165`, `ap-south-1`, shared with MentorEDGE. Only UniRise resou
 ### In use since 2026-11-17
 
 - S3 `uploads` bucket: record files (A1b), scanned by GuardDuty Malware Protection (A9).
-- SES: enquiries to the team (A1a). The account is still in the SES sandbox (A3), so mail reaches verified addresses only.
+- SES: enquiries to the team (A1a). Production access granted 2026-11-18 (A3), so mail can go to any address.
 - `exports` bucket: nightly backups (A5).
 - Secrets Manager: one secret per institution database (A2).
 
-### Not started
+### Work items
 
 | # | Item | Why it matters |
 |---|---|---|
@@ -223,7 +223,7 @@ Account `417441726165`, `ap-south-1`, shared with MentorEDGE. Only UniRise resou
 | A2 | ~~Tenant database passwords from the control-plane table to Secrets Manager~~ **Done 2026-11-17** | `SecretStore` (`app.secrets.store=aws` on AWS): one secret per institution, `unirise/dev/tenant/<slug>`, labelled Project=UniRise; the API task may use only that prefix. The three existing passwords were moved at start-up (written, read back, then removed from `institution_secret`). The table stays for local runs and tests only |
 | A3 | SES production access request | **Done 2026-11-18**: granted for ap-south-1 (50,000 emails a day); mail can go to any address |
 | A4 | Deploy pipeline: CI builds and tests only; deploys are `scripts/push-image.sh` plus `tofu apply` by hand | **Done 2026-11-18**: `.github/workflows/deploy-dev.yml` runs on every push to dev that changes `unirise-api/` (or by hand): (test, ARM64 image, new task definition, wait until stable; ECS rolls back a failed rollout) and `infra/envs/dev/github.tf` (a UniRise-only role for `MentorEDGE/UniRise` dev, through the account's existing GitHub OIDC provider; the deployed image recorded in SSM `/unirise/dev/api-image-digest`, which `ecs.tf` reads, so a later `tofu apply` keeps the image GitHub deployed). Infrastructure changes still go through `tofu plan` and `tofu apply` |
-| A5 | ~~Scheduled tenant backups~~ **Done 2026-11-17** | EventBridge Scheduler `unirise-dev-nightly-backup` runs the admin task with `backup-all` at 03:00 IST: one dump per live institution to `exports/backups/<slug>/` (AES-256, kept 30 days). First manual run: 3 of 3. No alert on failure yet (A8); the run is in the log group under `admin/` |
+| A5 | ~~Scheduled tenant backups~~ **Done 2026-11-17** | EventBridge Scheduler `unirise-dev-nightly-backup` runs the admin task with `backup-all` at 03:00 IST: one dump per live institution to `exports/backups/<slug>/` (AES-256, kept 30 days). First manual run: 3 of 3; first scheduled run 2026-11-18 03:01 IST: 2 of 2 (Demo University deleted). A failed run emails the team (A8); the run is in the log group under `admin/` |
 | A6 | ~~Frontend hosting~~ **Done 2026-11-16** | Hostinger publishes `dev-unirise.mentoredge.co.in` from the `dev` branch; the pages call the AWS API (`KNOWN_APIS` in `store.ts`); `.htaccess` stops browsers keeping an old page |
 | A7 | Human IAM users with MFA instead of root; budget alerts | **Done 2026-11-18**: budget `unirise-dev-monthly`, $80 a month for resources tagged Project=UniRise (the `Project` cost-allocation tag switched on for the account), emails corporate@mentoredge.co.in at 80% actual and 100% forecast. People sign in as IAM users with MFA (unirise-require-mfa), not root; the deploy key on the operator's Mac has no MFA (A4 removes the need for it) |
 | A8 | Alarms (task health, 5xx, RDS storage and CPU), rate limiting at the edge | **Alarms live 2026-11-17** (`alerts.tf`): API with no healthy server for 3 minutes (the health check includes the database), more than 10 server errors in 5 minutes, database storage under 2 GB, database CPU over 80% for 15 minutes, and any failed database admin job (the nightly backup); all email corporate@mentoredge.co.in through SNS (the subscription must be confirmed from that mailbox). Rate limiting at the edge (AWS WAF, about $6-7 a month) not done |
@@ -247,7 +247,7 @@ Each phase ends with tests passing and the docs updated. Order matters: phases 2
 
 **Phase 5. Profiles, settings, notices (G16, G20 to G22). Done 2026-11-14.** `GET /api/data` (the scoped slice, with ETag/304), `PUT /api/faculty/{id}` (including former faculty), `PUT /api/settings` (with feature switches, custom fields and lists), notices, enquiries (stored; email in phase 7), and an operator-only demo-data loader. Biodata read and write, official faculty details, departments, targets, weights, notices.
 
-**Phase 6. Frontend switch (G3). Done 2026-11-14; the SQLite prototype server was removed on 2026-11-17 after its API tests were ported to Java (`InstitutionApiTest`).** The API answers the same requests as the prototype, so the switch is one setting: `VITE_API_BASE` (empty = same origin). The frontend's end-to-end test (298 checks per run, every page and workflow for the three roles) passes against the Java API through `rdms-web/scripts/api-proxy.mjs` with the sample data loaded by `scripts/export-demo.ts`. The prototype server stays until the API is deployed (phase 7), because the shared demo still runs on it. Replace `store.ts` calls slice by slice: sign-in, then publications, then the remaining kinds, approvals, profiles, administration. Port `server/api.test.ts` as acceptance tests against the API. Remove the SQLite server last.
+**Phase 6. Frontend switch (G3). Done 2026-11-14; the SQLite prototype server was removed on 2026-11-17 after its API tests were ported to Java (`InstitutionApiTest`).** The API answers the same requests as the prototype, so the switch is one setting: `VITE_API_BASE` (empty = same origin). The frontend's end-to-end test (298 checks per run, every page and workflow for the three roles) passes against the Java API through `rdms-web/scripts/api-proxy.mjs` with the sample data loaded by `scripts/export-demo.ts`.
 
 **Phase 7. AWS (A1 to A9). Done 2026-11-18.** Done: A1 (uploads A1b, enquiry email A1a), A2 secrets, A3 SES production access, A4 deploy from GitHub, A5 nightly backups (first scheduled run 18 Nov: 2 of 2 institutions), A6 hosting, A9 virus scanning, A11. A7 budget, A8 alarms. Phase 7 complete; WAF rate limiting (about $6-8 a month) is left for production. The frontend is on Hostinger and calls the API cross-origin with the SameSite=Strict session cookie and CORS for the one allowed origin, as planned.
 
@@ -258,9 +258,9 @@ Each phase ends with tests passing and the docs updated. Order matters: phases 2
 | # | Decision | Recommendation |
 |---|---|---|
 | D1 | Sign-in for the pilot: password as in the UI, or wait for OIDC | **Decided 2026-11-14:** password for the pilot with the UI's existing protections; OIDC in phase 8. OIDC design is still deferred |
-| D2 | Data contract: keep the UI's "one scoped slice, compute in the browser" model, or move reports and analytics to the server | **Decided 2026-11-14:** keep it for the pilot. The server scopes the data, the UI computes the 54 reports and all analytics. Revisit when an institution's data gets large |
+| D2 | Data contract: keep the UI's "one scoped slice, compute in the browser" model, or move reports and analytics to the server | **Decided 2026-11-14:** keep it for the pilot. The server scopes the data, the UI computes the reports (60 today) and all analytics. Revisit when an institution's data gets large |
 | D3 | Old-model modules with no screen (milestones, meeting logs, projects, relationships, periods, scoped grants) | **Decided 2026-11-14:** park. Keep the tables, stop exposing the endpoints |
-| D4 | Where the frontend is hosted | **Decided 2026-11-14:** Hostinger, on `dev-unirise.mentoredge.co.in`. Same site as the API, so SameSite cookies work. Deploys are manual uploads of `rdms-web/dist`; no AWS frontend resources |
+| D4 | Where the frontend is hosted | **Decided 2026-11-14:** Hostinger, on `dev-unirise.mentoredge.co.in`. Same site as the API, so SameSite cookies work. Hostinger publishes the site from the `dev` branch automatically; no AWS frontend resources |
 | D5 | Can the Office grant individual features or data scopes, or are permissions fixed per role | Fixed per role until a customer asks |
 | D6 | Seed-money window: one switch (UI) or dated cycles (backend) | Keep dated cycles in the database, show "open now" to the UI |
 | D7 | Are reads by the Office audited, or only changes | Changes only for the pilot |
@@ -268,6 +268,6 @@ Each phase ends with tests passing and the docs updated. Order matters: phases 2
 
 ## 9. Not checked for this document
 
-- Updated 2026-11-17. AWS resources in section 6 were checked live with the AWS CLI on 2026-11-17 (the deploy user). The backend suite ran on 2026-11-17: 64 tests, 0 failures, 5 skipped (parked features).
-- The first scheduled nightly backup (A5) runs on the night of 17-18 November; not yet seen.
+- Updated 2026-11-18. AWS resources in section 6 were checked live with the AWS CLI on 2026-11-18 (the deploy user), including the first scheduled nightly backup, the GitHub deploy, the budget and SES production access. The backend suite ran on 2026-11-17: 64 tests, 0 failures, 5 skipped (parked features); the GitHub deploy runs it again on every API change.
+- The SNS alert subscription to corporate@mentoredge.co.in waits for its confirmation link to be clicked; until then alarm emails are not delivered.
 - Grant and seed-money columns were compared at table level, not field by field.
