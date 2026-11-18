@@ -35,6 +35,7 @@ public class PasswordLinks {
 	static final Duration INVITE_FOR = Duration.ofDays(7), RESET_FOR = Duration.ofHours(1);
 	private static final Logger log = LoggerFactory.getLogger(PasswordLinks.class);
 	private static final SecureRandom RANDOM = new SecureRandom();
+	private static final String FOOTER = "Kind regards,\nThe UniRise Team\nUniRise by MentorEdge\n\nThis is an automated message. Please do not reply to this email.\n";
 
 	/** An account that may receive a link. */
 	public record Account(TenantInfo tenant, long userId, String email, String name, String role, String institution) {}
@@ -84,17 +85,22 @@ public class PasswordLinks {
 		String subject, text;
 		if (INVITE.equals(purpose)) {
 			subject = "Set your UniRise password";
-			text = "Hello " + oneLine(a.name()) + ",\n\n"
-				+ oneLine(a.institution()) + "'s Office of Research has sent you a link to set the password for your UniRise account.\n\n"
-				+ "Set your password here (the link works once, for 7 days):\n" + link + "\n\n"
-				+ "Then sign in at " + signIn + " with this email address (" + a.email() + ").\n\n"
-				+ "If you were not expecting this email, you can ignore it.\n\n— UniRise\n";
+			text = "Dear " + oneLine(a.name()) + ",\n\n"
+				+ "The Office of Research at " + oneLine(a.institution()) + " has invited you to set the password for your UniRise account.\n\n"
+				+ "To set your password, please open the link below. For your security, the link can be used only once and expires in 7 days.\n\n"
+				+ link + "\n\n"
+				+ "Once your password is set, you can sign in at " + signIn + " using this email address: " + a.email() + "\n\n"
+				+ "If you were not expecting this invitation, you can safely ignore this email, or contact your institution's Office of Research.\n\n"
+				+ FOOTER;
 		} else {
 			subject = "Reset your UniRise password";
-			text = "Hello " + oneLine(a.name()) + ",\n\n"
-				+ "Someone asked to reset the password of your UniRise account (" + a.email() + ", " + oneLine(a.institution()) + ").\n\n"
-				+ "Choose a new password here (the link works once, for 1 hour):\n" + link + "\n\n"
-				+ "If it was not you, ignore this email: your password stays the same.\n\n— UniRise\n";
+			text = "Dear " + oneLine(a.name()) + ",\n\n"
+				+ "We received a request to reset the password for your UniRise account at " + oneLine(a.institution()) + " (" + a.email() + ").\n\n"
+				+ "To choose a new password, please open the link below. For your security, the link can be used only once and expires in 1 hour.\n\n"
+				+ link + "\n\n"
+				+ "If you did not request a password reset, no action is needed. Your current password will remain unchanged. "
+				+ "If you receive these emails repeatedly without having asked for them, please inform your institution's Office of Research.\n\n"
+				+ FOOTER;
 		}
 		try {
 			ses.sendEmail(b -> {
