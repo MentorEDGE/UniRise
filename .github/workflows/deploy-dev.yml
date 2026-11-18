@@ -5,8 +5,7 @@
 # infra/envs/dev/github.tf). No stored keys. Infrastructure changes still go through `tofu plan` and `tofu apply`.
 name: deploy-dev
 on:
-  # Manual until the AWS role exists (A4 not applied yet). Then add back:
-  #   push: { branches: [dev], paths: ["unirise-api/**", ".github/workflows/deploy-dev.yml"] }
+  push: { branches: [dev], paths: ["unirise-api/**", ".github/workflows/deploy-dev.yml"] }
   workflow_dispatch:
 concurrency: { group: deploy-dev, cancel-in-progress: false }
 permissions:
