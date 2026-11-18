@@ -104,3 +104,9 @@ variable "github_repo" {
   type        = string
   default     = "MentorEDGE/UniRise"
 }
+
+variable "github_repo_with_ids" {
+  description = "The same repository as GitHub names it in its sign-in token: owner@owner-id/repo@repo-id"
+  type        = string
+  default     = "MentorEDGE@276884968/UniRise@1442625440"
+}

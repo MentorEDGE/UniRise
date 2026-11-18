@@ -18,7 +18,12 @@ resource "aws_iam_role" "github_deploy" {
       Condition = {
         StringEquals = {
           "token.actions.githubusercontent.com:aud" = "sts.amazonaws.com"
-          "token.actions.githubusercontent.com:sub" = "repo:${var.github_repo}:ref:refs/heads/dev"
+          # GitHub sends the repository with its fixed IDs (owner@id/repo@id), as this organisation is set up to do;
+          # the plain name is kept in case that setting is turned off.
+          "token.actions.githubusercontent.com:sub" = [
+            "repo:${var.github_repo_with_ids}:ref:refs/heads/dev",
+            "repo:${var.github_repo}:ref:refs/heads/dev",
+          ]
         }
       }
     }]
