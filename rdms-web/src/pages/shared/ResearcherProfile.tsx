@@ -8,7 +8,7 @@ import { SHOW_FULL_PHONE_NUMBERS, displayPhone, fmtDate, inr, isSanctioned } fro
 import { creditedFaculty } from '../../lib/domain';
 import { saveFaculty, useStore } from '../../lib/store';
 import type { EntityKind, Faculty, Grant, Honour, IntellectualProperty, Publication, SeedMoney } from '../../lib/types';
-import { EMPTY_SCHOLAR, ENGAGEMENT_TYPES, EXIT_REASONS, SDGS, ipTypeLabel, listOf, withCurrent } from '../../lib/types';
+import { EMPTY_SCHOLAR, ENGAGEMENT_TYPES, EXIT_REASONS, SDGS, ipTypeLabel, latestFirst, listOf, withCurrent } from '../../lib/types';
 import { RecordDetail } from './RecordDetail';
 import { NetworkGraph, outputsOf } from '../../components/network';
 
@@ -72,7 +72,7 @@ export function ResearcherProfile({ facultyId }: { facultyId: string }) {
   if (!isMgmt && user?.facultyId !== facultyId) return <Panel><Alert kind="error">You can only view your own profile.</Alert></Panel>;
 
   const scholar = b?.scholar ?? EMPTY_SCHOLAR;
-  const quals = (b?.qualifications ?? []).filter((q) => q.degree).map((q) => `${q.degree}${q.specialization ? ` (${q.specialization})` : ''}${q.institution ? `, ${q.institution}` : ''}`);
+  const quals = latestFirst(b?.qualifications ?? []).filter((q) => q.degree).map((q) => `${q.degree}${q.specialization ? ` (${q.specialization})` : ''}${q.institution ? `, ${q.institution}` : ''}`);
   const tags = [...new Set([...splitList(b?.expertise), ...splitList(b?.keywords)])];
   const tagLink = (t: string) => (isMgmt ? <Link to={`/faculty?q=${encodeURIComponent(t)}`}>{t}</Link> : <span>{t}</span>);
   const highlights = resolveHighlights(db, facultyId, b?.highlights ?? []);
@@ -188,7 +188,7 @@ export function ResearcherProfile({ facultyId }: { facultyId: string }) {
                 <Fact label="Research keywords">{chips(b?.keywords)}</Fact>
                 <Fact label="Affiliation"><p>{f.designation}, {f.department}<br />{db.settings.institutionName}{f.joiningDate && <span className="muted"> · since {f.joiningDate.slice(0, 4)}</span>}</p></Fact>
                 {!!b?.experience.length && <Fact label="Appointments"><ol className="rp-timeline">{b.experience.map((x, i) => <li key={i}><b>{x.designation}</b>, {x.organisation}<span className="muted"> · {x.from}{x.to ? `–${x.to}` : ''}</span></li>)}</ol></Fact>}
-                {!!b?.qualifications.length && <Fact label="Education"><ul className="rp-plain">{b.qualifications.map((q, i) => <li key={i}>{q.degree}{q.specialization && `, ${q.specialization}`} <span className="muted">· {q.institution} {q.year}</span></li>)}</ul></Fact>}
+                {!!b?.qualifications.length && <Fact label="Education"><ul className="rp-plain">{latestFirst(b.qualifications).map((q, i) => <li key={i}>{q.degree}{q.specialization && `, ${q.specialization}`} <span className="muted">· {q.institution} {q.year}</span></li>)}</ul></Fact>}
               </div>
             </Section>
             <Section title="Expertise related to UN Sustainable Development Goals">

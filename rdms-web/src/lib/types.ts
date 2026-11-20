@@ -71,6 +71,21 @@ export interface Faculty {
 }
 
 export interface Qualification { degree: string; specialization: string; institution: string; year: string }
+
+/** Degree level for ordering when years are missing or equal: doctorate, then master's, then bachelor's, then anything else. */
+function degreeLevel(degree: string): number {
+  const d = degree.toLowerCase().replace(/[.\s]/g, '');
+  if (/^(phd|dphil|dsc|dlitt|doctor)|doctorate|postdoc/.test(d)) return 3;
+  if (/^(m|pg|master)/.test(d)) return 2;
+  if (/^(b|ug|bachelor)/.test(d)) return 1;
+  return 0;
+}
+
+/** Qualifications for display, latest first: by year (newest first), then by degree level; ones with no year go last. */
+export function latestFirst<T extends Qualification>(qs: T[]): T[] {
+  const year = (q: Qualification) => { const y = parseInt(q.year, 10); return Number.isFinite(y) ? y : -Infinity; };
+  return [...qs].sort((a, b) => year(b) - year(a) || degreeLevel(b.degree) - degreeLevel(a.degree));
+}
 export interface Experience { organisation: string; designation: string; from: string; to: string }
 export interface Award { title: string; by: string; year: string }
 export interface Membership { body: string; type: string; since: string }

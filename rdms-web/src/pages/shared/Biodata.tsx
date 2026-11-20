@@ -5,7 +5,7 @@ import { Alert, Attainment, Field, Input, NumberInput, PageTitle, Panel, Select,
 import { biodataCompleteness, displayPhone, fmtDate, inr, isSanctioned } from '../../lib/analytics';
 import { creditedFaculty, proposeProfileChange, useStore } from '../../lib/store';
 import { StatusBadge } from '../../components/ui';
-import { PROFILE_LINKS, STATUS_LABEL, linkAllowed } from '../../lib/types';
+import { PROFILE_LINKS, STATUS_LABEL, latestFirst, linkAllowed } from '../../lib/types';
 import { ProgressTracker } from '../../components/workflow';
 import { blankBiodata, normalizeBiodata, phdCounts } from '../../lib/domain';
 import type { Biodata, Course, Engagement, Experience, Faculty, MediaItem, Membership, Qualification, Supervisee } from '../../lib/types';
@@ -66,7 +66,7 @@ export function BiodataView() {
           <dt>Ph.D. guidance</dt><dd>{b?.phdGuided ?? 0} awarded, {b?.phdOngoing ?? 0} ongoing</dd>
         </dl>
         <h2>Educational Qualifications</h2>
-        {b?.qualifications.length ? <ol>{b.qualifications.map((q, i) => <li key={i}><b>{q.degree}</b>{q.specialization && ` in ${q.specialization}`}, {q.institution} ({q.year})</li>)}</ol> : <p className="muted">Not entered.</p>}
+        {b?.qualifications.length ? <ol>{latestFirst(b.qualifications).map((q, i) => <li key={i}><b>{q.degree}</b>{q.specialization && ` in ${q.specialization}`}, {q.institution} ({q.year})</li>)}</ol> : <p className="muted">Not entered.</p>}
         <h2>Experience</h2>
         {b?.experience.length ? <ol>{b.experience.map((x, i) => <li key={i}>{x.designation}, {x.organisation} ({x.from} – {x.to})</li>)}</ol> : <p className="muted">Not entered.</p>}
         <h2>Publications ({pubs.length})</h2>

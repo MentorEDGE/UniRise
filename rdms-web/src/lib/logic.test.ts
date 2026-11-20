@@ -397,3 +397,13 @@ describe('former faculty are in the database, not in any analysis', () => {
     expect(JSON.stringify(res).includes('EMP1009')).toBe(false);
   });
 });
+
+describe('education order', () => {
+  it('lists the latest qualification first, by year and then by degree level', async () => {
+    const { latestFirst } = await import('./types');
+    const q = (degree: string, year: string) => ({ degree, specialization: '', institution: '', year });
+    expect(latestFirst([q('B.E./B.Tech', '2005'), q('M.Tech/M.Sc/MBA', '2009'), q('Ph.D.', '2015')]).map((x) => x.degree)).toEqual(['Ph.D.', 'M.Tech/M.Sc/MBA', 'B.E./B.Tech']);
+    expect(latestFirst([q('B.Sc', ''), q('M.Sc', ''), q('PhD', '')]).map((x) => x.degree)).toEqual(['PhD', 'M.Sc', 'B.Sc']);
+    expect(latestFirst([q('Diploma', ''), q('MBA', '2012')]).map((x) => x.degree)).toEqual(['MBA', 'Diploma']);
+  });
+});
