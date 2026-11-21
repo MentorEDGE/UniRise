@@ -79,6 +79,8 @@ Email and password (decision D1; OIDC later). Java API: PBKDF2 hashes; HttpOnly,
 
 Landing page; dark and light themes (remembered per browser); UniRise by MentorEdge with the institution's name; one menu bar that folds into a Menu button on phones; print stays light; pages tested on desktop and phone for every role.
 
+**Added 2026-11-21 (QA follow-up):** a notifications bell in the menu bar (decisions on your entries and profile updates, funding outcomes and notices for faculty; new submissions for the Office of Research; unread count, "Mark all as read", a click opens the page it is about); an email to the faculty member when the Office approves, returns or rejects an entry; every file field accepts documents (PDF, Word, Excel, PowerPoint, OpenDocument, text, CSV, RTF), images and ZIP files up to 10 MB; faculty drafts are no longer sent to the Office of Research until submitted; profile phone numbers are checked.
+
 ## 10. Not built yet
 
 OIDC (university single sign-on), configurable approval chains, per-institution report selection. Tracked in `BACKEND_PLAN.md` (phase 8). Built since the first version of this list: enquiry email, file uploads with virus scanning, invitations and password reset by email.

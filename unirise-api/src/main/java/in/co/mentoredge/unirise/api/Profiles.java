@@ -58,7 +58,10 @@ public class Profiles {
 	private final Records records;
 	private final InstitutionSettings settings;
 
-	public Profiles(@Qualifier("tenantJdbc") JdbcClient db, Records records, InstitutionSettings settings) {
+	private final Notifier notifier;
+
+	public Profiles(@Qualifier("tenantJdbc") JdbcClient db, Records records, InstitutionSettings settings, Notifier notifier) {
+		this.notifier = notifier;
 		this.db = db;
 		this.records = records;
 		this.settings = settings;
@@ -104,6 +107,7 @@ public class Profiles {
 			if (!exitDate.matches("\\d{4}-\\d{2}-\\d{2}")) throw invalid("Enter the last working day.");
 			if (!joining.isEmpty() && exitDate.compareTo(joining) < 0) throw invalid("The last working day cannot be before the joining date.");
 		}
+		if (!validPhone(Json.str(in.get("phone"), 20))) throw invalid(PHONE_RULE);
 		db.sql("""
 			UPDATE researcher SET title = :t, name = :n, designation = :d, department = :dep, email = :e, phone = :p, joining_date = :j, orcid = :o, scopus_id = :s,
 			active = :a, exit_reason = :er, exit_date = :ed WHERE employee_id = :code""")
@@ -111,6 +115,10 @@ public class Profiles {
 			.param("e", Json.str(in.get("email"), 200).trim()).param("p", Json.str(in.get("phone"), 20)).param("j", joining).param("o", Json.str(in.get("orcid"), 19))
 			.param("s", Json.str(in.get("scopusId"), 20)).param("a", active).param("er", exitReason).param("ed", exitDate).param("code", current.get("id")).update();
 	}
+
+	static final String PHONE_RULE = "Enter a valid phone number (digits, spaces, + and -, 7 to 15 characters).";
+	/** Empty, or 7-15 digits, spaces, + and - (the rule a grant's contact number already follows). QA finding 2026-11-20. */
+	static boolean validPhone(String phone) { return phone == null || phone.isBlank() || phone.trim().matches("[0-9+\\- ]{7,15}"); }
 
 	// ---------- biodata ----------
 
@@ -280,6 +288,7 @@ public class Profiles {
 		Map<String, Object> contact = Json.of("email", Json.str(contactIn.get("email"), 200).trim(), "phone", Json.str(contactIn.get("phone"), 20),
 			"orcid", Json.str(contactIn.get("orcid"), 19).trim(), "scopusId", Json.str(contactIn.get("scopusId"), 20).trim());
 		if (!((String) contact.get("email")).matches("^[^@\\s]+@[^@\\s]+\\.[^@\\s]+$")) throw invalid("Enter a valid email address.");
+		if (!validPhone((String) contact.get("phone"))) throw invalid(PHONE_RULE);
 		String orcid = (String) contact.get("orcid");
 		if (!orcid.isEmpty() && !orcid.matches("\\d{4}-\\d{4}-\\d{4}-\\d{3}[\\dX]")) throw invalid("ORCID must look like 0000-0002-1825-0097.");
 		Map<String, Object> base = prev == null ? blank(me) : prev;
@@ -297,7 +306,10 @@ public class Profiles {
 			ON CONFLICT (id) DO UPDATE SET status = EXCLUDED.status, biodata = EXCLUDED.biodata, contact = EXCLUDED.contact, changed = EXCLUDED.changed, updated_at = EXCLUDED.updated_at""")
 			.param("id", id).param("f", me).param("s", status).param("b", Json.write(bio)).param("c", Json.write(contact)).param("ch", Json.write(changed)).param("at", at).update();
 		records.event(id, at, a.name(), open.isPresent() ? "Edited" : "Created", null);
-		if (submit) records.event(id, at, a.name(), "Rework".equals(prevStatus) ? "Resubmitted" : "Submitted", null);
+		if (submit) {
+			records.event(id, at, a.name(), "Rework".equals(prevStatus) ? "Resubmitted" : "Submitted", null);
+			notifier.office(("Rework".equals(prevStatus) ? "Resubmitted: " : "New submission: ") + "profile update " + id, a.name() + " changed: " + String.join(", ", changed), "/approvals?view=awaiting&kind=profiles");
+		}
 		return id;
 	}
 
@@ -324,8 +336,10 @@ public class Profiles {
 		if (status.equals("Submitted")) records.event(id, at, a.name(), "Review started", null);
 		db.sql("UPDATE profile_change SET status = :s, updated_at = CAST(:at AS timestamptz) WHERE id = :id").param("s", decision).param("at", at).param("id", id).update();
 		records.event(id, at, a.name(), decision.equals("Approved") ? "Approved" : decision.equals("Rework") ? "Returned for correction" : "Rejected", note);
-		if (!decision.equals("Approved")) return;
 		String code = (String) c.get("facultyId");
+		notifier.faculty(code, (decision.equals("Approved") ? "Approved: " : decision.equals("Rework") ? "Changes requested: " : "Not approved: ") + "profile update " + id,
+			decision.equals("Approved") ? "Your profile now shows the update." : note, decision.equals("Approved") ? "/my-profile" : "/submissions");
+		if (!decision.equals("Approved")) return;
 		Map<String, Object> bio = new LinkedHashMap<>(Json.obj(c.get("biodata")));
 		bio.put("updatedAt", at);
 		putBiodata(code, bio);

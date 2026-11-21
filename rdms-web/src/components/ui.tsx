@@ -75,9 +75,11 @@ export function YesNo({ value, onChange }: { value: boolean; onChange: (v: boole
 }
 /**
  * A file field. Where the API offers uploads (A1b), the file goes to the private bucket and the name becomes a link;
- * elsewhere (the prototype server) only the file name is kept, as before. PDF (or the given types) up to 10 MB.
+ * elsewhere (the prototype server) only the file name is kept, as before. Documents, images and ZIP files up to 10 MB.
  */
-export function FileName({ value, onChange, accept = '.pdf', file, onFile, onDone }: {
+/** The file kinds every upload field accepts (the API allows the same; programs and web pages are refused). */
+export const FILE_TYPES = '.pdf,.doc,.docx,.xls,.xlsx,.ppt,.pptx,.odt,.ods,.odp,.rtf,.txt,.csv,.jpg,.jpeg,.png,.gif,.webp,.heic,.tif,.tiff,.zip';
+export function FileName({ value, onChange, accept = FILE_TYPES, file, onFile, onDone }: {
   value: string; onChange: (v: string) => void; accept?: string;
   /** The stored file for this field, if any. */ file?: FileRef;
   /** Called with the stored file once uploaded, null when removed or when only the name is kept. */ onFile?: (f: Uploaded | null) => void;
@@ -91,6 +93,7 @@ export function FileName({ value, onChange, accept = '.pdf', file, onFile, onDon
         const f = e.target.files?.[0];
         if (!f) return;
         if (f.size > 10 * 1024 * 1024) { setError('The file must be 10 MB or smaller.'); setState('error'); e.target.value = ''; return; }
+        if (!FILE_TYPES.split(',').includes('.' + (f.name.split('.').pop() ?? '').toLowerCase())) { setError('This kind of file cannot be uploaded. Use a document (PDF, Word, Excel, PowerPoint, OpenDocument, text, CSV), an image or a ZIP file.'); setState('error'); e.target.value = ''; return; }
         setError(''); onChange(f.name);
         if (!onFile && !onDone) return;
         setState('uploading');

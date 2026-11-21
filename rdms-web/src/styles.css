@@ -2668,3 +2668,22 @@ fieldset { min-width: 0; }                       /* a fieldset otherwise grows t
 .check-inline { display: inline-flex; gap: 6px; align-items: center; margin-right: auto; }
 .custom-fields { border: 1px solid var(--border); border-radius: 12px; padding: 12px 14px 4px; margin: 14px 0 6px; }
 .custom-fields legend { padding: 0 6px; font-weight: 600; }
+
+/* ---- Notifications bell (menu bar) ---- */
+.notif { position: relative; display: flex; align-items: center; }
+.notif-bell { position: relative; width: 30px; height: 30px; display: grid; place-items: center; border: 0; background: transparent; border-radius: 8px; color: inherit; cursor: pointer; }
+.notif-bell:hover { background: rgb(120 120 128 / 0.14); }
+.notif-bell svg { width: 17px; height: 17px; fill: none; stroke: currentColor; stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; }
+.notif-count { position: absolute; top: -2px; right: -3px; min-width: 17px; height: 17px; padding: 0 4px; border-radius: 9px; background: var(--bad, #c0392b); color: #fff; font-size: 10.5px; font-weight: 700; line-height: 17px; text-align: center; font-variant-numeric: tabular-nums; }
+.notif-pop { position: absolute; right: 0; top: calc(100% + 8px); width: min(360px, calc(100vw - 32px)); max-height: min(70vh, 480px); overflow: auto; background: var(--card, var(--background)); color: var(--fg, inherit); border: 1px solid var(--border); border-radius: 14px; box-shadow: 0 12px 32px rgb(0 0 0 / 0.18); z-index: 60; text-align: left; }
+.notif-head { display: flex; justify-content: space-between; align-items: center; gap: 8px; padding: 10px 14px; border-bottom: 1px solid var(--border); position: sticky; top: 0; background: inherit; }
+.notif-pop ul { list-style: none; margin: 0; padding: 4px 0; }
+.notif-pop li button { display: grid; gap: 2px; width: 100%; text-align: left; padding: 9px 14px 9px 22px; border: 0; background: transparent; color: inherit; font: inherit; cursor: pointer; position: relative; }
+.notif-pop li button:hover, .notif-pop li button:focus-visible { background: var(--secondary); }
+.notif-pop li.unread button::before { content: ""; position: absolute; left: 9px; top: 15px; width: 7px; height: 7px; border-radius: 50%; background: var(--primary-text, #6d28d9); }
+.notif-pop li.unread .notif-title { font-weight: 600; }
+.notif-title { font-size: 14px; }
+.notif-body { font-size: 13px; color: var(--muted-fg); overflow-wrap: anywhere; }
+.notif-when { font-size: 12px; color: var(--muted-fg); }
+.notif-empty { margin: 0; padding: 14px; color: var(--muted-fg); font-size: 14px; }
+@media (max-width: 760px) { .notif-pop { position: fixed; right: max(16px, env(safe-area-inset-right, 0px)); left: max(16px, env(safe-area-inset-left, 0px)); width: auto; top: 64px; } }

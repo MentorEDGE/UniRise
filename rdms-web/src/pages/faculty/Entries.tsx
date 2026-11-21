@@ -55,7 +55,7 @@ export function PublicationEntry() {
     if (!r.authors.length) errs.authors = 'Add all authors.';
     else if (!r.authors.some((a) => a.code === r.facultyId)) errs.authors = 'You must be listed as one of the authors.';
     else if (r.authors.some((a) => !a.name.trim())) errs.authors = 'Every author needs a name.';
-    if (submit && r.entryType !== 'Book' && !r.pdfName) errs.pdf = 'Upload the PDF before submitting (optional for books).';
+    if (submit && r.entryType !== 'Book' && !r.pdfName) errs.pdf = 'Upload the full text before submitting (optional for books).';
     return errs;
   });
   if (e.blocked) return <BlockedEntry msg={e.blocked} />;
@@ -117,7 +117,7 @@ export function PublicationEntry() {
           <AuthorTable value={r.authors} onChange={(v) => u({ authors: v })} error={x.authors} />
         </Panel>
         <Panel title="Full Text" size="wide">
-          <Field label="Upload PDF" hint="Only PDF files (optional for Books), up to 10 MB. Larger files: contact the research office." error={x.pdf}>
+          <Field label="Upload full text" hint="PDF, Word or another document (optional for books), up to 10 MB. Larger files: contact the research office." error={x.pdf}>
             <FileName value={r.pdfName} onChange={(v) => u({ pdfName: v })} file={fileOf(r, 'pdfName')} onFile={(f) => e.attach('pdfName', f)} />
           </Field>
           <SaveBar extra={e.customFields} onSave={e.save} isNew={e.isNew} resubmit={e.resubmit} />
@@ -198,7 +198,7 @@ export function GrantEntry() {
         {step === 1 && <InvestigatorTable value={r.investigators} onChange={(v) => u({ investigators: v })} error={x.investigators} />}
         {step === 2 && (
           <>
-            <Field label="Add enclosure" hint="Proposal, endorsement letter, budget sheet… PDF up to 10 MB each." error={x.enclosures}>
+            <Field label="Add enclosure" hint="Proposal, endorsement letter, budget sheet… PDF, Word, Excel, PowerPoint or images, up to 10 MB each." error={x.enclosures}>
               <FileName value="" onChange={() => {}} onDone={(name, f) => { u({ enclosures: [...r.enclosures, name] }); if (f) e.attach('enclosures', f, { many: true }); }} />
             </Field>
             <ul>{r.enclosures.map((n, i) => { const f = r.attachments?.find((a) => a.field === 'enclosures' && a.name === n); return <li key={i}>📎 {f ? <a href={fileUrl(f.key)} target="_blank" rel="noreferrer">{n}</a> : n} <button type="button" className="link-btn" onClick={() => { u({ enclosures: r.enclosures.filter((_, j) => j !== i) }); e.attach('enclosures', null, { many: true, removeName: n }); }}>Remove</button></li>; })}</ul>
@@ -308,7 +308,7 @@ export function FdpEntry() {
           <Field label="From Date" required error={x.fromDate}><input type="date" value={r.fromDate} max={today()} onChange={(ev) => u({ fromDate: ev.target.value, hours: r.hours || daysBetween(ev.target.value, r.toDate) * 6 })} /></Field>
           <Field label="To Date" required error={x.toDate}><input type="date" value={r.toDate} min={r.fromDate} max={today()} onChange={(ev) => u({ toDate: ev.target.value, hours: r.hours || daysBetween(r.fromDate, ev.target.value) * 6 })} /></Field>
           <Field label="Duration (hours)" required error={x.hours} hint={r.fromDate && r.toDate ? `${daysBetween(r.fromDate, r.toDate)} day(s)` : undefined}><NumberInput value={r.hours} onChange={(v) => u({ hours: v })} min={0} /></Field>
-          <Field label="Certificate" error={x.certificate}><FileName value={r.certificateName} onChange={(v) => u({ certificateName: v })} accept=".pdf,.jpg,.png" file={fileOf(r, 'certificateName')} onFile={(f) => e.attach('certificateName', f)} /></Field>
+          <Field label="Certificate" error={x.certificate}><FileName value={r.certificateName} onChange={(v) => u({ certificateName: v })} file={fileOf(r, 'certificateName')} onFile={(f) => e.attach('certificateName', f)} /></Field>
           <Field label="Key learning / how it was applied" className="span4"><TextArea value={r.outcome} onChange={(v) => u({ outcome: v })} /></Field>
         </div>
         <SaveBar extra={e.customFields} onSave={e.save} isNew={e.isNew} resubmit={e.resubmit} />
@@ -360,7 +360,7 @@ export function ConferenceEntry() {
           <Field label="Registration Fee (₹)"><NumberInput value={r.registrationFee} onChange={(v) => u({ registrationFee: v })} min={0} /></Field>
           <Field label="Amount Claimed from Institution (₹)" error={x.amountClaimed} hint="Registration + travel"><NumberInput value={r.amountClaimed} onChange={(v) => u({ amountClaimed: v })} min={0} disabled={r.funding !== 'Institution'} /></Field>
           <Field label="Award (if any)"><Input value={r.award} onChange={(v) => u({ award: v })} placeholder="e.g. Best Paper Award" /></Field>
-          <Field label="Certificate" error={x.certificate} className="span2"><FileName value={r.certificateName} onChange={(v) => u({ certificateName: v })} accept=".pdf,.jpg,.png" file={fileOf(r, 'certificateName')} onFile={(f) => e.attach('certificateName', f)} /></Field>
+          <Field label="Certificate" error={x.certificate} className="span2"><FileName value={r.certificateName} onChange={(v) => u({ certificateName: v })} file={fileOf(r, 'certificateName')} onFile={(f) => e.attach('certificateName', f)} /></Field>
         </div>
         <SaveBar extra={e.customFields} onSave={e.save} isNew={e.isNew} resubmit={e.resubmit} />
       </Panel>
@@ -398,7 +398,7 @@ export function AwardEntry() {
           <Field label="Name of the Honour / Award" required error={x.title} className="span2"><Input value={r.title} onChange={(v) => u({ title: v })} /></Field>
           <Field label="Conferred By" required error={x.awardedBy} hint="Body, society, government or university" className="span2"><Input value={r.awardedBy} onChange={(v) => u({ awardedBy: v })} /></Field>
           <Field label="Citation / What it recognises" className="span3"><TextArea value={r.citation} onChange={(v) => u({ citation: v })} /></Field>
-          <Field label="Certificate / Letter" error={x.certificate}><FileName value={r.certificateName} onChange={(v) => u({ certificateName: v })} accept=".pdf,.jpg,.png" file={fileOf(r, 'certificateName')} onFile={(f) => e.attach('certificateName', f)} /></Field>
+          <Field label="Certificate / Letter" error={x.certificate}><FileName value={r.certificateName} onChange={(v) => u({ certificateName: v })} file={fileOf(r, 'certificateName')} onFile={(f) => e.attach('certificateName', f)} /></Field>
         </div>
         <SaveBar extra={e.customFields} onSave={e.save} isNew={e.isNew} resubmit={e.resubmit} />
       </Panel>
@@ -507,8 +507,8 @@ export function IpEntry() {
 
           <h3>3. Attachments and Declaration</h3>
           <table className="ipf-table"><tbody>
-            <Row label="Filing receipt or registration certificate" required error={x.document}><FileName value={r.documentName} onChange={(v) => u({ documentName: v })} accept=".pdf,.jpg,.png" file={fileOf(r, 'documentName')} onFile={(f) => e.attach('documentName', f)} /></Row>
-            <Row label="Funding or ownership agreement" hint="(if applicable)"><FileName value={r.agreementName} onChange={(v) => u({ agreementName: v })} accept=".pdf,.jpg,.png" file={fileOf(r, 'agreementName')} onFile={(f) => e.attach('agreementName', f)} /></Row>
+            <Row label="Filing receipt or registration certificate" required error={x.document}><FileName value={r.documentName} onChange={(v) => u({ documentName: v })} file={fileOf(r, 'documentName')} onFile={(f) => e.attach('documentName', f)} /></Row>
+            <Row label="Funding or ownership agreement" hint="(if applicable)"><FileName value={r.agreementName} onChange={(v) => u({ agreementName: v })} file={fileOf(r, 'agreementName')} onFile={(f) => e.attach('agreementName', f)} /></Row>
           </tbody></table>
           <label className="ipf-declare">
             <input type="checkbox" checked={r.declared} onChange={(ev) => u({ declared: ev.target.checked })} />

@@ -34,6 +34,7 @@ public class InstitutionController {
 	private final AdminLog log;
 	private final Sessions sessions;
 	private final in.co.mentoredge.unirise.tenancy.TenantDirectory directory;
+	@org.springframework.beans.factory.annotation.Autowired private Notifier notifier;
 
 	public InstitutionController(@Qualifier("tenantJdbc") JdbcClient db, AccessService access, DataSlice slice, Records records, Profiles profiles, InstitutionSettings settings, AdminLog log,
 		Sessions sessions, in.co.mentoredge.unirise.tenancy.TenantDirectory directory) {
@@ -273,6 +274,7 @@ public class InstitutionController {
 		String id = records.nextId("N");
 		db.sql("INSERT INTO notice(id, title, body) VALUES (:id, :t, :b)").param("id", id).param("t", title).param("b", Json.str(b.get("body"), 2000).trim()).update();
 		log.record(a, "Notice posted", title, null);
+		notifier.allFaculty("Notice: " + title, Json.str(b.get("body"), 300).trim(), "/");
 		return Json.of("ok", true, "result", null);
 	}
 

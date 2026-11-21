@@ -147,6 +147,7 @@ export function BiodataEdit() {
   const save = async (submit: boolean) => {
     if (fac.orcid && !/^\d{4}-\d{4}-\d{4}-\d{3}[\dX]$/.test(fac.orcid)) { setError('ORCID must look like 0000-0002-1825-0097.'); return; }
     if (fac.email && !/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(fac.email)) { setError('Enter a valid email address.'); return; }
+    if (fac.phone && !/^[0-9+\- ]{7,15}$/.test(fac.phone.trim())) { setError('Enter a valid phone number (digits, spaces, + and -, 7 to 15 characters).'); return; }
     if (bio.dob && bio.dob > new Date().toISOString().slice(0, 10)) { setError('Date of birth cannot be in the future.'); return; }
     const badLink = PROFILE_LINKS.find((l) => bio.links[l.key] && !linkAllowed(l.key, bio.links[l.key]));
     if (badLink) { setError(`Check the ${badLink.label} link: it must be an https:// address${badLink.hosts.length ? ` on ${badLink.hosts.join(' or ')}` : ''}.`); return; }

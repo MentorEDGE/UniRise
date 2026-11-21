@@ -55,7 +55,13 @@ export function managementHistory(h: HistoryItem[]): HistoryItem[] {
 
 /** The slice of the institution's data this actor may receive. */
 export function scopeFor(db: DB, actor: Actor): DB {
-  if (actor.role === 'office') return db;
+  // The Office of Research: everything except faculty drafts, which stay private to their author until submitted
+  // (as the entry form promises; same rule as the Java API's DataSlice, QA finding 2026-11-20).
+  if (actor.role === 'office') {
+    const out: DB = { ...db, profileChanges: (db.profileChanges ?? []).filter((c) => c.status !== 'Draft') };
+    for (const k of KINDS) (out[k] as AnyRecord[]) = (db[k] as AnyRecord[]).filter((r) => r.status !== 'Draft');
+    return out;
+  }
   if (actor.role === 'management') {
     const out: DB = { ...db };
     // Approved records only, and without the review conversation: comments, returns and resubmissions stay between
@@ -137,7 +143,7 @@ function validate(db: DB, kind: EntityKind, r: AnyRecord, submit: boolean) {
       const dup = db.publications.find((x) => x.id !== r.id && x.doi.trim().toLowerCase() === doi);
       if (dup) throw invalid(`This DOI is already entered as ${dup.id}. Ask the owner to add you as an author instead.`);
     }
-    if (submit && p.entryType !== 'Book' && !p.pdfName) throw invalid('Upload the PDF before submitting (optional for books).');
+    if (submit && p.entryType !== 'Book' && !p.pdfName) throw invalid('Upload the full text before submitting (optional for books).');
   }
   if (kind === 'grants' || kind === 'seedMoney') {
     const g = r as Grant;

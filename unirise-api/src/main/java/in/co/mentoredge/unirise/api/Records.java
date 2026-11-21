@@ -58,10 +58,16 @@ public class Records {
 
 	private final JdbcClient db;
 	private final InstitutionSettings settings;
+	private final UploadCleanup uploads;
+	private final Notifier notifier;
+	private final DecisionMail decisionMail;
 
-	public Records(@Qualifier("tenantJdbc") JdbcClient db, InstitutionSettings settings) {
+	public Records(@Qualifier("tenantJdbc") JdbcClient db, InstitutionSettings settings, UploadCleanup uploads, Notifier notifier, DecisionMail decisionMail) {
 		this.db = db;
 		this.settings = settings;
+		this.uploads = uploads;
+		this.notifier = notifier;
+		this.decisionMail = decisionMail;
 	}
 
 	static String now() { return Instant.now().toString(); }
@@ -182,9 +188,19 @@ public class Records {
 				.param("s", status).param("d", Json.write(data)).param("c", Json.write(custom)).param("at", at).param("id", newId).update();
 		}
 		setCredits(kind, newId, rec);
+		if (existing != null) { // files taken off the entry are removed from storage
+			var gone = UploadCleanup.keysOf(existing);
+			gone.removeAll(UploadCleanup.keysOf(data));
+			uploads.forget(gone);
+		}
 		event(newId, at, a.name(), existing == null ? "Created" : "Edited", null);
 		String note = Json.str(input.get("note"), 1000).trim(); // the faculty member's reply to the Office, sent with a (re)submission
-		if (submit) event(newId, at, a.name(), existing != null && "Rework".equals(existing.get("status")) ? "Resubmitted" : "Submitted", note);
+		if (submit) {
+			boolean again = existing != null && "Rework".equals(existing.get("status"));
+			event(newId, at, a.name(), again ? "Resubmitted" : "Submitted", note);
+			notifier.office((again ? "Resubmitted: " : "New submission: ") + Notifier.LABEL.get(kind).toLowerCase() + " " + newId,
+				a.name() + " " + (again ? "resubmitted " : "submitted ") + Notifier.nameOf(data) + (note.isEmpty() ? "" : ". Reply: " + note), "/approvals?view=awaiting&kind=" + kind);
+		}
 		return newId;
 	}
 
@@ -225,6 +241,7 @@ public class Records {
 		if (!"Draft".equals(r.get("status"))) throw forbid("Only drafts can be deleted.");
 		db.sql("DELETE FROM record WHERE id = :id").param("id", id).update();
 		db.sql("DELETE FROM record_event WHERE record_id = :id").param("id", id).update();
+		uploads.forget(UploadCleanup.keysOf(r)); // a deleted draft's files go with it
 	}
 
 	// ---------- Office of Research: review and outcomes ----------
@@ -261,6 +278,10 @@ public class Records {
 		}
 		db.sql("UPDATE record SET status = :s, updated_at = CAST(:at AS timestamptz) WHERE id = :id").param("s", decision).param("at", at).param("id", id).update();
 		event(id, at, a.name(), decision.equals("Approved") ? "Approved" : decision.equals("Rework") ? "Returned for correction" : "Rejected", note);
+		String label = Notifier.LABEL.get(kind), owner = (String) r.get("facultyId");
+		notifier.faculty(owner, (decision.equals("Approved") ? "Approved: " : decision.equals("Rework") ? "Changes requested: " : "Not approved: ") + label.toLowerCase() + " " + id,
+			Notifier.nameOf(r) + (note.isEmpty() ? "" : " · " + note), decision.equals("Rework") ? "/submissions" : "/submissions");
+		decisionMail.decided(owner, kind, id, Notifier.nameOf(r), decision, note);
 	}
 
 	/** The funding outcome of an approved grant, recorded by the Office of Research. */
@@ -280,6 +301,7 @@ public class Records {
 		String at = now();
 		db.sql("UPDATE record SET data = CAST(:d AS jsonb), updated_at = CAST(:at AS timestamptz) WHERE id = :id").param("d", Json.write(data)).param("at", at).param("id", id).update();
 		event(id, at, a.name(), "Outcome set to " + outcome, null);
+		notifier.faculty((String) g.get("facultyId"), "Funding outcome: grant " + id + " · " + outcome, Notifier.nameOf(g), "/grants");
 	}
 
 	// ---------- input cleaning and validation (sanitize and validate in domain.ts) ----------
@@ -341,7 +363,7 @@ public class Records {
 				String doi = Json.str(r.get("doi")).trim().toLowerCase();
 				if (!doi.isEmpty()) db.sql("SELECT id FROM record WHERE kind = 'publications' AND id <> :id AND lower(trim(data->>'doi')) = :d").param("id", r.get("id")).param("d", doi).query(String.class).optional()
 					.ifPresent(dup -> { throw invalid("This DOI is already entered as " + dup + ". Ask the owner to add you as an author instead."); });
-				if (submit && !"Book".equals(r.get("entryType")) && Json.str(r.get("pdfName")).isEmpty() && !Boolean.FALSE.equals(limits.get("pdfRequired"))) throw invalid("Upload the PDF before submitting (optional for books).");
+				if (submit && !"Book".equals(r.get("entryType")) && Json.str(r.get("pdfName")).isEmpty() && !Boolean.FALSE.equals(limits.get("pdfRequired"))) throw invalid("Upload the full text before submitting (optional for books).");
 			}
 			case "grants", "seedMoney" -> {
 				need(r.get("title"), "Title");

@@ -19,10 +19,10 @@ Date: 2026-11-14, brought up to date 2026-11-18. Branch `dev`. Sources: `unirise
 | Architecture | One deployable service (modular monolith). Packages `tenancy` and `api` | Built |
 | Database | PostgreSQL 16. One control-plane database plus one database per institution (ADR 11) | Built |
 | Data access | Routing `DataSource` with `JdbcClient`, LRU connection pools per tenant. No JPA or Hibernate | Built |
-| Migrations | Flyway, run in code: control plane at start, tenants by the migrator | Built (control V1-V7, tenant V1-V7) |
+| Migrations | Flyway, run in code: control plane at start, tenants by the migrator | Built (control V1-V7, tenant V1-V8) |
 | Access rules | One `AccessService` checked on the server for every read and write | Built for the three roles (phase 2, 2026-11-14) |
 | Sign-in | Email and password with a cookie session (phase 2), tenant API key for integrations, operator key. Target: OIDC in phase 8 | Built (phase 2, 2026-11-14) |
-| Tests | JUnit with Testcontainers (real PostgreSQL 16). 68 tests on 2026-11-18 (5 skipped, parked by D3) | Built |
+| Tests | JUnit with Testcontainers (real PostgreSQL 16). 75 tests on 2026-11-21 (5 skipped, parked by D3) | Built |
 | Packaging | Docker image, ARM64, non-root user | Built |
 | CI | GitHub Actions: `mvnw verify` and image build (`api.yml`); deploy to AWS dev on push to `dev` (`deploy-dev.yml`, A4) | Built |
 | Infrastructure as code | OpenTofu under `infra/`, state in an encrypted S3 bucket | Built for dev |
@@ -184,7 +184,9 @@ Updated 2026-11-18. "Browser" means computed in the website from the scoped data
 | Institution, departments, targets, weights, notices | Built | Built |
 | Record types on/off (G28), custom fields (G29), option lists (G30) | Built | Built |
 | Enquiry form, emailed to the team (G24) | Built | Built (A1a; SES production access since 2026-11-18) |
-| File uploads with virus scanning (G25) | Built | Built (A1b, A9) |
+| File uploads with virus scanning (G25) | Built | Built (A1b, A9). Since 2026-11-21: documents (PDF, Word, Excel, PowerPoint, OpenDocument, text, CSV, RTF), images and ZIP, by extension; programs and web pages refused; non-viewable files download. Files no entry uses are removed: when taken off an entry or with a deleted draft (`UploadCleanup.forget`), and abandoned uploads older than a day every 6 hours (`UploadCleanup.sweep`) |
+| In-app notifications with mark as read | Built (2026-11-21, bell in the menu bar) | Built: tenant V8 `notification`, `Notifier`, `GET /api/notifications`, `POST /api/notifications/read`. Faculty: decisions on entries and profile updates, funding outcomes, notices. Office: new submissions and resubmissions |
+| Email to faculty on a decision (approved, changes requested, rejected) | Not applicable | Built (2026-11-21): `DecisionMail`; never to accounts loaded from the sample data |
 | Email to users (invitations, password reset) | Built (2026-11-18) | Built (2026-11-18): `PasswordLinks`, `PasswordController` (`/api/password/forgot`, `check`, `set`), `POST /api/office/users/{id}/invite`; control V7 `password_link` (hashed, one use, invite 7 days, reset 1 hour) |
 | Landing page, dark mode, branding, print | Built | Not applicable |
 | Milestones, meeting logs, projects, periods, CSV import (old model) | No screen | Built, parked (D3) |
@@ -268,6 +270,7 @@ Each phase ends with tests passing and the docs updated. Order matters: phases 2
 
 ## 9. Not checked for this document
 
+- QA audit 2026-11-20/21: 389 checks across the three roles, security, files on AWS and load (report: https://claude.ai/artifact/AsmrTN2CGEC9Vv9MwWwxFU). Fixed: profile phone validation, the Office no longer receives faculty drafts, unused files are removed.
 - Updated 2026-11-18. AWS resources in section 6 were checked live with the AWS CLI on 2026-11-18 (the deploy user), including the first scheduled nightly backup, the GitHub deploy, the budget and SES production access. The backend suite ran on 2026-11-17: 64 tests, 0 failures, 5 skipped (parked features); the GitHub deploy runs it again on every API change.
 - The SNS alert subscription to corporate@mentoredge.co.in waits for its confirmation link to be clicked; until then alarm emails are not delivered.
 - Grant and seed-money columns were compared at table level, not field by field.

@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
+import { NotificationBell } from './Notifications';
 import { Link, Outlet, useLocation, useNavigate } from 'react-router-dom';
 import type { ReactNode } from 'react';
 import { adminApi, logout, useStore } from '../lib/store';
@@ -131,7 +132,7 @@ function NavBar({ menus }: { menus: MenuDef[] }) {
           <svg viewBox="0 0 24 24" aria-hidden>{folded ? <path d="M6 6l12 12M18 6 6 18" /> : <path d="M4 7h16M4 12h16M4 17h16" />}</svg>
           Menu<small>{menus.find(isActive)?.label.replace(/ \(\d+\)$/, '')}</small>
         </button>
-        <div className="nav-item nav-theme"><ThemeToggle /></div>
+        <div className="nav-item nav-theme"><NotificationBell /><ThemeToggle /></div>
       </div>
       <div className="nav-list" id="nav-list">
       {menus.map((m) => (
@@ -152,7 +153,7 @@ function NavBar({ menus }: { menus: MenuDef[] }) {
           )}
         </div>
       ))}
-      <div className="nav-item nav-theme"><ThemeToggle /></div>
+      <div className="nav-item nav-theme"><NotificationBell /><ThemeToggle /></div>
       </div>
     </nav>
   );

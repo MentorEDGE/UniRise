@@ -19,7 +19,9 @@ import software.amazon.awssdk.services.s3.presigner.S3Presigner;
  * uploads bucket with a short-lived link; the API never handles the bytes.
  *
  * <ul>
- * <li>{@code POST /api/uploads} {name, type, size}: faculty and the Office of Research; PDF, JPEG or PNG up to 10 MB.
+ * <li>{@code POST /api/uploads} {name, type, size}: faculty and the Office of Research; documents (PDF, Word, Excel,
+ * PowerPoint, OpenDocument, text, CSV, RTF), images and ZIP archives up to 10 MB, chosen by the file's extension (widened
+ * from PDF/JPEG/PNG on 2026-11-21). Programs and web pages (exe, js, html, svg…) are refused.
  * Answers {key, url, headers}: the browser PUTs the file to url, then saves the record with the key in attachments.</li>
  * <li>{@code GET /api/uploads/file?key=}: only when the key is attached to a record in the caller's own data (the same
  * rules as GET /api/data, so management sees files of approved records of current faculty only). Redirects to a link
@@ -32,7 +34,19 @@ import software.amazon.awssdk.services.s3.presigner.S3Presigner;
 public class UploadController {
 	public record NewUpload(String name, String type, Long size) {}
 
-	static final Set<String> TYPES = Set.of("application/pdf", "image/jpeg", "image/png");
+	/** Allowed file kinds by extension, with the content type they are stored and served with. */
+	static final java.util.Map<String, String> TYPES = java.util.Map.ofEntries(
+		java.util.Map.entry("pdf", "application/pdf"), java.util.Map.entry("jpg", "image/jpeg"), java.util.Map.entry("jpeg", "image/jpeg"), java.util.Map.entry("png", "image/png"),
+		java.util.Map.entry("gif", "image/gif"), java.util.Map.entry("webp", "image/webp"), java.util.Map.entry("heic", "image/heic"), java.util.Map.entry("tif", "image/tiff"), java.util.Map.entry("tiff", "image/tiff"),
+		java.util.Map.entry("doc", "application/msword"), java.util.Map.entry("docx", "application/vnd.openxmlformats-officedocument.wordprocessingml.document"),
+		java.util.Map.entry("xls", "application/vnd.ms-excel"), java.util.Map.entry("xlsx", "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"),
+		java.util.Map.entry("ppt", "application/vnd.ms-powerpoint"), java.util.Map.entry("pptx", "application/vnd.openxmlformats-officedocument.presentationml.presentation"),
+		java.util.Map.entry("odt", "application/vnd.oasis.opendocument.text"), java.util.Map.entry("ods", "application/vnd.oasis.opendocument.spreadsheet"),
+		java.util.Map.entry("odp", "application/vnd.oasis.opendocument.presentation"), java.util.Map.entry("rtf", "application/rtf"), java.util.Map.entry("txt", "text/plain"),
+		java.util.Map.entry("csv", "text/csv"), java.util.Map.entry("zip", "application/zip"));
+	/** Shown in the browser tab; everything else downloads. */
+	static final Set<String> INLINE = Set.of("pdf", "jpg", "jpeg", "png", "gif", "webp");
+	static String ext(String name) { String n = name == null ? "" : name.trim().toLowerCase(); int i = n.lastIndexOf('.'); return i < 0 ? "" : n.substring(i + 1); }
 	private static final List<String> KINDS = List.of("publications", "grants", "seedMoney", "fdps", "conferences", "awards", "ipr");
 	private final AccessService access;
 	private final DataSlice slice;
@@ -55,13 +69,14 @@ public class UploadController {
 		if (off()) return AuthController.error(HttpStatus.NOT_FOUND, "File uploads are not available here.");
 		Actor a = access.actor(req);
 		if (a.isManagement() || a.userId() == null) return AuthController.error(HttpStatus.FORBIDDEN, "Only faculty and the Office of Research upload files.");
-		if (body == null || body.type() == null || !TYPES.contains(body.type())) return AuthController.error(HttpStatus.BAD_REQUEST, "Upload a PDF, JPEG or PNG file.");
+		String type = body == null ? null : TYPES.get(ext(body.name()));
+		if (type == null) return AuthController.error(HttpStatus.BAD_REQUEST, "This kind of file cannot be uploaded. Use a document (PDF, Word, Excel, PowerPoint, OpenDocument, text, CSV), an image or a ZIP file.");
 		long size = body.size() == null ? 0 : body.size();
 		if (size <= 0 || size > props.uploads().maxBytes()) return AuthController.error(HttpStatus.BAD_REQUEST, "Files can be at most " + props.uploads().maxBytes() / (1024 * 1024) + " MB.");
 		String key = TenantContext.require() + "/" + a.userId() + "/" + UUID.randomUUID() + "/" + safeName(body.name());
 		var put = presigner.presignPutObject((p) -> p.signatureDuration(Duration.ofMinutes(10))
-			.putObjectRequest((o) -> o.bucket(props.uploads().bucket()).key(key).contentType(body.type()).contentLength(size)));
-		return ResponseEntity.ok(Map.of("key", key, "url", put.url().toString(), "headers", Map.of("Content-Type", body.type())));
+			.putObjectRequest((o) -> o.bucket(props.uploads().bucket()).key(key).contentType(type).contentLength(size)));
+		return ResponseEntity.ok(Map.of("key", key, "url", put.url().toString(), "headers", Map.of("Content-Type", type)));
 	}
 
 	@GetMapping("/file")
@@ -84,7 +99,7 @@ public class UploadController {
 		}
 		var get = presigner.presignGetObject((p) -> p.signatureDuration(Duration.ofMinutes(5))
 			.getObjectRequest((o) -> o.bucket(props.uploads().bucket()).key(key)
-				.responseContentDisposition("inline; filename=\"" + name.replaceAll("[\"\\\\\\r\\n]", "_") + "\"")));
+				.responseContentDisposition((INLINE.contains(ext(name)) ? "inline" : "attachment") + "; filename=\"" + name.replaceAll("[\"\\\\\\r\\n]", "_") + "\"")));
 		return ResponseEntity.status(HttpStatus.FOUND).location(URI.create(get.url().toString())).header("Cache-Control", "no-store").build();
 	}
 

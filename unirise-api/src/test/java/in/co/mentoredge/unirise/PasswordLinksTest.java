@@ -207,4 +207,28 @@ class PasswordLinksTest {
 			DOWN.set(false);
 		}
 	}
+
+	@Test
+	void decisionEmailsGoToTheFacultyMemberButNeverToSampleAccounts() throws Exception {
+		setup();
+		api.create("/api/org-units", office, "{\"type\":\"department\",\"name\":\"Chemistry\"}");
+		Caller nita = api.faculty(office, "Nita Shah", "nita@abc.example", "ABC101", "Chemistry");
+		String rec = "{\"record\":{\"entryType\":\"Book\",\"title\":\"Mailed book\",\"venue\":\"P\",\"year\":2024,\"authors\":[{\"kind\":\"Faculty\",\"code\":\"ABC101\",\"name\":\"Nita Shah\"}]},\"submit\":true}";
+		String id = TestApi.field(api.call("POST", "/api/records/publications", nita, rec).body(), "result");
+		int before = SENT.size();
+		assertEquals(200, api.call("POST", "/api/office/approvals/publications/" + id + "/review", office, "{\"decision\":\"Approved\"}").statusCode());
+		var m = mailTo("nita@abc.example", before);
+		assertEquals("Approved: publication " + id, m.content().simple().subject().data());
+		assertTrue(m.content().simple().body().text().data().contains("has approved your Publication " + id + " “Mailed book”"), m.content().simple().body().text().data());
+		// The same for an account loaded from the sample data: no email.
+		Caller demo = api.faculty(office, "Sample Person", "sample@abc.example", "ABC102", "Chemistry");
+		try (var c = java.sql.DriverManager.getConnection(PG.getJdbcUrl().replaceAll("/[^/?]+(\\?|$)", "/tenant_abc$1"), PG.getUsername(), PG.getPassword())) {
+			c.createStatement().executeUpdate("UPDATE app_user SET created_by = 'UniRise demo data' WHERE email = 'sample@abc.example'");
+		}
+		String id2 = TestApi.field(api.call("POST", "/api/records/publications", demo, rec.replace("ABC101", "ABC102").replace("Nita Shah", "Sample Person").replace("Mailed", "Sample")).body(), "result");
+		int mid = SENT.size();
+		assertEquals(200, api.call("POST", "/api/office/approvals/publications/" + id2 + "/review", office, "{\"decision\":\"Rejected\",\"remark\":\"QA\"}").statusCode());
+		Thread.sleep(800);
+		assertTrue(SENT.stream().skip(mid).noneMatch((r) -> r.destination().toAddresses().contains("sample@abc.example")), "sample accounts are never emailed");
+	}
 }

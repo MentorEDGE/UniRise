@@ -27,6 +27,10 @@ class UploadsTest {
 	static final HttpClient NO_REDIRECT = HttpClient.newBuilder().followRedirects(HttpClient.Redirect.NEVER).build();
 	/** The virus-scan tag of each object, as GuardDuty would set it (A9). */
 	static final java.util.Map<String, String> SCAN = new java.util.concurrent.ConcurrentHashMap<>();
+	/** Keys deleted from the bucket (files no entry uses any more). */
+	static final java.util.Set<String> DELETED = java.util.concurrent.ConcurrentHashMap.newKeySet();
+	/** What the bucket listing returns (key → last modified), for the abandoned-upload sweep. */
+	static final java.util.Map<String, java.time.Instant> LISTING = new java.util.concurrent.ConcurrentHashMap<>();
 
 	@org.springframework.boot.test.context.TestConfiguration
 	static class FakeS3 {
@@ -35,6 +39,14 @@ class UploadsTest {
 			return new software.amazon.awssdk.services.s3.S3Client() {
 				@Override public String serviceName() { return "s3"; }
 				@Override public void close() {}
+				@Override public software.amazon.awssdk.services.s3.model.ListObjectsV2Response listObjectsV2(software.amazon.awssdk.services.s3.model.ListObjectsV2Request r) {
+					var objects = LISTING.entrySet().stream().map((e) -> software.amazon.awssdk.services.s3.model.S3Object.builder().key(e.getKey()).lastModified(e.getValue()).size(100L).build()).toList();
+					return software.amazon.awssdk.services.s3.model.ListObjectsV2Response.builder().contents(objects).isTruncated(false).build();
+				}
+				@Override public software.amazon.awssdk.services.s3.model.DeleteObjectResponse deleteObject(software.amazon.awssdk.services.s3.model.DeleteObjectRequest r) {
+					DELETED.add(r.key());
+					return software.amazon.awssdk.services.s3.model.DeleteObjectResponse.builder().build();
+				}
 				@Override public software.amazon.awssdk.services.s3.model.GetObjectTaggingResponse getObjectTagging(software.amazon.awssdk.services.s3.model.GetObjectTaggingRequest r) {
 					var tags = SCAN.containsKey(r.key()) ? java.util.List.of(software.amazon.awssdk.services.s3.model.Tag.builder().key("GuardDutyMalwareScanStatus").value(SCAN.get(r.key())).build()) : java.util.List.<software.amazon.awssdk.services.s3.model.Tag>of();
 					return software.amazon.awssdk.services.s3.model.GetObjectTaggingResponse.builder().tagSet(tags).build();
@@ -57,6 +69,7 @@ class UploadsTest {
 	}
 
 	@Value("${local.server.port}") int port;
+	@org.springframework.beans.factory.annotation.Autowired in.co.mentoredge.unirise.api.UploadCleanup cleanup;
 
 	String upload(TestApi api, Caller c, String name, String type, long size, int expected) throws Exception {
 		var r = api.call("POST", "/api/uploads", c, "{\"name\":\"" + name + "\",\"type\":\"" + type + "\",\"size\":" + size + "}");
@@ -90,8 +103,8 @@ class UploadsTest {
 		upload(api, mgmt, "m.pdf", "application/pdf", 10, 403);
 
 		// The file is attached to a draft publication.
-		String rec = "{\"record\":{\"entryType\":\"Journal Article\",\"title\":\"Uploads\",\"venue\":\"J\",\"year\":2024,\"pdfName\":\"evil paper.pdf\","
-			+ "\"authors\":[{\"kind\":\"Faculty\",\"code\":\"UPL001\",\"name\":\"Asha Rao\"}],"
+		String rec = "{\"record\":{\"entryType\":\"Journal Article\",\"title\":\"Uploads\",\"venue\":\"J\",\"year\":2024,\"doi\":\"10.5555/uploads\",\"pdfName\":\"evil paper.pdf\","
+			+"\"authors\":[{\"kind\":\"Faculty\",\"code\":\"UPL001\",\"name\":\"Asha Rao\"}],"
 			+ "\"attachments\":[{\"field\":\"pdfName\",\"key\":\"" + key + "\",\"name\":\"evil paper.pdf\",\"size\":2048}]},\"submit\":false}";
 		var saved = api.call("POST", "/api/records/publications", fac, rec);
 		assertEquals(200, saved.statusCode(), saved.body());
@@ -108,15 +121,90 @@ class UploadsTest {
 		assertEquals(403, flagged.statusCode());
 		assertTrue(flagged.body().contains("flagged this file as unsafe") && flagged.headers().firstValue("Content-Type").orElse("").startsWith("text/html"), flagged.body());
 		SCAN.put(key, "NO_THREATS_FOUND");
-		// Downloads: the owner and the Office get a short-lived link; a colleague and management (draft) do not.
+		// Downloads of a draft's file: the owner only. The Office of Research gets it once the entry is submitted (a draft
+		// is private to its author, QA finding 2026-11-20); a colleague and management never (not approved).
 		var mine = download(fac, key);
 		assertEquals(302, mine.statusCode());
 		String loc = mine.headers().firstValue("Location").orElseThrow();
 		assertTrue(loc.contains("unirise-test-uploads") && loc.contains("X-Amz-Expires=300") && loc.contains("response-content-disposition"), loc);
-		assertEquals(302, download(office, key).statusCode());
+		assertEquals(404, download(office, key).statusCode(), "the Office does not see drafts");
+		String id = TestApi.field(saved.body(), "result");
+		var submitted = api.call("POST", "/api/records/publications", fac, rec.replace("\"record\":{", "\"record\":{\"id\":\"" + id + "\",").replace("\"submit\":false", "\"submit\":true"));
+		assertEquals(200, submitted.statusCode(), submitted.body());
+		assertEquals(302, download(office, key).statusCode(), "submitted: the Office can review the file");
 		assertEquals(404, download(other, key).statusCode());
 		assertEquals(404, download(mgmt, key).statusCode());
 		assertEquals(404, download(fac, key.replace("evil", "other")).statusCode()); // not attached to anything
 		assertEquals(401, download(Caller.NOBODY, key).statusCode());
+	}
+
+	@Test
+	void filesNoEntryUsesAnyMoreAreRemovedFromTheBucket() throws Exception {
+		TestApi api = new TestApi(port);
+		var inst = api.provision("upc", "office@upc.example");
+		Caller office = api.signIn(inst.officeEmail(), inst.officePassword());
+		api.create("/api/org-units", office, "{\"type\":\"department\",\"name\":\"Physics\"}");
+		Caller fac = api.faculty(office, "Meena Das", "meena@upc.example", "UPC001", "Physics");
+		String a = TestApi.field(upload(api, fac, "first.pdf", "application/pdf", 100, 200), "key");
+		String b = TestApi.field(upload(api, fac, "second.pdf", "application/pdf", 100, 200), "key");
+		java.util.function.BiFunction<String, String, String> fdp = (id, key) -> "{\"record\":{" + (id == null ? "" : "\"id\":\"" + id + "\",") + "\"role\":\"Attended\",\"programmeType\":\"FDP\",\"title\":\"Files\",\"organiser\":\"O\","
+			+ "\"fromDate\":\"2026-01-01\",\"toDate\":\"2026-01-02\",\"hours\":8,\"certificateName\":\"c.pdf\",\"attachments\":[{\"field\":\"certificateName\",\"key\":\"" + key + "\",\"name\":\"c.pdf\",\"size\":100}]},\"submit\":false}";
+		var first = api.call("POST", "/api/records/fdps", fac, fdp.apply(null, a));
+		assertEquals(200, first.statusCode(), first.body());
+		String id = TestApi.field(first.body(), "result");
+		// A second entry using the same file keeps it alive when the first lets it go.
+		var twin = api.call("POST", "/api/records/fdps", fac, fdp.apply(null, a));
+		assertEquals(200, twin.statusCode(), twin.body());
+		assertEquals(200, api.call("POST", "/api/records/fdps", fac, fdp.apply(id, b)).statusCode());
+		assertFalse(DELETED.contains(a), "still attached to the other entry");
+		assertEquals(200, api.call("DELETE", "/api/records/fdps/" + TestApi.field(twin.body(), "result"), fac, null).statusCode());
+		assertTrue(DELETED.contains(a), "replaced and no longer used: removed from the bucket");
+		assertFalse(DELETED.contains(b));
+		assertEquals(200, api.call("DELETE", "/api/records/fdps/" + id, fac, null).statusCode());
+		assertTrue(DELETED.contains(b), "a deleted draft's file is removed");
+	}
+
+	@Test
+	void officeDocumentsAndImagesUploadProgramsAndWebPagesDoNot() throws Exception {
+		TestApi api = new TestApi(port);
+		var inst = api.provision("upt", "office@upt.example");
+		Caller office = api.signIn(inst.officeEmail(), inst.officePassword());
+		api.create("/api/org-units", office, "{\"type\":\"department\",\"name\":\"Physics\"}");
+		Caller fac = api.faculty(office, "Lata Menon", "lata@upt.example", "UPT001", "Physics");
+		for (String[] ok : new String[][] { { "budget.xlsx", "spreadsheetml" }, { "proposal.docx", "wordprocessingml" }, { "talk.pptx", "presentationml" }, { "notes.txt", "text/plain" }, { "data.csv", "text/csv" }, { "scan.jpeg", "image/jpeg" }, { "bundle.zip", "application/zip" } }) {
+			String body = upload(api, fac, ok[0], "", 100, 200); // the browser's own type is not trusted; the extension decides
+			assertTrue(body.contains(ok[1]), ok[0] + " → " + body);
+		}
+		for (String bad : new String[] { "x.exe", "page.html", "image.svg", "script.js", "noextension", "macro.docm" }) upload(api, fac, bad, "application/pdf", 100, 400);
+		// A Word file downloads; a PDF opens in the tab.
+		String doc = TestApi.field(upload(api, fac, "report.docx", "", 100, 200), "key");
+		String rec = "{\"record\":{\"role\":\"Attended\",\"programmeType\":\"FDP\",\"title\":\"Docs\",\"organiser\":\"O\",\"fromDate\":\"2026-01-01\",\"toDate\":\"2026-01-02\",\"hours\":8,"
+			+ "\"certificateName\":\"report.docx\",\"attachments\":[{\"field\":\"certificateName\",\"key\":\"" + doc + "\",\"name\":\"report.docx\",\"size\":100}]},\"submit\":false}";
+		assertEquals(200, api.call("POST", "/api/records/fdps", fac, rec).statusCode());
+		SCAN.put(doc, "NO_THREATS_FOUND");
+		String loc = download(fac, doc).headers().firstValue("Location").orElseThrow();
+		assertTrue(java.net.URLDecoder.decode(loc, "UTF-8").contains("attachment; filename=\"report.docx\""), loc);
+	}
+
+	@Test
+	void abandonedUploadsAreSweptAfterADay() throws Exception {
+		TestApi api = new TestApi(port);
+		var inst = api.provision("ups", "office@ups.example");
+		Caller office = api.signIn(inst.officeEmail(), inst.officePassword());
+		api.create("/api/org-units", office, "{\"type\":\"department\",\"name\":\"Physics\"}");
+		Caller fac = api.faculty(office, "Hari Nair", "hari@ups.example", "UPS001", "Physics");
+		String used = TestApi.field(upload(api, fac, "kept.pdf", "", 100, 200), "key");
+		String abandoned = TestApi.field(upload(api, fac, "left.pdf", "", 100, 200), "key");
+		String fresh = TestApi.field(upload(api, fac, "now.pdf", "", 100, 200), "key");
+		String rec = "{\"record\":{\"role\":\"Attended\",\"programmeType\":\"FDP\",\"title\":\"Kept\",\"organiser\":\"O\",\"fromDate\":\"2026-01-01\",\"toDate\":\"2026-01-02\",\"hours\":8,"
+			+ "\"certificateName\":\"kept.pdf\",\"attachments\":[{\"field\":\"certificateName\",\"key\":\"" + used + "\",\"name\":\"kept.pdf\",\"size\":100}]},\"submit\":false}";
+		assertEquals(200, api.call("POST", "/api/records/fdps", fac, rec).statusCode());
+		var old = java.time.Instant.now().minus(java.time.Duration.ofHours(30));
+		LISTING.clear();
+		LISTING.put(used, old); LISTING.put(abandoned, old); LISTING.put(fresh, java.time.Instant.now().minus(java.time.Duration.ofHours(2)));
+		LISTING.put("malware-protection-resource-validation-object", old); // not an upload: never touched
+		DELETED.clear();
+		assertEquals(1, cleanup.sweep());
+		assertEquals(java.util.Set.of(abandoned), java.util.Set.copyOf(DELETED), "only the day-old file no entry uses");
 	}
 }

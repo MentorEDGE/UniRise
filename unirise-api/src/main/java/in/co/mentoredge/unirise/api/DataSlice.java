@@ -13,7 +13,8 @@ import org.springframework.stereotype.Service;
 /**
  * The slice of the institution's data a caller may receive, in the UI's DB shape (decision D2: the browser computes
  * reports and analytics from it). Port of scopeFor in rdms-web/src/lib/domain.ts:
- * - Office of Research: everything.
+ * - Office of Research: everything except faculty drafts: an entry or profile update is private to its author until it
+ *   is submitted, as the entry form promises (QA finding 2026-11-20).
  * - Top-Level Management: current (active) faculty only; approved records that credit at least one of them, with the
  *   review conversation removed; no pending profile updates (G1, G35, G39).
  * - Faculty: their own profile and every record they are credited on, in every status; colleagues by name only.
@@ -44,8 +45,8 @@ public class DataSlice {
 		if (a.isAdmin()) {
 			out.put("faculty", faculty);
 			out.put("biodata", biodata);
-			for (String k : Records.KINDS) out.put(k, records.all(k));
-			out.put("profileChanges", profiles.profileChanges("", Map.of()));
+			for (String k : Records.KINDS) out.put(k, records.all(k).stream().filter(r -> !"Draft".equals(r.get("status"))).toList());
+			out.put("profileChanges", profiles.profileChanges(" WHERE status <> 'Draft'", Map.of()));
 			return out;
 		}
 		if (a.isManagement()) {
