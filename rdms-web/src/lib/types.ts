@@ -32,6 +32,8 @@ export interface HistoryItem {
 /** A platform account as the client sees it (no password hash, ever). */
 export interface User {
   id: string;
+  /** Signed in with a password someone else chose (temporary): the website asks for a new one before anything else. */
+  mustChangePassword?: boolean;
   email: string;
   name: string;
   role: Role;

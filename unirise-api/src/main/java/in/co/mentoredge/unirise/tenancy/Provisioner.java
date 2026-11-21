@@ -83,7 +83,7 @@ public class Provisioner {
 		String temporaryPassword = null;
 		if (officeUserId != null) {
 			temporaryPassword = in.co.mentoredge.unirise.api.Passwords.randomPassword();
-			control.sql("INSERT INTO account_login(email, institution_id, app_user_id, password_hash) VALUES (:e, :i, :u, :h)")
+			control.sql("INSERT INTO account_login(email, institution_id, app_user_id, password_hash, must_change_password) VALUES (:e, :i, :u, :h, true)")
 				.param("e", email).param("i", id).param("u", officeUserId).param("h", in.co.mentoredge.unirise.api.Passwords.hash(temporaryPassword)).update();
 		}
 

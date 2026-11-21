@@ -77,13 +77,27 @@ public class PasswordLinks {
 	}
 
 	/** Creates a link and emails it. Throws if the email could not be sent (the link is then withdrawn). */
-	public void send(Account a, String purpose) {
+	public void send(Account a, String purpose) { send(a, purpose, null); }
+
+	/** As above; a new account's invitation can also carry its temporary password (to be changed at first sign-in). */
+	public void send(Account a, String purpose, String temporaryPassword) {
 		if (!on()) throw new IllegalStateException("Password emails are not set up here.");
 		String token = issue(a, purpose);
 		String link = mail.siteUrl().replaceAll("/+$", "") + "/#/set-password?t=" + token;
 		String signIn = mail.siteUrl().replaceAll("/+$", "") + "/#/login";
 		String subject, text;
-		if (INVITE.equals(purpose)) {
+		if (INVITE.equals(purpose) && temporaryPassword != null) {
+			subject = "Your UniRise account";
+			text = "Dear " + oneLine(a.name()) + ",\n\n"
+				+ "The Office of Research at " + oneLine(a.institution()) + " has created a UniRise account for you.\n\n"
+				+ "Sign in at " + signIn + " with:\n"
+				+ "  Email: " + a.email() + "\n"
+				+ "  Temporary password: " + temporaryPassword + "\n\n"
+				+ "When you first sign in, you will be asked to choose your own password. Please do so straight away, and do not share this email.\n\n"
+				+ "Alternatively, set your own password now with this link (it can be used once and expires in 7 days):\n" + link + "\n\n"
+				+ "If you were not expecting this email, please contact your institution's Office of Research.\n\n"
+				+ FOOTER;
+		} else if (INVITE.equals(purpose)) {
 			subject = "Set your UniRise password";
 			text = "Dear " + oneLine(a.name()) + ",\n\n"
 				+ "The Office of Research at " + oneLine(a.institution()) + " has invited you to set the password for your UniRise account.\n\n"

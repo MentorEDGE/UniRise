@@ -31,6 +31,7 @@ export function Account() {
         <p className="note">Your role and institution are set by your institution’s Office of Research. Ask them if either is wrong.</p>
       </Panel>
       <Panel title="Change password">
+        {user?.mustChangePassword && <Alert kind="info"><b>Choose your own password to continue.</b> You signed in with a temporary password. Enter it as the current password, then choose a new one; the rest of UniRise opens once it is changed.</Alert>}
         {error && <Alert kind="error">{error}</Alert>}
         <div className="grid g3">
           <Field label="Current password"><input type="password" value={pw.old} onChange={(e) => setPw({ ...pw, old: e.target.value })} autoComplete="current-password" /></Field>

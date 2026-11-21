@@ -120,7 +120,7 @@ public class UserController {
 			.param("d", designation).param("dep", department).param("by", office.name()).query(Long.class).single();
 		String temp = Passwords.randomPassword();
 		try {
-			control.sql("INSERT INTO account_login(email, institution_id, app_user_id, password_hash) VALUES (:e, :i, :u, :h)")
+			control.sql("INSERT INTO account_login(email, institution_id, app_user_id, password_hash, must_change_password) VALUES (:e, :i, :u, :h, true)")
 				.param("e", email).param("i", institutionId()).param("u", userId).param("h", Passwords.hash(temp)).update();
 		} catch (DuplicateKeyException race) { // the same email was registered in another institution a moment ago
 			db.sql("DELETE FROM app_user WHERE id = :u").param("u", userId).update();
@@ -130,7 +130,7 @@ public class UserController {
 		Map<String, Object> out = new LinkedHashMap<>();
 		out.put("id", String.valueOf(userId));
 		if (Boolean.TRUE.equals(b.invite())) {
-			String why = invite(userId, office);
+			String why = invite(userId, office, temp); // the welcome email carries the temporary password, to be changed at first sign-in
 			if (why == null) { out.put("invited", true); return ResponseEntity.ok(out); }
 			out.put("inviteProblem", why);
 		}
@@ -145,21 +145,22 @@ public class UserController {
 		Actor office = access.actor(req);
 		access.requireAdmin(office);
 		target(id, office);
-		String why = invite(id, office);
+		String why = invite(id, office, null);
 		return why == null ? ResponseEntity.ok(Map.of("ok", true)) : AuthController.error(HttpStatus.CONFLICT, why);
 	}
 
 	/** Null when the invitation was emailed, otherwise why not (in words for the Office). */
-	private String invite(long userId, Actor office) {
+	private String invite(long userId, Actor office, String temporaryPassword) {
 		if (!links.on()) return "Email is not set up here, so no invitation was sent.";
 		var account = links.account(institutionId(), userId);
 		if (account.isEmpty()) return "The account is not active, so no invitation was sent. Activate it first.";
 		try {
-			links.send(account.get(), PasswordLinks.INVITE);
+			links.send(account.get(), PasswordLinks.INVITE, temporaryPassword);
 		} catch (RuntimeException e) {
 			return "The invitation email could not be sent.";
 		}
-		log.record(office, "Password link emailed", account.get().email(), "invitation, works for 7 days");
+		log.record(office, temporaryPassword == null ? "Password link emailed" : "Welcome email sent", account.get().email(),
+			temporaryPassword == null ? "invitation, works for 7 days" : "sign-in details with a temporary password (to be changed at first sign-in) and a link for 7 days");
 		return null;
 	}
 
@@ -204,7 +205,7 @@ public class UserController {
 		access.requireAdmin(office);
 		Target t = target(id, office);
 		String temp = Passwords.randomPassword();
-		control.sql("UPDATE account_login SET password_hash = :h, password_set_at = now() WHERE institution_id = :i AND app_user_id = :u")
+		control.sql("UPDATE account_login SET password_hash = :h, password_set_at = now(), must_change_password = true WHERE institution_id = :i AND app_user_id = :u")
 			.param("h", Passwords.hash(temp)).param("i", institutionId()).param("u", id).update();
 		sessions.endAll(institutionId(), id, null);
 		log.record(office, "Password reset", t.email(), null);

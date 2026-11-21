@@ -19,7 +19,7 @@ Date: 2026-11-14, brought up to date 2026-11-18. Branch `dev`. Sources: `unirise
 | Architecture | One deployable service (modular monolith). Packages `tenancy` and `api` | Built |
 | Database | PostgreSQL 16. One control-plane database plus one database per institution (ADR 11) | Built |
 | Data access | Routing `DataSource` with `JdbcClient`, LRU connection pools per tenant. No JPA or Hibernate | Built |
-| Migrations | Flyway, run in code: control plane at start, tenants by the migrator | Built (control V1-V7, tenant V1-V8) |
+| Migrations | Flyway, run in code: control plane at start, tenants by the migrator | Built (control V1-V8, tenant V1-V8) |
 | Access rules | One `AccessService` checked on the server for every read and write | Built for the three roles (phase 2, 2026-11-14) |
 | Sign-in | Email and password with a cookie session (phase 2), tenant API key for integrations, operator key. Target: OIDC in phase 8 | Built (phase 2, 2026-11-14) |
 | Tests | JUnit with Testcontainers (real PostgreSQL 16). 75 tests on 2026-11-21 (5 skipped, parked by D3) | Built |
@@ -186,7 +186,8 @@ Updated 2026-11-18. "Browser" means computed in the website from the scoped data
 | Enquiry form, emailed to the team (G24) | Built | Built (A1a; SES production access since 2026-11-18) |
 | File uploads with virus scanning (G25) | Built | Built (A1b, A9). Since 2026-11-21: documents (PDF, Word, Excel, PowerPoint, OpenDocument, text, CSV, RTF), images and ZIP, by extension; programs and web pages refused; non-viewable files download. Files no entry uses are removed: when taken off an entry or with a deleted draft (`UploadCleanup.forget`), and abandoned uploads older than a day every 6 hours (`UploadCleanup.sweep`) |
 | In-app notifications with mark as read | Built (2026-11-21, bell in the menu bar) | Built: tenant V8 `notification`, `Notifier`, `GET /api/notifications`, `POST /api/notifications/read`. Faculty: decisions on entries and profile updates, funding outcomes, notices. Office: new submissions and resubmissions |
-| Email to faculty on a decision (approved, changes requested, rejected) | Not applicable | Built (2026-11-21): `DecisionMail`; never to accounts loaded from the sample data |
+| Email to faculty on a decision (approved, changes requested, rejected) | Not applicable | Built (2026-11-21): `DecisionMail`, for all seven entry types and profile updates; never to accounts loaded from the sample data |
+| Welcome email with a temporary password; new password required at first sign-in | Built (2026-11-21) | Built: the account-creation invitation carries the email, a temporary password and a set-password link; control V8 `must_change_password` (set for every temporary password); the website opens Account → Change Password first |
 | Email to users (invitations, password reset) | Built (2026-11-18) | Built (2026-11-18): `PasswordLinks`, `PasswordController` (`/api/password/forgot`, `check`, `set`), `POST /api/office/users/{id}/invite`; control V7 `password_link` (hashed, one use, invite 7 days, reset 1 hour) |
 | Landing page, dark mode, branding, print | Built | Not applicable |
 | Milestones, meeting logs, projects, periods, CSV import (old model) | No screen | Built, parked (D3) |

@@ -97,7 +97,7 @@ public class PasswordController {
 		var used = links.use(body.token());
 		if (used.isEmpty()) return AuthController.error(HttpStatus.NOT_FOUND, GONE);
 		var a = used.get().account();
-		control.sql("UPDATE account_login SET password_hash = :h, password_set_at = now() WHERE institution_id = :i AND app_user_id = :u")
+		control.sql("UPDATE account_login SET password_hash = :h, password_set_at = now(), must_change_password = false WHERE institution_id = :i AND app_user_id = :u")
 			.param("h", Passwords.hash(password)).param("i", a.tenant().id()).param("u", a.userId()).update();
 		sessions.endAll(a.tenant().id(), a.userId(), null);
 		throttle.clear("email:" + a.email()); // a locked sign-in is unlocked by the new password

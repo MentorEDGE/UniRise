@@ -131,7 +131,7 @@ public class AuthController {
 		if (body == null || !Passwords.matches(body.current(), hash)) return error(HttpStatus.BAD_REQUEST, "Current password is incorrect.");
 		String problem = Passwords.problem(body.next());
 		if (problem != null) return error(HttpStatus.BAD_REQUEST, problem);
-		control.sql("UPDATE account_login SET password_hash = :h, password_set_at = now() WHERE institution_id = :i AND app_user_id = :u")
+		control.sql("UPDATE account_login SET password_hash = :h, password_set_at = now(), must_change_password = false WHERE institution_id = :i AND app_user_id = :u")
 			.param("h", Passwords.hash(body.next())).param("i", institutionId).param("u", a.userId()).update();
 		sessions.endAll(institutionId, a.userId(), (String) req.getAttribute("sessionHash"));
 		return ResponseEntity.ok(Map.of("ok", true));
@@ -165,6 +165,11 @@ public class AuthController {
 		institution.put("name", directory.name(inst.id()));
 		institution.put("status", inst.status().equals("suspended") ? "suspended" : "active");
 		Map<String, Object> body = new LinkedHashMap<>(); // user first, then institution, as in the prototype
+		if (user != null) { // signed in with a password someone else chose: the website asks for a new one first
+			user = new LinkedHashMap<>(user);
+			user.put("mustChangePassword", control.sql("SELECT must_change_password FROM account_login WHERE institution_id = :i AND app_user_id = :u")
+				.param("i", inst.id()).param("u", Long.parseLong((String) user.get("id"))).query(Boolean.class).optional().orElse(false));
+		}
 		body.put("user", user);
 		body.put("institution", institution);
 		return body;

@@ -60,6 +60,8 @@ function ScrollToTop() {
 function RequireAuth({ children }: { children: ReactNode }) {
   const { user } = useStore();
   const loc = useLocation();
+  // A temporary password (from the Office, or in the welcome email) must be replaced before anything else.
+  if (user?.mustChangePassword && loc.pathname !== '/account') return <Navigate to="/account" replace />;
   if (user) return <>{children}</>;
   // Signed out: the address of the site shows the introduction page; anything else needs signing in first.
   return loc.pathname === '/' ? <IntroLanding /> : <Navigate to="/login" replace />;

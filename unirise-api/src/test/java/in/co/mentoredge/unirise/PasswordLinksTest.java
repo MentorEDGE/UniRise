@@ -112,9 +112,19 @@ class PasswordLinksTest {
 		String body = newUser("meera@abc.example", true);
 		assertTrue(body.contains("\"invited\":true") && !body.contains("temporaryPassword"), "nobody sees a password: " + body);
 		var m = mailTo("meera@abc.example", before);
-		assertEquals("Set your UniRise password", m.content().simple().subject().data());
+		assertEquals("Your UniRise account", m.content().simple().subject().data());
 		assertEquals("test-set", m.configurationSetName());
-		assertTrue(m.content().simple().body().text().data().contains("ABC University") && m.content().simple().body().text().data().contains("7 days"));
+		String mailBody = m.content().simple().body().text().data();
+		assertTrue(mailBody.contains("ABC University") && mailBody.contains("7 days") && mailBody.contains("Email: meera@abc.example") && mailBody.contains("choose your own password"), mailBody);
+		// The temporary password in the welcome email works, and the person must change it first.
+		var tm = java.util.regex.Pattern.compile("Temporary password: (\\S+)").matcher(mailBody);
+		assertTrue(tm.find(), mailBody);
+		var first = api.login("meera@abc.example", tm.group(1));
+		assertEquals(200, first.statusCode(), first.body());
+		assertTrue(first.body().contains("\"mustChangePassword\":true"), first.body());
+		Caller meera = new Caller(null, TestApi.sessionCookie(first));
+		assertEquals(200, api.call("POST", "/api/account/password", meera, "{\"current\":\"" + tm.group(1) + "\",\"next\":\"Changed123\"}").statusCode());
+		assertTrue(api.call("GET", "/api/session", meera, null).body().contains("\"mustChangePassword\":false"));
 		String t = token(m);
 		String info = check(t);
 		assertTrue(info.contains("\"purpose\":\"invite\"") && info.contains("meera@abc.example") && info.contains("Meera Nair"), info);
@@ -220,6 +230,15 @@ class PasswordLinksTest {
 		var m = mailTo("nita@abc.example", before);
 		assertEquals("Approved: publication " + id, m.content().simple().subject().data());
 		assertTrue(m.content().simple().body().text().data().contains("has approved your Publication " + id + " “Mailed book”"), m.content().simple().body().text().data());
+		// Profile updates are emailed the same way (here: changes requested, with what to change).
+		var pc = api.call("POST", "/api/profile-changes", nita, "{\"biodata\":{\"summary\":\"New summary\"},\"contact\":{\"email\":\"nita@abc.example\"},\"submit\":true}");
+		assertEquals(200, pc.statusCode(), pc.body());
+		String pcId = TestApi.field(pc.body(), "result");
+		int p0 = SENT.size();
+		assertEquals(200, api.call("POST", "/api/office/approvals/profiles/" + pcId + "/review", office, "{\"decision\":\"Rework\",\"remark\":\"Add your keywords\"}").statusCode());
+		var pm = mailTo("nita@abc.example", p0);
+		assertEquals("Changes requested: profile update " + pcId, pm.content().simple().subject().data());
+		assertTrue(pm.content().simple().body().text().data().contains("Add your keywords"));
 		// The same for an account loaded from the sample data: no email.
 		Caller demo = api.faculty(office, "Sample Person", "sample@abc.example", "ABC102", "Chemistry");
 		try (var c = java.sql.DriverManager.getConnection(PG.getJdbcUrl().replaceAll("/[^/?]+(\\?|$)", "/tenant_abc$1"), PG.getUsername(), PG.getPassword())) {

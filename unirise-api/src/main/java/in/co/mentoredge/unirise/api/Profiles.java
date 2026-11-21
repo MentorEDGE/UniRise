@@ -59,9 +59,11 @@ public class Profiles {
 	private final InstitutionSettings settings;
 
 	private final Notifier notifier;
+	private final DecisionMail decisionMail;
 
-	public Profiles(@Qualifier("tenantJdbc") JdbcClient db, Records records, InstitutionSettings settings, Notifier notifier) {
+	public Profiles(@Qualifier("tenantJdbc") JdbcClient db, Records records, InstitutionSettings settings, Notifier notifier, DecisionMail decisionMail) {
 		this.notifier = notifier;
+		this.decisionMail = decisionMail;
 		this.db = db;
 		this.records = records;
 		this.settings = settings;
@@ -339,6 +341,7 @@ public class Profiles {
 		String code = (String) c.get("facultyId");
 		notifier.faculty(code, (decision.equals("Approved") ? "Approved: " : decision.equals("Rework") ? "Changes requested: " : "Not approved: ") + "profile update " + id,
 			decision.equals("Approved") ? "Your profile now shows the update." : note, decision.equals("Approved") ? "/my-profile" : "/submissions");
+		decisionMail.decided(code, "profiles", id, "", decision, note); // emailed like entry decisions
 		if (!decision.equals("Approved")) return;
 		Map<String, Object> bio = new LinkedHashMap<>(Json.obj(c.get("biodata")));
 		bio.put("updatedAt", at);

@@ -153,7 +153,11 @@ export async function logout() {
 }
 
 export async function changePassword(current: string, next: string): Promise<string | null> {
-  try { await api('POST', '/account/password', { current, next }); return null; } catch (e) { return (e as Error).message; }
+  try {
+    await api('POST', '/account/password', { current, next });
+    await enter(await api<{ user: User; institution: Institution | null }>('GET', '/session')); // clears "must change password"
+    return null;
+  } catch (e) { return (e as Error).message; }
 }
 
 /** "Forgot password?": the API emails a reset link if the account exists. Returns the message to show, or throws. */

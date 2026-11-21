@@ -287,7 +287,7 @@ function AddUser({ onClose, onDone }: { onClose: () => void; onDone: () => void 
       {created ? (
         <>
           {created.invited
-            ? <Alert kind="success">Account created for <b>{created.name}</b>. We emailed <b>{created.email}</b> a link to set their own password; it works for 7 days. If it does not arrive, open the user and choose “Email a password link” again.</Alert>
+            ? <Alert kind="success">Account created for <b>{created.name}</b>. We emailed <b>{created.email}</b> their sign-in details with a temporary password, which they must change when they first sign in, and a link to set their own password (works for 7 days). If it does not arrive, open the user and choose “Email a password link”.</Alert>
             : <>
                 {created.problem && <Alert kind="info">{created.problem} Give them the temporary password below instead.</Alert>}
                 <Alert kind="success">Account created for <b>{created.name}</b>{created.active ? '' : ' (not active yet; activate it under Users when they should start)'}. Give them these sign-in details through a trusted channel. The password is shown only once; they can change it under Settings → Change Password.</Alert>
@@ -315,7 +315,7 @@ function AddUser({ onClose, onDone }: { onClose: () => void; onDone: () => void 
             </Field>
           </div>
           {f.status === 'active' && <label className="check-inline" style={{ marginTop: 12 }}><input type="checkbox" checked={f.invite} onChange={(e) => u({ invite: e.target.checked })} /> Email them a link to set their own password</label>}
-          <p className="note">{f.invite && f.status === 'active' ? 'They get an email with a link that works for 7 days; nobody else sees their password.' : 'A temporary password is generated and shown once.'} For faculty, the employee code links the account to their faculty profile (created if it does not exist yet).</p>
+          <p className="note">{f.invite && f.status === 'active' ? 'They get an email with their sign-in details and a temporary password, which they must change at first sign-in.' : 'A temporary password is generated and shown once.'} For faculty, the employee code links the account to their faculty profile (created if it does not exist yet).</p>
           <div className="btn-row"><button className="btn secondary" onClick={onClose}>Cancel</button><button className="btn ok" disabled={busy} onClick={save}>{busy ? 'Creating…' : 'Create account'}</button></div>
         </>
       )}
@@ -402,7 +402,7 @@ export function AdminUsers() {
                 {open.status === 'active' && <button className="btn secondary" onClick={() => act(`/office/users/${open.id}/invite`, {}, `Password link emailed to ${open.email}.`)}>Email a password link</button>}
                 <button className="btn secondary" onClick={() => act(`/office/users/${open.id}/reset-password`, {}, 'Temporary password created.')}>Create temporary password</button>
               </div>
-              {temp && <Alert kind="success">Temporary password: <b style={{ fontFamily: 'monospace' }}>{temp}</b>. Give it to {open.name} through a trusted channel; it is shown only once. They should change it after signing in.</Alert>}
+              {temp && <Alert kind="success">Temporary password: <b style={{ fontFamily: 'monospace' }}>{temp}</b>. Give it to {open.name} through a trusted channel; it is shown only once. They will be asked to change it when they sign in.</Alert>}
             </div>
           )}
         </Modal>
