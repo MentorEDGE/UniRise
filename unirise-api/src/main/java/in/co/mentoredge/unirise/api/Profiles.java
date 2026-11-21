@@ -311,6 +311,7 @@ public class Profiles {
 		if (submit) {
 			records.event(id, at, a.name(), "Rework".equals(prevStatus) ? "Resubmitted" : "Submitted", null);
 			notifier.office(("Rework".equals(prevStatus) ? "Resubmitted: " : "New submission: ") + "profile update " + id, a.name() + " changed: " + String.join(", ", changed), "/approvals?view=awaiting&kind=profiles");
+			decisionMail.submitted("profiles", id, "", a.name(), "Rework".equals(prevStatus), "Changed: " + String.join(", ", changed));
 		}
 		return id;
 	}

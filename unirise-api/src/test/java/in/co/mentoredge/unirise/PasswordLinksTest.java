@@ -225,6 +225,10 @@ class PasswordLinksTest {
 		Caller nita = api.faculty(office, "Nita Shah", "nita@abc.example", "ABC101", "Chemistry");
 		String rec = "{\"record\":{\"entryType\":\"Book\",\"title\":\"Mailed book\",\"venue\":\"P\",\"year\":2024,\"authors\":[{\"kind\":\"Faculty\",\"code\":\"ABC101\",\"name\":\"Nita Shah\"}]},\"submit\":true}";
 		String id = TestApi.field(api.call("POST", "/api/records/publications", nita, rec).body(), "result");
+		// The Office of Research is emailed about the submission.
+		var sub = mailTo("office@abc.example", 0);
+		assertTrue(SENT.stream().anyMatch((r) -> r.destination().toAddresses().contains("office@abc.example") && r.content().simple().subject().data().equals("New submission: publication " + id + " from Nita Shah")),
+			sub.content().simple().subject().data());
 		int before = SENT.size();
 		assertEquals(200, api.call("POST", "/api/office/approvals/publications/" + id + "/review", office, "{\"decision\":\"Approved\"}").statusCode());
 		var m = mailTo("nita@abc.example", before);
@@ -237,6 +241,8 @@ class PasswordLinksTest {
 		int p0 = SENT.size();
 		assertEquals(200, api.call("POST", "/api/office/approvals/profiles/" + pcId + "/review", office, "{\"decision\":\"Rework\",\"remark\":\"Add your keywords\"}").statusCode());
 		var pm = mailTo("nita@abc.example", p0);
+		Thread.sleep(300);
+		assertTrue(SENT.stream().anyMatch((r) -> r.destination().toAddresses().contains("office@abc.example") && r.content().simple().subject().data().startsWith("New submission: profile update " + pcId)), "the Office is emailed about profile updates too");
 		assertEquals("Changes requested: profile update " + pcId, pm.content().simple().subject().data());
 		assertTrue(pm.content().simple().body().text().data().contains("Add your keywords"));
 		// The same for an account loaded from the sample data: no email.

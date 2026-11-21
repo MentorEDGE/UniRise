@@ -200,6 +200,7 @@ public class Records {
 			event(newId, at, a.name(), again ? "Resubmitted" : "Submitted", note);
 			notifier.office((again ? "Resubmitted: " : "New submission: ") + Notifier.LABEL.get(kind).toLowerCase() + " " + newId,
 				a.name() + " " + (again ? "resubmitted " : "submitted ") + Notifier.nameOf(data) + (note.isEmpty() ? "" : ". Reply: " + note), "/approvals?view=awaiting&kind=" + kind);
+			decisionMail.submitted(kind, newId, Notifier.nameOf(data), a.name(), again, note);
 		}
 		return newId;
 	}
