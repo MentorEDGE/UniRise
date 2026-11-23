@@ -250,7 +250,7 @@ export function SeedMoneyEntry() {
       <PageTitle sub="Seed money supports pilot work that leads to an external research proposal.">{e.isNew ? 'Apply for Seed Money' : `Edit Seed Money Application ${e.rec.id}`}</PageTitle>
       {e.banner}
       {closed && <div className="panel"><p className="note" style={{ color: 'var(--bad)' }}><b>Note:</b> Reception of applications for seed money proposals for this quarter is closed.</p></div>}
-      <fieldset disabled={closed} style={{ border: 0, padding: 0, margin: 0 }}>
+      <fieldset disabled={closed} style={{ border: 0, padding: 0, margin: 0, minWidth: 0 }}>
         <Panel title="New Proposal" size="wide">
           <div className="grid g3">
             <Field label="ID"><input type="text" readOnly value={r.id || 'Generated on save'} /></Field>
@@ -261,11 +261,14 @@ export function SeedMoneyEntry() {
             <Field label="Abstract" required error={x.abstract} className="span3"><TextArea value={r.abstract} onChange={(v) => u({ abstract: v })} rows={4} /></Field>
           </div>
         </Panel>
-        <Panel title="Investigator Details" size="wide">
-          <InvestigatorTable value={r.investigators} onChange={(v) => u({ investigators: v })} error={x.investigators} />
-          <SaveBar extra={e.customFields} onSave={e.save} isNew={e.isNew} resubmit={e.resubmit} />
-        </Panel>
       </fieldset>
+      <Panel title="Investigator Details" size="wide">
+        {/* Cancel stays usable when the window is closed; everything that would save is locked. */}
+        <fieldset disabled={closed} style={{ border: 0, padding: 0, margin: 0, minWidth: 0 }}>
+          <InvestigatorTable value={r.investigators} onChange={(v) => u({ investigators: v })} error={x.investigators} />
+        </fieldset>
+        <SaveBar extra={e.customFields} onSave={e.save} isNew={e.isNew} resubmit={e.resubmit} locked={closed} />
+      </Panel>
     </>
   );
 }

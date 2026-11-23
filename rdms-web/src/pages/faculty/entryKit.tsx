@@ -83,15 +83,16 @@ export function useEntry<T extends AnyRecord>(kind: EntityKind, blank: (facultyI
   return { rec, update, setRec, attach, customFields, errors, save, blocked, banner, isNew: !existing, resubmit: existing?.status === 'Rework' };
 }
 
-export function SaveBar({ onSave, isNew, resubmit, extra }: { onSave: (submit: boolean) => void; isNew: boolean; resubmit?: boolean; /** the institution's own fields (G29) */ extra?: ReactNode }) {
+export function SaveBar({ onSave, isNew, resubmit, extra, locked }: { onSave: (submit: boolean) => void; isNew: boolean; resubmit?: boolean; /** the institution's own fields (G29) */ extra?: ReactNode;
+  /** Saving is closed (e.g. the seed money window): fields and Save/Submit are disabled, Cancel still leaves the form. */ locked?: boolean }) {
   const nav = useNavigate();
   return (
     <>
-    {extra}
+    <fieldset disabled={locked} style={{ border: 0, padding: 0, margin: 0, minWidth: 0 }}>{extra}</fieldset>
     <div className="btn-row">
       <button className="btn secondary" type="button" onClick={() => nav(-1)}>Cancel</button>
-      <button className="btn" type="button" onClick={() => onSave(false)}>{isNew ? 'Save Draft' : 'Save'}</button>
-      <button className="btn ok" type="button" onClick={() => onSave(true)}>{resubmit ? 'Resubmit for Approval' : 'Submit for Approval'}</button>
+      <button className="btn" type="button" disabled={locked} onClick={() => onSave(false)}>{isNew ? 'Save Draft' : 'Save'}</button>
+      <button className="btn ok" type="button" disabled={locked} onClick={() => onSave(true)}>{resubmit ? 'Resubmit for Approval' : 'Submit for Approval'}</button>
     </div>
     </>
   );

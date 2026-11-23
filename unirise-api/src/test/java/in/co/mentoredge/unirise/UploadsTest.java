@@ -184,6 +184,14 @@ class UploadsTest {
 		SCAN.put(doc, "NO_THREATS_FOUND");
 		String loc = download(fac, doc).headers().firstValue("Location").orElseThrow();
 		assertTrue(java.net.URLDecoder.decode(loc, "UTF-8").contains("attachment; filename=\"report.docx\""), loc);
+		// A name with non-Latin letters: a plain fallback plus the exact name encoded as UTF-8 (it used to fail to download).
+		String ru = TestApi.field(upload(api, fac, "спец & (1).pdf", "", 100, 200), "key");
+		String rec2 = "{\"record\":{\"role\":\"Attended\",\"programmeType\":\"FDP\",\"title\":\"Names\",\"organiser\":\"O\",\"fromDate\":\"2026-01-01\",\"toDate\":\"2026-01-02\",\"hours\":8,"
+			+ "\"certificateName\":\"спец & (1).pdf\",\"attachments\":[{\"field\":\"certificateName\",\"key\":\"" + ru + "\",\"name\":\"спец & (1).pdf\",\"size\":100}]},\"submit\":false}";
+		assertEquals(200, api.call("POST", "/api/records/fdps", fac, rec2).statusCode());
+		SCAN.put(ru, "NO_THREATS_FOUND");
+		String header = java.net.URLDecoder.decode(download(fac, ru).headers().firstValue("Location").orElseThrow(), "UTF-8");
+		assertTrue(header.contains("inline; filename=\"____ & (1).pdf\"; filename*=UTF-8''%D1%81%D0%BF%D0%B5%D1%86%20%26%20%281%29.pdf"), header);
 	}
 
 	@Test

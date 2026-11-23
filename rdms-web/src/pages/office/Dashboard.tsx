@@ -34,8 +34,11 @@ export function OfficeDashboard() {
   ], [db]);
   const name = new Map(db.faculty.map((f) => [f.id, `${f.title} ${f.name}`]));
   const newOnes = items.filter((x) => x.status === 'Submitted');
-  const resubmitted = newOnes.filter((x) => isResubmission(x.history)).length;
   const inReview = items.filter((x) => x.status === 'UnderReview');
+  // The entry tiles count entries only; profile updates have their own tile, so nothing is counted twice.
+  const newEntries = newOnes.filter((x) => x.kind !== 'profiles');
+  const reviewEntries = inReview.filter((x) => x.kind !== 'profiles');
+  const resubmitted = newEntries.filter((x) => isResubmission(x.history)).length;
   const returned = items.filter((x) => x.status === 'Rework');
   const profiles = items.filter((x) => x.kind === 'profiles' && x.status !== 'Rework');
   // With the Office now: new, resubmitted and under review. Oldest first, as they should be taken.
@@ -52,8 +55,8 @@ export function OfficeDashboard() {
       <div className="dash">
         <h2 className="dash-h">Waiting for you</h2>
         <div className="tiles">
-          <Tile label="New and resubmitted" value={newOnes.length} sub={resubmitted ? `${resubmitted} resubmitted` : 'to start reviewing'} to={approvals('awaiting')} />
-          <Tile label="Under review" value={inReview.length} sub="opened, no decision yet" to={approvals('review')} />
+          <Tile label="New and resubmitted" value={newEntries.length} sub={resubmitted ? `${resubmitted} resubmitted` : 'entries to start reviewing'} to={approvals('awaiting')} />
+          <Tile label="Under review" value={reviewEntries.length} sub="entries opened, no decision yet" to={approvals('review')} />
           <Tile label="Profile updates" value={profiles.length} sub="waiting for approval" to={approvals('awaiting', 'profiles')} />
           <Tile label="Changes requested" value={returned.length} sub="with faculty to correct" to={approvals('returned')} />
           <Tile label="Oldest waiting" value={oldest ? `${days(oldest.updatedAt)} days` : '—'} sub={oldest ? `${oldest.id} · ${name.get(oldest.facultyId) ?? oldest.facultyId}` : 'nothing waiting'}

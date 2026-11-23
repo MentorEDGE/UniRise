@@ -363,6 +363,8 @@ dl.kv dd { margin: 0; word-break: break-word; }
 .cv h2 { font-size: 13.5px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.2em; color: var(--violet-600); border-bottom: 1px solid var(--border); padding-bottom: 6px; margin: 22px 0 8px; }
 .cv ol { margin: 0; padding-left: 20px; }
 .cv li { margin-bottom: 4px; line-height: 1.5; }
+/* Long unbroken text (DOIs, web links, emails) wraps instead of widening the page on phones. */
+.cv li, .cv dd, .cv p { overflow-wrap: anywhere; }
 .muted { color: var(--muted-fg); }
 .row-actions { display: flex; gap: 6px; flex-wrap: wrap; }
 .sr-only { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }

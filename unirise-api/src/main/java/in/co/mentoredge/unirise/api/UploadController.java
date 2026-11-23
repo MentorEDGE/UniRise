@@ -99,8 +99,21 @@ public class UploadController {
 		}
 		var get = presigner.presignGetObject((p) -> p.signatureDuration(Duration.ofMinutes(5))
 			.getObjectRequest((o) -> o.bucket(props.uploads().bucket()).key(key)
-				.responseContentDisposition((INLINE.contains(ext(name)) ? "inline" : "attachment") + "; filename=\"" + name.replaceAll("[\"\\\\\\r\\n]", "_") + "\"")));
+				.responseContentDisposition(disposition(name))));
 		return ResponseEntity.status(HttpStatus.FOUND).location(URI.create(get.url().toString())).header("Cache-Control", "no-store").build();
+	}
+
+	/**
+	 * Content-Disposition for a stored file: "inline" for what a browser shows, "attachment" otherwise. The header only
+	 * carries plain characters, so the name goes in twice: a plain fallback, and the exact name encoded as UTF-8
+	 * (RFC 6266/5987), which browsers prefer. A name with Cyrillic, Devanagari or other letters then downloads with its
+	 * own name; before 2026-11-23 such names made the download fail.
+	 */
+	static String disposition(String name) {
+		String n = name == null ? "file" : name.replaceAll("[\\r\\n]", " ").trim();
+		String plain = n.replaceAll("[^\\x20-\\x7E]", "_").replaceAll("[\"\\\\]", "_");
+		String exact = java.net.URLEncoder.encode(n, java.nio.charset.StandardCharsets.UTF_8).replace("+", "%20").replace("*", "%2A");
+		return (INLINE.contains(ext(n)) ? "inline" : "attachment") + "; filename=\"" + plain + "\"; filename*=UTF-8''" + exact;
 	}
 
 	/** A file link opens in a browser tab, so a refusal is a short readable page rather than JSON. */
