@@ -25,7 +25,10 @@ import software.amazon.awssdk.services.sesv2.model.SendEmailRequest;
 import software.amazon.awssdk.services.sesv2.model.SendEmailResponse;
 import software.amazon.awssdk.services.sesv2.model.SesV2Exception;
 
-/** Email to users: invitations from the Office of Research and "Forgot password?" links, through a stand-in for SES. */
+/**
+ * Email to users, through a stand-in for SES: invitations and decisions come only from the institution's own verified
+ * Office of Research address (never UniRise's); "Forgot password?" sends nothing and points to the Office.
+ */
 @SpringBootTest(webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT, properties = { "app.admin-key=test-admin", "app.session.secure-cookie=false",
 	"app.mail.from=UniRise <no-reply@dev.example>", "app.mail.configuration-set=test-set", "app.mail.site-url=https://site.example/",
 	"spring.main.allow-bean-definition-overriding=true" })
@@ -35,6 +38,8 @@ class PasswordLinksTest {
 	static final AtomicBoolean DOWN = new AtomicBoolean(false);
 	static final Pattern LINK = Pattern.compile("https://site\\.example/#/set-password\\?t=([A-Za-z0-9_-]{43})");
 	static Institution abc;
+	/** SES domain identities: domain → verified (DNS records in place). */
+	static final java.util.Map<String, Boolean> IDENTITIES = new java.util.concurrent.ConcurrentHashMap<>();
 
 	@TestConfiguration
 	static class FakeSes {
@@ -47,6 +52,20 @@ class PasswordLinksTest {
 					if (DOWN.get()) throw SesV2Exception.builder().message("Throttling").build();
 					SENT.add(r);
 					return SendEmailResponse.builder().messageId("m-" + SENT.size()).build();
+				}
+				@Override public software.amazon.awssdk.services.sesv2.model.GetEmailIdentityResponse getEmailIdentity(software.amazon.awssdk.services.sesv2.model.GetEmailIdentityRequest r) {
+					Boolean ok = IDENTITIES.get(r.emailIdentity());
+					if (ok == null) throw software.amazon.awssdk.services.sesv2.model.NotFoundException.builder().message("not found").build();
+					return software.amazon.awssdk.services.sesv2.model.GetEmailIdentityResponse.builder().verifiedForSendingStatus(ok)
+						.dkimAttributes((d) -> d.tokens("tok1", "tok2", "tok3").status(ok ? "SUCCESS" : "PENDING")).build();
+				}
+				@Override public software.amazon.awssdk.services.sesv2.model.CreateEmailIdentityResponse createEmailIdentity(software.amazon.awssdk.services.sesv2.model.CreateEmailIdentityRequest r) {
+					IDENTITIES.put(r.emailIdentity(), false);
+					return software.amazon.awssdk.services.sesv2.model.CreateEmailIdentityResponse.builder().build();
+				}
+				@Override public software.amazon.awssdk.services.sesv2.model.DeleteEmailIdentityResponse deleteEmailIdentity(software.amazon.awssdk.services.sesv2.model.DeleteEmailIdentityRequest r) {
+					IDENTITIES.remove(r.emailIdentity());
+					return software.amazon.awssdk.services.sesv2.model.DeleteEmailIdentityResponse.builder().build();
 				}
 			};
 		}
@@ -73,6 +92,10 @@ class PasswordLinksTest {
 			abc = api.provision("abc", "office@abc.example");
 			Caller o = api.signIn(abc.officeEmail(), abc.officePassword());
 			api.create("/api/org-units", o, "{\"type\":\"department\",\"name\":\"Physics\"}");
+			// ABC's Office sets its own address; its IT adds the DNS records; the Office checks again: verified.
+			assertTrue(api.call("PUT", "/api/office/mail-sender", o, "{\"address\":\"research@abc.example\"}").body().contains("\"status\":\"pending\""));
+			IDENTITIES.put("abc.example", true);
+			assertTrue(api.call("POST", "/api/office/mail-sender/check", o, null).body().contains("\"status\":\"verified\""));
 		}
 		office = api.signIn(abc.officeEmail(), abc.officePassword());
 	}
@@ -114,8 +137,12 @@ class PasswordLinksTest {
 		var m = mailTo("meera@abc.example", before);
 		assertEquals("Your UniRise account", m.content().simple().subject().data());
 		assertEquals("test-set", m.configurationSetName());
+		// From the Office of Research's own address, never UniRise's; replies go to the Office.
+		assertEquals("\"Office of Research, ABC University\" <research@abc.example>", m.fromEmailAddress());
+		assertEquals(List.of("research@abc.example"), m.replyToAddresses());
 		String mailBody = m.content().simple().body().text().data();
 		assertTrue(mailBody.contains("ABC University") && mailBody.contains("7 days") && mailBody.contains("Email: meera@abc.example") && mailBody.contains("choose your own password"), mailBody);
+		assertTrue(mailBody.contains("Kind regards,\nOffice of Research\nABC University") && !mailBody.contains("UniRise Team") && !mailBody.contains("MentorEdge"), mailBody);
 		// The temporary password in the welcome email works, and the person must change it first.
 		var tm = java.util.regex.Pattern.compile("Temporary password: (\\S+)").matcher(mailBody);
 		assertTrue(tm.find(), mailBody);
@@ -138,42 +165,70 @@ class PasswordLinksTest {
 		assertTrue(check(t).contains("expired or has already been used"));
 		assertEquals(404, api.call("POST", "/api/password/check", Caller.NOBODY, "{\"token\":\"nonsense\"}").statusCode());
 		String log = api.call("GET", "/api/office/audit", office, null).body();
-		assertTrue(log.contains("Password link emailed") && log.contains("Password set from an emailed link"), log);
+		assertTrue(log.contains("Welcome email sent") && log.contains("Password set from an emailed link") && log.contains("Email sender set"), log);
 	}
 
 	@Test
-	void forgotPasswordEmailsAResetLinkAndRevealsNothing() throws Exception {
+	void forgotPasswordSendsNothingAndPointsToTheOffice() throws Exception {
 		setup();
-		String temp = field(newUser("ravi@abc.example", false), "temporaryPassword"); // no invitation: a temporary password as before
-		Caller laptop = api.signIn("ravi@abc.example", temp);
+		String temp = field(newUser("ravi@abc.example", false), "temporaryPassword");
 		int before = SENT.size();
-
 		var unknown = api.call("POST", "/api/password/forgot", Caller.NOBODY, "{\"email\":\"nobody@abc.example\"}");
 		var known = api.call("POST", "/api/password/forgot", Caller.NOBODY, "{\"email\":\"Ravi@ABC.example\"}");
-		assertEquals(200, unknown.statusCode());
+		assertEquals(200, known.statusCode());
 		assertEquals(unknown.body(), known.body(), "the same answer whether or not the account exists");
-		var first = mailTo("ravi@abc.example", before);
-		assertEquals("Reset your UniRise password", first.content().simple().subject().data());
-		assertTrue(first.content().simple().body().text().data().contains("1 hour"));
-		Thread.sleep(300);
-		assertTrue(SENT.stream().skip(before).noneMatch(r -> r.destination().toAddresses().contains("nobody@abc.example")));
-
-		// A second request replaces the first link; the old password works until a link is used.
-		int mid = SENT.size();
-		api.call("POST", "/api/password/forgot", Caller.NOBODY, "{\"email\":\"ravi@abc.example\"}");
-		var second = mailTo("ravi@abc.example", mid);
-		assertEquals(404, set(token(first), "NewPass123"));
-		assertEquals(200, api.login("ravi@abc.example", temp).statusCode());
-		assertTrue(check(token(second)).contains("\"purpose\":\"reset\""));
-		assertEquals(200, set(token(second), "NewPass123"));
-		assertEquals(401, api.call("GET", "/api/session", laptop, null).statusCode(), "a reset signs the account out everywhere");
-		assertEquals(401, api.login("ravi@abc.example", temp).statusCode());
-		assertEquals(200, api.login("ravi@abc.example", "NewPass123").statusCode());
-
-		// A fourth request for the same email within 15 minutes is refused; browsers must send the request header.
-		assertEquals(200, api.call("POST", "/api/password/forgot", Caller.NOBODY, "{\"email\":\"ravi@abc.example\"}").statusCode()); // the third
+		assertTrue(known.body().contains("Office of Research can reset your password"), known.body());
+		Thread.sleep(500);
+		assertEquals(before, SENT.size(), "no email at all");
+		assertEquals(200, api.login("ravi@abc.example", temp).statusCode(), "the password is unchanged");
+		// Still limited (three per email in 15 minutes), and browsers must send the request header.
+		assertEquals(200, api.call("POST", "/api/password/forgot", Caller.NOBODY, "{\"email\":\"ravi@abc.example\"}").statusCode());
+		assertEquals(200, api.call("POST", "/api/password/forgot", Caller.NOBODY, "{\"email\":\"ravi@abc.example\"}").statusCode());
 		assertEquals(429, api.call("POST", "/api/password/forgot", Caller.NOBODY, "{\"email\":\"ravi@abc.example\"}").statusCode());
 		assertEquals(403, api.call("POST", "/api/password/forgot", Caller.NOBODY, "{\"email\":\"x@abc.example\"}", false).statusCode());
+	}
+
+	@Test
+	void withoutAVerifiedAddressOfItsOwnAnInstitutionSendsNoEmail() throws Exception {
+		setup();
+		var xyz = api.provision("xyz", "office@xyz.example");
+		Caller o = api.signIn(xyz.officeEmail(), xyz.officePassword());
+		api.create("/api/org-units", o, "{\"type\":\"department\",\"name\":\"Physics\"}");
+		// Not someone else's domain, and not UniRise's.
+		var taken = api.call("PUT", "/api/office/mail-sender", o, "{\"address\":\"dean@abc.example\"}");
+		assertEquals(400, taken.statusCode()); assertTrue(taken.body().contains("another institution"), taken.body());
+		var ours = api.call("PUT", "/api/office/mail-sender", o, "{\"address\":\"office@dev.example\"}");
+		assertEquals(400, ours.statusCode()); assertTrue(ours.body().contains("not UniRise"), ours.body());
+		assertEquals(400, api.call("PUT", "/api/office/mail-sender", o, "{\"address\":\"not an address\"}").statusCode());
+		// No address: the account is created, nothing is sent, and the Office is told why and sees a temporary password.
+		int before = SENT.size();
+		var r = api.call("POST", "/api/office/users", o, "{\"role\":\"management\",\"name\":\"Zoya Khan\",\"email\":\"zoya@xyz.example\",\"designation\":\"Dean\",\"invite\":true}");
+		assertTrue(r.body().contains("\"invited\":false") && r.body().contains("not verified") && r.body().contains("temporaryPassword"), r.body());
+		// Decisions without an address: no email either.
+		Caller f = api.faculty(o, "Ravi Iyer", "ravi.iyer@xyz.example", "XYZ001", "Physics");
+		String rec = "{\"record\":{\"entryType\":\"Book\",\"title\":\"Quiet book\",\"venue\":\"P\",\"year\":2024,\"authors\":[{\"kind\":\"Faculty\",\"code\":\"XYZ001\",\"name\":\"Ravi Iyer\"}]},\"submit\":true}";
+		String id = TestApi.field(api.call("POST", "/api/records/publications", f, rec).body(), "result");
+		assertEquals(200, api.call("POST", "/api/office/approvals/publications/" + id + "/review", o, "{\"decision\":\"Approved\"}").statusCode());
+		Thread.sleep(600);
+		assertEquals(before, SENT.size(), "no email for an institution without a verified address");
+		// Set up, but the DNS records are not in yet: shown to the Office, still nothing sent.
+		String set = api.call("PUT", "/api/office/mail-sender", o, "{\"address\":\"Research@XYZ.example\",\"name\":\"Research Office, XYZ\"}").body();
+		assertTrue(set.contains("\"status\":\"pending\"") && set.contains("tok1._domainkey.xyz.example") && set.contains("tok1.dkim.amazonses.com") && set.contains("research@xyz.example"), set);
+		String uid = TestApi.field(api.call("POST", "/api/office/users", o, "{\"role\":\"management\",\"name\":\"Amit Rao\",\"email\":\"amit@xyz.example\",\"designation\":\"Dean\",\"invite\":false}").body(), "id");
+		var pending = api.call("POST", "/api/office/users/" + uid + "/invite", o, "{}");
+		assertEquals(409, pending.statusCode()); assertTrue(pending.body().contains("not verified"), pending.body());
+		// Verified: emails go out from XYZ's address, with the name the Office chose.
+		IDENTITIES.put("xyz.example", true);
+		assertTrue(api.call("POST", "/api/office/mail-sender/check", o, null).body().contains("\"status\":\"verified\""));
+		assertEquals(200, api.call("POST", "/api/office/users/" + uid + "/invite", o, "{}").statusCode());
+		var m = mailTo("amit@xyz.example", before);
+		assertEquals("\"Research Office, XYZ\" <research@xyz.example>", m.fromEmailAddress());
+		// Only the Office manages it; removing it stops email and releases the domain.
+		Caller faculty = f;
+		assertEquals(403, api.call("PUT", "/api/office/mail-sender", faculty, "{\"address\":\"me@xyz.example\"}").statusCode());
+		assertEquals(200, api.call("DELETE", "/api/office/mail-sender", o, null).statusCode());
+		assertFalse(IDENTITIES.containsKey("xyz.example"), "domain released");
+		assertTrue(IDENTITIES.containsKey("abc.example"), "another institution's domain is untouched");
 	}
 
 	@Test
@@ -191,9 +246,6 @@ class PasswordLinksTest {
 		assertEquals(409, refused.statusCode());
 		assertTrue(refused.body().contains("not active"), refused.body());
 		int before = SENT.size();
-		api.call("POST", "/api/password/forgot", Caller.NOBODY, "{\"email\":\"sunil@abc.example\"}");
-		Thread.sleep(500);
-		assertEquals(before, SENT.size(), "no reset email for a suspended account");
 
 		// Reactivated: a fresh link works until it expires.
 		assertEquals(200, api.call("POST", "/api/office/users/" + id + "/status", office, "{\"status\":\"active\"}").statusCode());
@@ -233,7 +285,9 @@ class PasswordLinksTest {
 		assertEquals(200, api.call("POST", "/api/office/approvals/publications/" + id + "/review", office, "{\"decision\":\"Approved\"}").statusCode());
 		var m = mailTo("nita@abc.example", before);
 		assertEquals("Approved: publication " + id, m.content().simple().subject().data());
-		assertTrue(m.content().simple().body().text().data().contains("has approved your Publication " + id + " “Mailed book”"), m.content().simple().body().text().data());
+		assertTrue(m.content().simple().body().text().data().contains("We have approved your Publication " + id + " “Mailed book”"), m.content().simple().body().text().data());
+		assertEquals("\"Office of Research, ABC University\" <research@abc.example>", m.fromEmailAddress());
+		assertTrue(SENT.stream().noneMatch((x) -> x.fromEmailAddress().contains("dev.example")), "nothing is ever sent from UniRise's address");
 		// Profile updates are emailed the same way (here: changes requested, with what to change).
 		var pc = api.call("POST", "/api/profile-changes", nita, "{\"biodata\":{\"summary\":\"New summary\"},\"contact\":{\"email\":\"nita@abc.example\"},\"submit\":true}");
 		assertEquals(200, pc.statusCode(), pc.body());

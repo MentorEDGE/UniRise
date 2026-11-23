@@ -35,7 +35,6 @@ public class PasswordLinks {
 	static final Duration INVITE_FOR = Duration.ofDays(7), RESET_FOR = Duration.ofHours(1);
 	private static final Logger log = LoggerFactory.getLogger(PasswordLinks.class);
 	private static final SecureRandom RANDOM = new SecureRandom();
-	private static final String FOOTER = "Kind regards,\nThe UniRise Team\nUniRise by MentorEdge\n\nThis is an automated message. Please do not reply to this email.\n";
 
 	/** An account that may receive a link. */
 	public record Account(TenantInfo tenant, long userId, String email, String name, String role, String institution) {}
@@ -44,6 +43,7 @@ public class PasswordLinks {
 	private final TenantDirectory directory;
 	private final AppProperties.Mail mail;
 	private final SesV2Client ses;
+	@org.springframework.beans.factory.annotation.Autowired private InstitutionSender sender;
 
 	public PasswordLinks(@Qualifier("controlJdbc") JdbcClient control, @Qualifier("tenantJdbc") JdbcClient tenant, TenantDirectory directory, AppProperties props, Optional<SesV2Client> ses) {
 		this.control = control;
@@ -54,7 +54,7 @@ public class PasswordLinks {
 	}
 
 	/** Whether password emails can be sent here (AWS: yes; local runs: no, the Office hands out temporary passwords). */
-	public boolean on() { return ses != null && !mail.from().isEmpty() && !mail.siteUrl().isEmpty(); }
+	public boolean on() { return ses != null && !mail.siteUrl().isEmpty(); }
 
 	/** The account behind a sign-in email, if it could sign in. */
 	public Optional<Account> byEmail(String email) {
@@ -76,58 +76,54 @@ public class PasswordLinks {
 			.query((r, n) -> new Account(t.get(), userId, email, r.getString("name"), r.getString("role"), institution)).optional());
 	}
 
-	/** Creates a link and emails it. Throws if the email could not be sent (the link is then withdrawn). */
+	/** Creates a link and emails it from the institution's own address. Throws if it could not be sent (the link is then withdrawn). */
 	public void send(Account a, String purpose) { send(a, purpose, null); }
 
-	/** As above; a new account's invitation can also carry its temporary password (to be changed at first sign-in). */
+	/**
+	 * As above; a new account's invitation can also carry its temporary password (to be changed at first sign-in).
+	 * Sent from the institution's verified Office of Research address, never UniRise's (2026-11-23); without one,
+	 * nothing is sent and the caller says why. Self-service password resets are no longer emailed: the Office resets.
+	 */
 	public void send(Account a, String purpose, String temporaryPassword) {
 		if (!on()) throw new IllegalStateException("Password emails are not set up here.");
+		if (!INVITE.equals(purpose)) throw new IllegalStateException("Only invitations are emailed; the Office of Research resets passwords.");
+		if (sender.verified(a.tenant().id(), a.institution()).isEmpty()) throw new NoSender();
 		String token = issue(a, purpose);
 		String link = mail.siteUrl().replaceAll("/+$", "") + "/#/set-password?t=" + token;
 		String signIn = mail.siteUrl().replaceAll("/+$", "") + "/#/login";
 		String subject, text;
-		if (INVITE.equals(purpose) && temporaryPassword != null) {
+		if (temporaryPassword != null) {
 			subject = "Your UniRise account";
 			text = "Dear " + oneLine(a.name()) + ",\n\n"
-				+ "The Office of Research at " + oneLine(a.institution()) + " has created a UniRise account for you.\n\n"
+				+ "We have created a UniRise account for you at " + oneLine(a.institution()) + ".\n\n"
 				+ "Sign in at " + signIn + " with:\n"
 				+ "  Email: " + a.email() + "\n"
 				+ "  Temporary password: " + temporaryPassword + "\n\n"
 				+ "When you first sign in, you will be asked to choose your own password. Please do so straight away, and do not share this email.\n\n"
 				+ "Alternatively, set your own password now with this link (it can be used once and expires in 7 days):\n" + link + "\n\n"
-				+ "If you were not expecting this email, please contact your institution's Office of Research.\n\n"
-				+ FOOTER;
-		} else if (INVITE.equals(purpose)) {
+				+ "If you were not expecting this email, please let us know by replying to it.\n\n";
+		} else {
 			subject = "Set your UniRise password";
 			text = "Dear " + oneLine(a.name()) + ",\n\n"
-				+ "The Office of Research at " + oneLine(a.institution()) + " has invited you to set the password for your UniRise account.\n\n"
-				+ "To set your password, please open the link below. For your security, the link can be used only once and expires in 7 days.\n\n"
+				+ "Please set the password for your UniRise account at " + oneLine(a.institution()) + ".\n\n"
+				+ "Open the link below. For your security, it can be used only once and expires in 7 days.\n\n"
 				+ link + "\n\n"
 				+ "Once your password is set, you can sign in at " + signIn + " using this email address: " + a.email() + "\n\n"
-				+ "If you were not expecting this invitation, you can safely ignore this email, or contact your institution's Office of Research.\n\n"
-				+ FOOTER;
-		} else {
-			subject = "Reset your UniRise password";
-			text = "Dear " + oneLine(a.name()) + ",\n\n"
-				+ "We received a request to reset the password for your UniRise account at " + oneLine(a.institution()) + " (" + a.email() + ").\n\n"
-				+ "To choose a new password, please open the link below. For your security, the link can be used only once and expires in 1 hour.\n\n"
-				+ link + "\n\n"
-				+ "If you did not request a password reset, no action is needed. Your current password will remain unchanged. "
-				+ "If you receive these emails repeatedly without having asked for them, please inform your institution's Office of Research.\n\n"
-				+ FOOTER;
+				+ "If you were not expecting this, you can ignore this email, or reply to let us know.\n\n";
 		}
 		try {
-			ses.sendEmail(b -> {
-				b.fromEmailAddress(mail.from()).destination(d -> d.toAddresses(a.email()))
-					.content(c -> c.simple(m -> m.subject(s -> s.data(subject).charset("UTF-8")).body(bd -> bd.text(t -> t.data(text).charset("UTF-8")))));
-				if (!mail.configurationSet().isEmpty()) b.configurationSetName(mail.configurationSet());
-			});
+			if (!sender.send(a.tenant().id(), a.institution(), a.email(), subject, text)) throw new NoSender();
 			log.info("Password {} link emailed (institution {}, user {})", purpose, a.tenant().slug(), a.userId());
 		} catch (RuntimeException e) {
 			control.sql("DELETE FROM password_link WHERE token_hash = :h").param("h", hash(token)).update();
 			log.warn("Password {} link for institution {}, user {} could not be emailed: {}", purpose, a.tenant().slug(), a.userId(), e.getMessage());
 			throw e;
 		}
+	}
+
+	/** The institution has no verified sending address, so nothing was sent. */
+	public static class NoSender extends IllegalStateException {
+		NoSender() { super("Your institution's email address is not verified yet (Settings → Institution → Email sender), so no email was sent."); }
 	}
 
 	/** A new link for the account; any unused one stops working. Returns the secret (only ever put in the email). */

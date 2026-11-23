@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { Link, Navigate, useNavigate, useSearchParams } from 'react-router-dom';
 import { Alert, Field, Input, PageTitle, Panel, useToast } from '../../components/ui';
-import { API_BASE, changePassword, checkPasswordLink, forgotPassword, login, setPasswordFromLink, useStore } from '../../lib/store';
+import { API_BASE, changePassword, checkPasswordLink, login, setPasswordFromLink, useStore } from '../../lib/store';
 import { DEMO_PASSWORD } from '../../lib/demo';
 import { Logo } from '../../components/Logo';
 import { ThemeToggle } from '../../components/ThemeToggle';
@@ -82,7 +82,6 @@ export function Login() {
   const [pw, setPw] = useState('');
   const [show, setShow] = useState(false);
   const [forgot, setForgot] = useState(false);
-  const [sent, setSent] = useState('');
   const [error, setError] = useState('');
   const [busy, setBusy] = useState(false);
   const pwRef = useRef<HTMLInputElement>(null);
@@ -113,21 +112,11 @@ export function Login() {
           </Field>
           <div className="auth-row">
             <span className="auth-new">New to UniRise? <Link to="/talk-to-our-team">Talk to our team</Link></span>
-            <button type="button" className="link-btn" onClick={() => { setForgot(!forgot); setSent(''); }} aria-expanded={forgot}>Forgot password?</button>
+            <button type="button" className="link-btn" onClick={() => setForgot(!forgot)} aria-expanded={forgot}>Forgot password?</button>
           </div>
           {forgot && (
             <div className="forgot-box">
-              {sent
-                ? <Alert kind="success">{sent} Check your inbox (and spam folder).</Alert>
-                : <>
-                    <p className="note" style={{ margin: '0 0 8px' }}>Enter your institutional email above and we will email you a link to choose a new password.</p>
-                    <button type="button" className="btn secondary sm" disabled={busy} onClick={async () => {
-                      if (!email.trim()) { setError('Enter your email first.'); return; }
-                      setBusy(true); setError('');
-                      try { setSent(await forgotPassword(email.trim())); } catch (err) { setError((err as Error).message); } finally { setBusy(false); }
-                    }}>Email me a link</button>
-                  </>}
-              <p className="note" style={{ margin: '8px 0 0' }}>No email? Your Office of Research can also give you a temporary password.</p>
+              <p className="note" style={{ margin: 0 }}>Your institution’s <b>Office of Research</b> can reset your password. Contact them and they will email you a temporary password, which you change when you next sign in.</p>
             </div>
           )}
           <button className="btn auth-submit" type="submit" disabled={busy}>{busy ? <><span className="spinner" aria-hidden /> Signing in…</> : 'Sign In'}</button>

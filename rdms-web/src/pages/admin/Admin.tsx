@@ -1,11 +1,11 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import type { ReactNode } from 'react';
-import { useSearchParams } from 'react-router-dom';
+import { Link, useSearchParams } from 'react-router-dom';
 import { Alert, DataTable, Field, Input, Modal, NumberInput, PageTitle, Panel, Select, StatusBadge, Tabs, TextArea, useToast } from '../../components/ui';
 import type { Column } from '../../components/ui';
 import { fmtDate } from '../../lib/analytics';
 import { ENTITIES, listColumns } from '../../lib/entities';
-import { adminApi, reloadData, useStore } from '../../lib/store';
+import { adminApi, mailSender, reloadData, useStore } from '../../lib/store';
 import type { AnyRecord, Biodata, DB, EntityKind, Faculty, Grant, HistoryItem, ProfileChange, SeedMoney, Status } from '../../lib/types';
 import { DECISION_ACTIONS, ENTITY_LABEL, GRANT_OUTCOMES, STATUS_LABEL, customFieldsOf, customText, isAwaitingOffice, listOf, statusLabel } from '../../lib/types';
 import { Conversation, ProgressTracker } from '../../components/workflow';
@@ -274,6 +274,9 @@ function AddUser({ onClose, onDone }: { onClose: () => void; onDone: () => void 
   const [busy, setBusy] = useState(false);
   const [created, setCreated] = useState<{ email: string; password: string; name: string; active: boolean; invited: boolean; problem: string } | null>(null);
   const u = (p: Partial<typeof f>) => setF({ ...f, ...p });
+  // Email goes out only from the Office's own verified address (Settings → Institution → Email sender).
+  const [mailReady, setMailReady] = useState<boolean | null>(null);
+  useEffect(() => { mailSender.get().then((m) => { const ok = m.available && m.status === 'verified'; setMailReady(ok); if (!ok) setF((x) => ({ ...x, invite: false })); }).catch(() => setMailReady(false)); }, []);
   const save = async () => {
     setBusy(true);
     try {
@@ -314,7 +317,8 @@ function AddUser({ onClose, onDone }: { onClose: () => void; onDone: () => void 
                 : <Input value={f.designation} onChange={(v) => u({ designation: v })} placeholder="e.g. Director, Dean (Research), Registrar" />}
             </Field>
           </div>
-          {f.status === 'active' && <label className="check-inline" style={{ marginTop: 12 }}><input type="checkbox" checked={f.invite} onChange={(e) => u({ invite: e.target.checked })} /> Email them a link to set their own password</label>}
+          {f.status === 'active' && mailReady === false && <Alert kind="info">Your Office’s email address is not verified yet, so no email is sent: you get a temporary password to give them. Set it up under <Link to="/settings">Settings → Institution → Email sender</Link>.</Alert>}
+          {f.status === 'active' && <label className="check-inline" style={{ marginTop: 12 }}><input type="checkbox" checked={f.invite} disabled={!mailReady} onChange={(e) => u({ invite: e.target.checked })} /> Email them a link to set their own password</label>}
           <p className="note">{f.invite && f.status === 'active' ? 'They get an email with their sign-in details and a temporary password, which they must change at first sign-in.' : 'A temporary password is generated and shown once.'} For faculty, the employee code links the account to their faculty profile (created if it does not exist yet).</p>
           <div className="btn-row"><button className="btn secondary" onClick={onClose}>Cancel</button><button className="btn ok" disabled={busy} onClick={save}>{busy ? 'Creating…' : 'Create account'}</button></div>
         </>

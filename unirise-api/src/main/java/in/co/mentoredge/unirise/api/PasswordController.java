@@ -16,8 +16,8 @@ import org.springframework.web.bind.annotation.*;
 
 /**
  * Setting a password from an emailed link (public; the link's secret is the credential):
- * POST /api/password/forgot {email}            emails a reset link if the account exists and could sign in. The answer
- *                                              is the same either way, and comes before any lookup, so it reveals nothing.
+ * POST /api/password/forgot {email}            no email: tells the person to ask their Office of Research, who resets the
+ *                                              password (2026-11-23). The answer is the same for every email.
  * POST /api/password/check {token}             whether the link still works, and whose it is (for the page's heading).
  * POST /api/password/set {token, password}     sets the password, uses up the link and signs the account out everywhere.
  */
@@ -29,7 +29,7 @@ public class PasswordController {
 	public record SetPassword(String token, String password) {}
 
 	static final int PER_EMAIL = 3, PER_ADDRESS = 20;
-	static final String SENT = "If an account exists for this email, we have sent it a link to choose a new password. The link works for 1 hour.";
+	static final String ASK_OFFICE = "Your institution's Office of Research can reset your password. Contact them and they will send you a temporary password.";
 	static final String GONE = "This link has expired or has already been used. Ask for a new one with “Forgot password?” on the sign-in page, or ask your Office of Research.";
 	private static final Logger log = LoggerFactory.getLogger(PasswordController.class);
 
@@ -61,18 +61,9 @@ public class PasswordController {
 		}
 		throttle.fail(byEmail);
 		throttle.fail(byAddress);
-		background.submit(() -> {
-			try {
-				if (!links.on()) return;
-				links.byEmail(email).ifPresent(a -> {
-					links.send(a, PasswordLinks.RESET);
-					links.inTenant(a.tenant().slug(), () -> { audit.record(null, "Password reset link emailed", a.email(), "asked for on the sign-in page"); return null; });
-				});
-			} catch (RuntimeException e) {
-				log.warn("Forgot-password request could not be completed: {}", e.getMessage());
-			}
-		});
-		return ResponseEntity.ok(Map.of("ok", true, "message", SENT));
+		// No email (2026-11-23): UniRise sends nothing itself; the Office of Research resets passwords and emails the
+		// temporary one from its own address. The answer is the same for every email, so it reveals nothing.
+		return ResponseEntity.ok(Map.of("ok", true, "message", ASK_OFFICE));
 	}
 
 	@PostMapping("/check")

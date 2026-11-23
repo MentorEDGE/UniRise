@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { Alert, Field, Input, NumberInput, PageTitle, Panel, Select, Tabs, TextArea, useToast } from '../../components/ui';
 import { schoolOf } from '../../lib/org';
 import { ENTITY_LABEL, OPTION_LISTS, kindOn, listOf } from '../../lib/types';
@@ -6,7 +6,8 @@ import type { AnyRecord, CustomField, EntityKind, ListKey } from '../../lib/type
 
 const RECORD_KINDS: EntityKind[] = ['publications', 'grants', 'seedMoney', 'fdps', 'conferences', 'awards', 'ipr'];
 import { DEFAULT_WEIGHTS } from '../../lib/seed';
-import { addNotice, deleteNotice, saveSettings, useStore } from '../../lib/store';
+import { addNotice, deleteNotice, mailSender, saveSettings, useStore } from '../../lib/store';
+import type { MailSender } from '../../lib/store';
 import type { Settings, Targets, Weights } from '../../lib/types';
 import { MONTHS } from '../../lib/types';
 import { fmtDate, plural } from '../../lib/analytics';
@@ -88,6 +89,7 @@ export function InstitutionSettings() {
         {schools.length > 0 && s.departments.some((d) => !schoolOf(s, d)) && <p className="note">Choose a school for every department before saving.</p>}
       </Panel>
       <div className="btn-row"><button className="btn ok" onClick={save}>Save settings</button></div>
+      <EmailSenderSettings />
     </>
   );
 }
@@ -237,5 +239,52 @@ export function OptionListSettings() {
       </Panel>
       <div className="btn-row"><button className="btn ok" onClick={save}>Save settings</button></div>
     </>
+  );
+}
+
+/**
+ * The Office of Research's own sending address (2026-11-23). UniRise sends no email of its own: welcome emails with
+ * temporary passwords, password links and decisions go out from this address once its domain is verified with the
+ * DNS records shown, which the institution's IT adds. Until then nothing is emailed.
+ */
+export function EmailSenderSettings() {
+  const { institution } = useStore();
+  const toast = useToast();
+  const [m, setM] = useState<MailSender | null>(null);
+  const [address, setAddress] = useState('');
+  const [name, setName] = useState('');
+  const [error, setError] = useState('');
+  const [busy, setBusy] = useState(false);
+  useEffect(() => { mailSender.get().then((r) => { setM(r); setAddress(r.address ?? ''); setName(r.name ?? `Office of Research, ${institution?.name ?? ''}`); }).catch((e) => setError((e as Error).message)); }, [institution?.name]);
+  const run = async (f: () => Promise<MailSender | void>, msg: string) => {
+    setBusy(true); setError('');
+    try { const r = await f(); if (r) setM(r); else setM({ available: m?.available ?? true }); toast(msg); } catch (e) { setError((e as Error).message); } finally { setBusy(false); }
+  };
+  if (!m) return <Panel title="Email sender" size="wide">{error ? <Alert kind="error">{error}</Alert> : <p className="muted">Loading…</p>}</Panel>;
+  const STATUS: Record<string, [string, string]> = { verified: ['Approved', 'Verified: emails are sent from this address'], pending: ['Submitted', 'Waiting for the DNS records'], failed: ['Rejected', 'Not verified: check the DNS records'] };
+  return (
+    <Panel title="Email sender" size="wide">
+      <p className="note" style={{ marginTop: 0 }}>Emails to your faculty and management — welcome emails with temporary passwords, password links, and approvals, requests for changes and rejections — are sent from <b>your</b> address and signed by the Office of Research. UniRise sends no email of its own: until your address is verified, nothing is emailed and temporary passwords are shown to you instead.</p>
+      {!m.available && <Alert kind="info">Email is not available on this server.</Alert>}
+      {error && <Alert kind="error">{error}</Alert>}
+      {m.status && <p><span className={`badge ${STATUS[m.status][0]}`}>{STATUS[m.status][1]}</span>{m.checkedAt && <span className="muted"> · checked {new Date(m.checkedAt).toLocaleString('en-IN', { dateStyle: 'medium', timeStyle: 'short' })}</span>}</p>}
+      <div className="grid g2">
+        <Field label="Send from (your Office's address)" required hint="For example research@your-institution.edu.in. Replies come back to it."><Input value={address} onChange={setAddress} type="email" placeholder="research@your-institution.edu.in" /></Field>
+        <Field label="Sender name" hint="Shown as the sender in people's inboxes."><Input value={name} onChange={setName} /></Field>
+      </div>
+      <div className="btn-row left">
+        <button className="btn ok" disabled={busy || !m.available} onClick={() => run(() => mailSender.set(address, name), 'Email sender saved.')}>{m.address ? 'Save changes' : 'Save and get DNS records'}</button>
+        {m.address && <button className="btn secondary" disabled={busy} onClick={() => run(() => mailSender.check(), 'Checked again.')}>Check again</button>}
+        {m.address && <button className="btn danger" disabled={busy} onClick={() => confirm('Stop sending email? Nothing will be emailed until an address is verified again.') && run(async () => { await mailSender.remove(); setAddress(''); }, 'Email sender removed.')}>Remove</button>}
+      </div>
+      {m.status && m.status !== 'verified' && !!m.dns?.length && (
+        <>
+          <h3 className="panel-title" style={{ marginTop: 16 }}>Give these DNS records to your IT team</h3>
+          <p className="note" style={{ marginTop: 0 }}>They prove to email providers that UniRise may send for <b>{m.domain}</b>. Add them in the domain’s DNS settings; verification usually takes from a few minutes to a few hours. Then press “Check again”.</p>
+          <div className="table-wrap"><table className="data"><thead><tr><th>Type</th><th>Name</th><th>Value</th></tr></thead>
+            <tbody>{m.dns.map((r) => <tr key={r.name}><td>{r.type}</td><td style={{ overflowWrap: 'anywhere' }}><code>{r.name}</code></td><td style={{ overflowWrap: 'anywhere' }}><code>{r.value}</code></td></tr>)}</tbody></table></div>
+        </>
+      )}
+    </Panel>
   );
 }

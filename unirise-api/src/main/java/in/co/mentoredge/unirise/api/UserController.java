@@ -156,6 +156,8 @@ public class UserController {
 		if (account.isEmpty()) return "The account is not active, so no invitation was sent. Activate it first.";
 		try {
 			links.send(account.get(), PasswordLinks.INVITE, temporaryPassword);
+		} catch (PasswordLinks.NoSender e) {
+			return e.getMessage();
 		} catch (RuntimeException e) {
 			return "The invitation email could not be sent.";
 		}

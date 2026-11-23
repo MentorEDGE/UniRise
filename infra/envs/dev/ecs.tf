@@ -75,8 +75,26 @@ data "aws_iam_policy_document" "task" {
     for_each = local.ses_on ? [1] : []
     content {
       actions = ["ses:SendEmail", "ses:SendRawEmail"]
-      # In the SES sandbox the recipient's identity must be allowed too (the team's verified address).
-      resources = concat(local.email_on ? [aws_sesv2_email_identity.sender[0].arn] : [], local.domain_on ? [aws_sesv2_email_identity.domain[0].arn] : [], [aws_sesv2_configuration_set.main[0].arn], aws_sesv2_email_identity.enquiries_to[*].arn)
+      # Any identity in this account: each institution sends from its own verified domain (2026-11-23); the API only
+      # uses a domain its institution registered and verified, and never lets one institution use another's.
+      resources = ["arn:aws:ses:${var.region}:${local.account_id}:identity/*", aws_sesv2_configuration_set.main[0].arn]
+    }
+  }
+  dynamic "statement" {
+    for_each = local.ses_on ? [1] : []
+    content {
+      # The Office of Research registers its institution's sending domain (Easy DKIM), checks it and can remove it.
+      actions   = ["ses:CreateEmailIdentity", "ses:GetEmailIdentity", "ses:DeleteEmailIdentity"]
+      resources = ["arn:aws:ses:${var.region}:${local.account_id}:identity/*", aws_sesv2_configuration_set.main[0].arn]
+    }
+  }
+  dynamic "statement" {
+    for_each = local.ses_on ? [1] : []
+    content {
+      # Never UniRise's or MentorEdge's own identities, whatever the code does.
+      effect    = "Deny"
+      actions   = ["ses:CreateEmailIdentity", "ses:DeleteEmailIdentity"]
+      resources = concat(local.email_on ? [aws_sesv2_email_identity.sender[0].arn] : [], local.domain_on ? [aws_sesv2_email_identity.domain[0].arn] : [], aws_sesv2_email_identity.enquiries_to[*].arn)
     }
   }
 }

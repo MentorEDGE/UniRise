@@ -160,8 +160,14 @@ export async function changePassword(current: string, next: string): Promise<str
   } catch (e) { return (e as Error).message; }
 }
 
-/** "Forgot password?": the API emails a reset link if the account exists. Returns the message to show, or throws. */
-export const forgotPassword = async (email: string) => (await api<{ message: string }>('POST', '/password/forgot', { email })).message;
+/** The Office of Research's own sending address (UniRise sends no email of its own; none verified means no email). */
+export interface MailSender { available: boolean; address?: string; name?: string; domain?: string; status?: 'pending' | 'verified' | 'failed'; dns?: { type: string; name: string; value: string }[]; checkedAt?: string }
+export const mailSender = {
+  get: () => api<MailSender>('GET', '/office/mail-sender'),
+  set: (address: string, name: string) => api<MailSender>('PUT', '/office/mail-sender', { address, name }),
+  check: () => api<MailSender>('POST', '/office/mail-sender/check'),
+  remove: () => api<{ ok: boolean }>('DELETE', '/office/mail-sender'),
+};
 
 /** What an emailed password link is for and whose it is; throws (with the message to show) if it no longer works. */
 export const checkPasswordLink = (token: string) =>
