@@ -23,7 +23,14 @@ export const getUser = () => snapshot.user;
 
 // ---------- HTTP ----------
 
-export class ApiError extends Error { constructor(public status: number, message: string) { super(message); } }
+export class ApiError extends Error { constructor(public status: number, message: string, public code?: string) { super(message); } }
+
+/**
+ * Sensitive Office actions need the password again (2026-11-24). The layout registers a prompt (a small dialog); when
+ * the API asks, it is shown, the password is confirmed, and the action is retried once. Cancelling stops the action.
+ */
+let askPassword: (() => Promise<string | null>) | null = null;
+export const setPasswordPrompt = (f: (() => Promise<string | null>) | null) => { askPassword = f; };
 
 /**
  * Where the API is. Empty (the default): the same site that serves the pages, as with the prototype server or a proxy.
@@ -68,6 +75,23 @@ export const fileUrl = (key: string) => `${API_BASE}/api/uploads/file?key=${enco
 const UNREACHABLE = 'UniRise can’t be reached right now. Check your internet connection, or try again in a few minutes.';
 
 async function api<T = unknown>(method: string, path: string, body?: unknown): Promise<T> {
+  try {
+    return await request<T>(method, path, body);
+  } catch (e) {
+    if (!(e instanceof ApiError) || e.code !== 'confirm-password' || !askPassword) throw e;
+    for (;;) {
+      const password = await askPassword();
+      if (password === null) throw new ApiError(403, 'Cancelled: your password is needed for this action.');
+      try { await request('POST', '/account/confirm', { password }); break; } catch (c) {
+        if (c instanceof ApiError && c.status === 400) continue; // wrong password: ask again (5 wrong sign the account out)
+        throw c;
+      }
+    }
+    return request<T>(method, path, body);
+  }
+}
+
+async function request<T = unknown>(method: string, path: string, body?: unknown): Promise<T> {
   let res: Response;
   try {
     res = await fetch(`${API_BASE}/api${path}`, {
@@ -84,11 +108,14 @@ async function api<T = unknown>(method: string, path: string, body?: unknown): P
     if (res.status === 401 && snapshot.user) set({ user: null, institution: null, db: EMPTY });
     const message = (data as { error?: string } | null)?.error;
     // No JSON error from UniRise: the request never reached it (a hosting error page, or the server is down or restarting).
-    throw new ApiError(res.status, message ?? (data === null || res.status >= 502 ? UNREACHABLE : 'Something went wrong. Try again.'));
+    throw new ApiError(res.status, message ?? (data === null || res.status >= 502 ? UNREACHABLE : 'Something went wrong. Try again.'), (data as { code?: string } | null)?.code);
   }
   return (data ?? {}) as T;
 }
 export const adminApi = api;
+
+/** Each CSV export is recorded in the institution's audit log (2026-11-24); never blocks or fails the download. */
+export const reportExport = (name: string, rows: number) => { if (snapshot.user) request('POST', '/audit/export', { name, rows }).catch(() => {}); };
 
 // ---------- session ----------
 

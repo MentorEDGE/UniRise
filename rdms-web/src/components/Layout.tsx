@@ -5,6 +5,7 @@ import type { ReactNode } from 'react';
 import { adminApi, logout, useStore } from '../lib/store';
 import { Logo } from './Logo';
 import { ThemeToggle } from './ThemeToggle';
+import { ConfirmPasswordHost } from './ConfirmPassword';
 import type { EntityKind, Role, Settings } from '../lib/types';
 import { kindOn } from '../lib/types';
 
@@ -191,6 +192,7 @@ export function Layout() {
         </div>
       </header>
       <NavBar menus={menusFor(user.role, user.role === 'office' ? pending : 0, db.settings)} />
+      <ConfirmPasswordHost />
       <main><Outlet /></main>
     </div>
   );

@@ -39,6 +39,7 @@ public class PasswordController {
 	private final SignInThrottle throttle;
 	private final AdminLog audit;
 	private final ExecutorService background = Executors.newVirtualThreadPerTaskExecutor();
+	@org.springframework.beans.factory.annotation.Autowired private BreachedPasswords breached;
 
 	public PasswordController(PasswordLinks links, @Qualifier("controlJdbc") JdbcClient control, Sessions sessions, SignInThrottle throttle, AdminLog audit) {
 		this.links = links;
@@ -82,8 +83,10 @@ public class PasswordController {
 	@PostMapping("/set")
 	ResponseEntity<?> set(@RequestBody(required = false) SetPassword body) {
 		String password = body == null ? null : body.password();
-		if (links.find(body == null ? null : body.token()).isEmpty()) return AuthController.error(HttpStatus.NOT_FOUND, GONE);
-		String problem = Passwords.problem(password);
+		var found = links.find(body == null ? null : body.token());
+		if (found.isEmpty()) return AuthController.error(HttpStatus.NOT_FOUND, GONE);
+		String problem = Passwords.problem(password, found.get().account().email());
+		if (problem == null) problem = breached.problem(password);
 		if (problem != null) return AuthController.error(HttpStatus.BAD_REQUEST, problem);
 		var used = links.use(body.token());
 		if (used.isEmpty()) return AuthController.error(HttpStatus.NOT_FOUND, GONE);

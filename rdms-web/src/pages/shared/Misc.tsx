@@ -35,7 +35,7 @@ export function Account() {
         {error && <Alert kind="error">{error}</Alert>}
         <div className="grid g3">
           <Field label="Current password"><input type="password" value={pw.old} onChange={(e) => setPw({ ...pw, old: e.target.value })} autoComplete="current-password" /></Field>
-          <Field label="New password" hint="At least 8 characters, with letters and a number"><input type="password" value={pw.next} onChange={(e) => setPw({ ...pw, next: e.target.value })} autoComplete="new-password" /></Field>
+          <Field label="New password" hint="At least 10 characters, with letters and a number. Avoid common words and passwords used on other sites."><input type="password" value={pw.next} onChange={(e) => setPw({ ...pw, next: e.target.value })} autoComplete="new-password" /></Field>
           <Field label="Repeat new password"><input type="password" value={pw.again} onChange={(e) => setPw({ ...pw, again: e.target.value })} autoComplete="new-password" /></Field>
         </div>
         <div className="btn-row"><button className="btn" onClick={change}>Change password</button></div>
@@ -181,7 +181,7 @@ export function SetPassword() {
             {error && <Alert kind="error">{error}</Alert>}
             <form onSubmit={submit} noValidate>
               <input type="email" value={link.email} autoComplete="username" readOnly hidden />
-              <Field label="New password" hint="At least 8 characters, with letters and a number">
+              <Field label="New password" hint="At least 10 characters, with letters and a number. Avoid common words and passwords used on other sites.">
                 <div className="pw-wrap">
                   <input type={show ? 'text' : 'password'} value={pw.next} onChange={(e) => { setPw({ ...pw, next: e.target.value }); setError(''); }} autoComplete="new-password" autoFocus />
                   <button type="button" className="pw-toggle" onClick={() => setShow(!show)} aria-pressed={show} aria-label={show ? 'Hide password' : 'Show password'}>{show ? 'Hide' : 'Show'}</button>

@@ -418,19 +418,18 @@ export function AdminUsers() {
 // ---------------- Audit ----------------
 
 export function AdminAudit() {
-  const audit = useAdmin<{ id: number; at: string; actor_name: string | null; action: string; target: string | null; institution_id: string | null; detail: string }[]>('/office/audit');
+  const audit = useAdmin<{ id: number; at: string; actorName: string | null; action: string; target: string | null; detail: string | null }[]>('/office/audit');
   return (
     <>
-      <PageTitle sub="Every sign-in, account change and approval decision, newest first.">Audit Log</PageTitle>
+      <PageTitle sub="Every sign-in, account change, file opened and data export, newest first. Entries cannot be changed or deleted.">Audit Log</PageTitle>
       <Panel size="wide">
         {audit.error && <Alert kind="error">{audit.error}</Alert>}
         <DataTable rows={audit.data ?? []} rowKey={(r) => String(r.id)} exportName="platform_audit" pageSize={25} columns={[
           { key: 'at', label: 'When', value: (r) => r.at, render: (r) => `${fmtDate(r.at)} ${r.at.slice(11, 16)}` },
-          { key: 'who', label: 'By', value: (r) => r.actor_name ?? '—' },
+          { key: 'who', label: 'By', value: (r) => r.actorName ?? '—' },
           { key: 'action', label: 'Action', value: (r) => r.action },
           { key: 'target', label: 'Target', value: (r) => r.target ?? '' },
-          { key: 'inst', label: 'Institution', value: (r) => r.institution_id ?? '' },
-          { key: 'detail', label: 'Detail', value: (r) => r.detail },
+          { key: 'detail', label: 'Detail', value: (r) => r.detail ?? '' },
         ]} />
       </Panel>
     </>

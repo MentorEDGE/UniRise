@@ -10,6 +10,6 @@ import org.springframework.web.bind.annotation.RestControllerAdvice;
 class ErrorAdvice {
 	@ExceptionHandler(RuleException.class)
 	ResponseEntity<Map<String, String>> rule(RuleException e) {
-		return ResponseEntity.status(e.status).body(Map.of("error", e.getMessage()));
+		return ResponseEntity.status(e.status).body(e.code == null ? Map.of("error", e.getMessage()) : Map.of("error", e.getMessage(), "code", e.code));
 	}
 }

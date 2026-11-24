@@ -13,6 +13,10 @@ import org.springframework.security.crypto.password.Pbkdf2PasswordEncoder;
  */
 public final class Passwords {
 	private static final String ID = "pbkdf2@SpringSecurity_v5_8";
+	/** Words found in the most common leaked passwords, and the site's own name (2026-11-24). */
+	static final java.util.List<String> COMMON = java.util.List.of("password", "passw0rd", "unirise", "mentoredge", "qwerty", "asdfgh", "zxcvbn", "letmein",
+		"welcome", "admin", "iloveyou", "monkey", "dragon", "football", "princess", "sunshine", "abc123", "123456", "654321", "111111", "000000",
+		"changeme", "secret", "india123", "test123", "default");
 	private static final PasswordEncoder ENCODER = new DelegatingPasswordEncoder(ID, Map.of(ID, Pbkdf2PasswordEncoder.defaultsForSpringSecurity_v5_8()));
 	private static final SecureRandom RANDOM = new SecureRandom();
 	/** Checked against when the email is unknown, so timing does not reveal which accounts exist. */
@@ -31,11 +35,25 @@ public final class Passwords {
 
 	/** Null when acceptable, otherwise the message to show. */
 	public static String problem(String password) {
-		if (password == null || password.length() < 8) return "Use at least 8 characters.";
+		if (password == null || password.length() < 10) return "Use at least 10 characters.";
 		if (password.length() > 128) return "Use at most 128 characters.";
 		if (!password.matches(".*[A-Za-z].*") || !password.matches(".*\\d.*")) return "Use letters and at least one number.";
+		String p = password.toLowerCase(java.util.Locale.ROOT).replaceAll("[^a-z0-9]", "");
+		if (p.chars().distinct().count() < 5 || COMMON.stream().anyMatch(p::contains))
+			return "This password is too easy to guess. Avoid common words, the name of the site and long runs of the same characters.";
 		return null;
 	}
+
+	/** As above, and not built from the person's own email address. */
+	public static String problem(String password, String email) {
+		String p = problem(password);
+		if (p != null || email == null) return p;
+		String local = email.toLowerCase(java.util.Locale.ROOT).replaceAll("@.*", "").replaceAll("[^a-z0-9]", "");
+		if (local.length() >= 4 && password.toLowerCase(java.util.Locale.ROOT).replaceAll("[^a-z0-9]", "").contains(local))
+			return "Do not use your email address in your password.";
+		return null;
+	}
+
 
 	/** A temporary password: 12 characters, shown once to the Office of Research. Always has letters and a digit. */
 	public static String randomPassword() {

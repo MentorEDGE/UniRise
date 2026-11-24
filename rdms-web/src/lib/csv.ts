@@ -1,3 +1,5 @@
+import { reportExport } from './store';
+
 export function toCsv(header: string[], rows: (string | number)[][]): string {
   const esc = (v: string | number) => {
     let s = String(v ?? '');
@@ -8,6 +10,7 @@ export function toCsv(header: string[], rows: (string | number)[][]): string {
 }
 
 export function downloadCsv(name: string, header: string[], rows: (string | number)[][]) {
+  reportExport(name, rows.length);
   const blob = new Blob(['﻿' + toCsv(header, rows)], { type: 'text/csv;charset=utf-8' });
   const a = document.createElement('a');
   a.href = URL.createObjectURL(blob);

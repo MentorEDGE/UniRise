@@ -35,6 +35,7 @@ public class AuthController {
 	private final AdminLog log;
 	private final AccessService access;
 	private final boolean secureCookie;
+	@org.springframework.beans.factory.annotation.Autowired private BreachedPasswords breached;
 
 	public AuthController(@Qualifier("tenantJdbc") JdbcClient tenant, @Qualifier("controlJdbc") JdbcClient control, TenantDirectory directory, Sessions sessions,
 		SignInThrottle throttle, AdminLog log, AccessService access, @Value("${app.session.secure-cookie:true}") boolean secureCookie) {
@@ -129,11 +130,43 @@ public class AuthController {
 		String hash = control.sql("SELECT password_hash FROM account_login WHERE institution_id = :i AND app_user_id = :u").param("i", institutionId).param("u", a.userId())
 			.query(String.class).optional().orElse(null);
 		if (body == null || !Passwords.matches(body.current(), hash)) return error(HttpStatus.BAD_REQUEST, "Current password is incorrect.");
-		String problem = Passwords.problem(body.next());
+		String email = control.sql("SELECT email FROM account_login WHERE institution_id = :i AND app_user_id = :u").param("i", institutionId).param("u", a.userId()).query(String.class).optional().orElse(null);
+		String problem = Passwords.problem(body.next(), email);
+		if (problem == null && Passwords.matches(body.next(), hash)) problem = "Choose a password different from your current one.";
+		if (problem == null) problem = breached.problem(body.next());
 		if (problem != null) return error(HttpStatus.BAD_REQUEST, problem);
 		control.sql("UPDATE account_login SET password_hash = :h, password_set_at = now(), must_change_password = false WHERE institution_id = :i AND app_user_id = :u")
 			.param("h", Passwords.hash(body.next())).param("i", institutionId).param("u", a.userId()).update();
 		sessions.endAll(institutionId, a.userId(), (String) req.getAttribute("sessionHash"));
+		return ResponseEntity.ok(Map.of("ok", true));
+	}
+
+	record Confirm(String password) {}
+
+	/**
+	 * Confirms the password in this session, unlocking sensitive actions for 5 minutes (2026-11-24). Five wrong
+	 * passwords within 15 minutes sign the account out everywhere: a borrowed browser cannot keep guessing.
+	 */
+	@PostMapping("/account/confirm")
+	ResponseEntity<?> confirm(@RequestBody(required = false) Confirm body, HttpServletRequest req) {
+		Actor a = access.actor(req);
+		if (a.userId() == null) return ResponseEntity.ok(Map.of("ok", true));
+		long institutionId = (Long) req.getAttribute("institutionId");
+		String key = "confirm:" + institutionId + ":" + a.userId();
+		String hash = control.sql("SELECT password_hash FROM account_login WHERE institution_id = :i AND app_user_id = :u").param("i", institutionId).param("u", a.userId())
+			.query(String.class).optional().orElse(null);
+		if (body == null || !Passwords.matches(body.password(), hash)) {
+			throttle.fail(key);
+			if (throttle.blocked(key, 5)) {
+				sessions.endAll(institutionId, a.userId(), null);
+				throttle.clear(key);
+				log.record(a, "Signed out after wrong passwords", a.name(), "5 wrong passwords when confirming a sensitive action");
+				return error(HttpStatus.UNAUTHORIZED, "Too many wrong passwords. You have been signed out.");
+			}
+			return error(HttpStatus.BAD_REQUEST, "That password is incorrect.");
+		}
+		throttle.clear(key);
+		sessions.confirm((String) req.getAttribute("sessionHash"));
 		return ResponseEntity.ok(Map.of("ok", true));
 	}
 

@@ -112,6 +112,7 @@ public class InstitutionController {
 	@PutMapping("/faculty/{id}")
 	Map<String, Object> saveFaculty(@PathVariable String id, @RequestBody(required = false) Map<String, Object> b, HttpServletRequest req) {
 		Actor a = access.actor(req);
+		if (a.isAdmin()) access.requireRecentPassword(req); // official details, leaving or returning
 		Map<String, Object> before = profiles.facultyById(id).orElse(null);
 		profiles.saveFaculty(a, id, b == null ? Map.of() : b);
 		if (b != null && Boolean.FALSE.equals(b.get("active"))) { // former faculty: their sessions end at once (they also can no longer act, see AccessService)
@@ -263,6 +264,19 @@ public class InstitutionController {
 		Map<String, Object> out = new LinkedHashMap<>();
 		for (String k : ref.keySet()) out.put(k, in.containsKey(k) ? (Json.dbl(in.get(k)) < 0 ? (Object) 0L : Json.num(in.get(k))) : ref.get(k));
 		return out;
+	}
+
+	/**
+	 * The website reports each CSV export so it appears in the audit log (2026-11-24): who exported which list, how many
+	 * rows. Exports are built in the browser from data the person may already see; this makes bulk copying visible.
+	 */
+	@PostMapping("/audit/export")
+	Map<String, Object> exported(@RequestBody(required = false) Map<String, Object> b, HttpServletRequest req) {
+		Actor a = access.actor(req);
+		String what = Json.str(b == null ? null : b.get("name"), 120).replaceAll("[\\p{Cntrl}]", " ").trim();
+		long rows = Math.max(0, Math.min(10_000_000, (long) Json.dbl(b == null ? null : b.get("rows"))));
+		log.record(a, "Data exported", what.isEmpty() ? "CSV" : what, rows + " rows");
+		return Json.of("ok", true);
 	}
 
 	@PostMapping("/notices")

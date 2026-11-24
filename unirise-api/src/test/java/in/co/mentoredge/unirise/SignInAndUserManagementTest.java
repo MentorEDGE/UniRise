@@ -76,6 +76,7 @@ class SignInAndUserManagementTest {
 		String cookie = r.headers().allValues("Set-Cookie").stream().filter(h -> h.startsWith("unirise_sid=")).findFirst().orElseThrow();
 		assertTrue(cookie.contains("HttpOnly") && cookie.contains("SameSite=Strict") && cookie.contains("Path=/"), cookie);
 		Caller office = new Caller(null, TestApi.sessionCookie(r));
+		TestApi.PASSWORDS.put(office.cookie(), abc.officePassword()); // lets the helper confirm it for sensitive actions
 		assertTrue(api.call("GET", "/api/session", office, null).body().contains("office@abc.example"));
 		assertEquals(401, api.call("GET", "/api/session", Caller.NOBODY, null).statusCode());
 		assertEquals(401, api.login("office@abc.example", "wrong-password1").statusCode());
@@ -212,14 +213,14 @@ class SignInAndUserManagementTest {
 		String pw = api.createUser(office, "management", "Treasurer", "treasurer@abc.example", null, null)[1];
 		Caller laptop = api.signIn("treasurer@abc.example", pw);
 		Caller phone = api.signIn("treasurer@abc.example", pw);
-		assertEquals(400, api.call("POST", "/api/account/password", laptop, "{\"current\":\"wrong\",\"next\":\"NewPass123\"}").statusCode());
+		assertEquals(400, api.call("POST", "/api/account/password", laptop, "{\"current\":\"wrong\",\"next\":\"Quiet-Falcon-206\"}").statusCode());
 		assertEquals(400, api.call("POST", "/api/account/password", laptop, "{\"current\":\"" + pw + "\",\"next\":\"short\"}").statusCode());
 		assertEquals(400, api.call("POST", "/api/account/password", laptop, "{\"current\":\"" + pw + "\",\"next\":\"onlyletters\"}").statusCode());
-		assertEquals(200, api.call("POST", "/api/account/password", laptop, "{\"current\":\"" + pw + "\",\"next\":\"NewPass123\"}").statusCode());
+		assertEquals(200, api.call("POST", "/api/account/password", laptop, "{\"current\":\"" + pw + "\",\"next\":\"Quiet-Falcon-206\"}").statusCode());
 		assertEquals(200, api.call("GET", "/api/session", laptop, null).statusCode());
 		assertEquals(401, api.call("GET", "/api/session", phone, null).statusCode());
 		assertEquals(401, api.login("treasurer@abc.example", pw).statusCode());
-		assertEquals(200, api.login("treasurer@abc.example", "NewPass123").statusCode());
+		assertEquals(200, api.login("treasurer@abc.example", "Quiet-Falcon-206").statusCode());
 	}
 
 	@Test

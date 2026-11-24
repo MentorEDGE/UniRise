@@ -53,6 +53,7 @@ public class UploadController {
 	private final AppProperties props;
 	private final S3Presigner presigner;
 	private final software.amazon.awssdk.services.s3.S3Client s3;
+	@org.springframework.beans.factory.annotation.Autowired private AdminLog audit;
 
 	public UploadController(AccessService access, DataSlice slice, AppProperties props, java.util.Optional<S3Presigner> presigner, java.util.Optional<software.amazon.awssdk.services.s3.S3Client> s3) {
 		this.access = access;
@@ -100,6 +101,7 @@ public class UploadController {
 		var get = presigner.presignGetObject((p) -> p.signatureDuration(Duration.ofMinutes(5))
 			.getObjectRequest((o) -> o.bucket(props.uploads().bucket()).key(key)
 				.responseContentDisposition(disposition(name))));
+		audit.record(a, "File opened", name, "entry " + Json.str(found.get("recordId"), 40)); // who opened which file, in the audit log (2026-11-24)
 		return ResponseEntity.status(HttpStatus.FOUND).location(URI.create(get.url().toString())).header("Cache-Control", "no-store").build();
 	}
 
@@ -128,7 +130,7 @@ public class UploadController {
 	static Map<String, Object> attachedTo(Map<String, Object> data, String key) {
 		for (String kind : KINDS) for (Object r : Json.arr(data.get(kind))) for (Object f : Json.arr(Json.obj(r).get("attachments"))) {
 			Map<String, Object> file = Json.obj(f);
-			if (key.equals(file.get("key"))) return file;
+			if (key.equals(file.get("key"))) { var out = new java.util.LinkedHashMap<>(file); out.put("recordId", Json.obj(r).get("id")); return out; }
 		}
 		return null;
 	}

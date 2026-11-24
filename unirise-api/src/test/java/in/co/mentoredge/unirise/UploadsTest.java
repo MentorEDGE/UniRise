@@ -184,6 +184,8 @@ class UploadsTest {
 		SCAN.put(doc, "NO_THREATS_FOUND");
 		String loc = download(fac, doc).headers().firstValue("Location").orElseThrow();
 		assertTrue(java.net.URLDecoder.decode(loc, "UTF-8").contains("attachment; filename=\"report.docx\""), loc);
+		String audit = api.call("GET", "/api/office/audit", office, null).body();
+		assertTrue(audit.contains("File opened") && audit.contains("report.docx") && audit.contains("Lata Menon"), "who opened which file is in the audit log");
 		// A name with non-Latin letters: a plain fallback plus the exact name encoded as UTF-8 (it used to fail to download).
 		String ru = TestApi.field(upload(api, fac, "спец & (1).pdf", "", 100, 200), "key");
 		String rec2 = "{\"record\":{\"role\":\"Attended\",\"programmeType\":\"FDP\",\"title\":\"Names\",\"organiser\":\"O\",\"fromDate\":\"2026-01-01\",\"toDate\":\"2026-01-02\",\"hours\":8,"

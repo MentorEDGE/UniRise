@@ -9,3 +9,16 @@
     Header set Cache-Control "public, max-age=604800"
   </FilesMatch>
 </IfModule>
+
+# Security headers (2026-11-24). Content-Security-Policy: only this site's own scripts and styles run; pages may call
+# the UniRise API (*.mentoredge.co.in) and upload straight to the private S3 bucket; images may also be inline
+# previews (data:/blob:) and the landing page's Unsplash photo. Nothing may frame the site, and plugins are off.
+<IfModule mod_headers.c>
+  Header always set Content-Security-Policy "default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self' data: blob: https://images.unsplash.com; font-src 'self' data:; media-src 'self'; connect-src 'self' https://*.mentoredge.co.in https://*.s3.ap-south-1.amazonaws.com https://*.s3.amazonaws.com; frame-ancestors 'none'; base-uri 'self'; form-action 'self'; object-src 'none'; upgrade-insecure-requests"
+  Header always set Strict-Transport-Security "max-age=31536000; includeSubDomains"
+  Header always set X-Frame-Options "DENY"
+  Header always set X-Content-Type-Options "nosniff"
+  Header always set Referrer-Policy "strict-origin-when-cross-origin"
+  Header always set Permissions-Policy "camera=(), microphone=(), geolocation=(), payment=(), usb=(), serial=(), bluetooth=()"
+  Header always set Cross-Origin-Opener-Policy "same-origin"
+</IfModule>

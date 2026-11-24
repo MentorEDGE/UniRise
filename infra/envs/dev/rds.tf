@@ -29,7 +29,7 @@ resource "aws_db_instance" "main" {
   copy_tags_to_snapshot               = true
   apply_immediately                   = true
 
-  deletion_protection       = false # dev only; turn on for staging and production
+  deletion_protection       = true # on since 2026-11-24: the database cannot be deleted until this is set back to false and applied
   skip_final_snapshot       = false
   final_snapshot_identifier = "${local.name}-final"
 }

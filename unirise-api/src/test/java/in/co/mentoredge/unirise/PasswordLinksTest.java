@@ -150,7 +150,7 @@ class PasswordLinksTest {
 		assertEquals(200, first.statusCode(), first.body());
 		assertTrue(first.body().contains("\"mustChangePassword\":true"), first.body());
 		Caller meera = new Caller(null, TestApi.sessionCookie(first));
-		assertEquals(200, api.call("POST", "/api/account/password", meera, "{\"current\":\"" + tm.group(1) + "\",\"next\":\"Changed123\"}").statusCode());
+		assertEquals(200, api.call("POST", "/api/account/password", meera, "{\"current\":\"" + tm.group(1) + "\",\"next\":\"Gentle-Orchard-73\"}").statusCode());
 		assertTrue(api.call("GET", "/api/session", meera, null).body().contains("\"mustChangePassword\":false"));
 		String t = token(m);
 		String info = check(t);

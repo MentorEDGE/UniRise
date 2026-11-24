@@ -48,6 +48,17 @@ public class Sessions {
 		return s;
 	}
 
+	/** The password was just confirmed in this session (sensitive actions are allowed for a few minutes). */
+	public void confirm(String tokenHash) {
+		control.sql("UPDATE user_token SET confirmed_at = now() WHERE token_hash = :h AND kind = 'session'").param("h", tokenHash).update();
+	}
+
+	/** Whether this session confirmed the password within the last {@code seconds}. */
+	public boolean confirmedWithin(String tokenHash, int seconds) {
+		return tokenHash != null && control.sql("SELECT count(*) FROM user_token WHERE token_hash = :h AND kind = 'session' AND confirmed_at > now() - make_interval(secs => :s)")
+			.param("h", tokenHash).param("s", seconds).query(Long.class).single() > 0;
+	}
+
 	public void end(String token) {
 		if (token != null && !token.isEmpty() && token.length() <= 200) control.sql("DELETE FROM user_token WHERE token_hash = :h AND kind = 'session'").param("h", Provisioner.hash(token)).update();
 	}

@@ -40,6 +40,21 @@ final class TestApi {
 
 	/** csrf=false leaves out the X-RDMS header, as a cross-site form would. */
 	HttpResponse<String> call(String method, String path, Caller c, String body, boolean csrf) throws Exception {
+		var r = send(method, path, c, body, csrf);
+		// Sensitive Office actions need the password confirmed recently (2026-11-24): confirm it and retry, as the website does.
+		String pw = c == null || c.cookie() == null ? null : PASSWORDS.get(c.cookie());
+		if (r.statusCode() == 403 && r.body().contains("confirm-password") && pw != null && !path.equals("/api/account/confirm")) {
+			var ok = send("POST", "/api/account/confirm", c, "{\"password\":\"" + pw + "\"}", true);
+			assertEquals(200, ok.statusCode(), ok.body());
+			r = send(method, path, c, body, csrf);
+		}
+		return r;
+	}
+
+	/** Passwords of the sessions signed in through this helper, so it can confirm them when asked. */
+	static final java.util.Map<String, String> PASSWORDS = new java.util.concurrent.ConcurrentHashMap<>();
+
+	private HttpResponse<String> send(String method, String path, Caller c, String body, boolean csrf) throws Exception {
 		var b = HttpRequest.newBuilder(URI.create(url(path)))
 			.method(method, body == null ? HttpRequest.BodyPublishers.noBody() : HttpRequest.BodyPublishers.ofString(body)).header("Content-Type", "application/json");
 		if (c != null && c.apiKey() != null) b.header("X-API-Key", c.apiKey());
@@ -59,7 +74,9 @@ final class TestApi {
 	Caller signIn(String email, String password) throws Exception {
 		var r = login(email, password);
 		assertEquals(200, r.statusCode(), r.body());
-		return new Caller(null, sessionCookie(r));
+		Caller c = new Caller(null, sessionCookie(r));
+		PASSWORDS.put(c.cookie(), password);
+		return c;
 	}
 
 	static String sessionCookie(HttpResponse<String> r) {
