@@ -35,6 +35,7 @@ public class UserController {
 	private final InstitutionSettings settings;
 	private final Profiles profiles;
 	private final PasswordLinks links;
+	@org.springframework.beans.factory.annotation.Autowired private TwoStep twoStep;
 
 	public UserController(@Qualifier("tenantJdbc") JdbcClient db, @Qualifier("controlJdbc") JdbcClient control, AccessService access, TenantDirectory directory, Sessions sessions, AdminLog log,
 		InstitutionSettings settings, Profiles profiles, PasswordLinks links) {
@@ -52,6 +53,10 @@ public class UserController {
 	@GetMapping("/users")
 	List<Map<String, Object>> users(HttpServletRequest req) {
 		access.requireAdmin(access.actor(req));
+		// For the access review (2026-11-24): last sign-in and whether two-step sign-in is on, from the control plane.
+		Map<Long, Object[]> logins = new java.util.HashMap<>();
+		control.sql("SELECT app_user_id, last_sign_in_at, totp_enabled_at IS NOT NULL FROM account_login WHERE institution_id = :i").param("i", institutionId())
+			.query((r, n) -> logins.put(r.getLong(1), new Object[] { r.getTimestamp(2) == null ? null : r.getTimestamp(2).toInstant().toString(), r.getBoolean(3) })).list();
 		return db.sql("""
 			SELECT u.*, r.employee_id FROM app_user u LEFT JOIN researcher r ON r.id = u.researcher_id
 			ORDER BY u.role = 'office' DESC, u.role, u.name""").query((r, n) -> {
@@ -73,6 +78,10 @@ public class UserController {
 			m.put("reviewedAt", r.getTimestamp("created_at").toInstant().toString());
 			m.put("reviewNote", nz(r.getString("status_reason")));
 			m.put("affiliationVerified", true);
+			Object[] l = logins.get(r.getLong("id"));
+			m.put("lastSignInAt", l == null ? null : l[0]);
+			m.put("twoStep", l != null && (Boolean) l[1]);
+			m.put("twoStepRequired", twoStep.required(r.getString("role"), r.getString("created_by")));
 			return m;
 		}).list();
 	}
@@ -201,6 +210,20 @@ public class UserController {
 	}
 
 	/** Issues a new temporary password (shown once) and signs the person out everywhere. */
+	/** Someone lost their phone: the Office turns their two-step sign-in off; they set it up again at their next sign-in. */
+	@PostMapping("/users/{id}/reset-2fa")
+	ResponseEntity<?> resetTwoStep(@PathVariable long id, HttpServletRequest req) {
+		Actor office = access.actor(req);
+		access.requireAdmin(office);
+		if (office.userId() != null && office.userId() == id) return AuthController.error(HttpStatus.BAD_REQUEST, "Another Office of Research account, or the UniRise team, must reset your own two-step sign-in.");
+		var t = db.sql("SELECT email FROM app_user WHERE id = :u").param("u", id).query(String.class).optional();
+		if (t.isEmpty()) return AuthController.error(HttpStatus.NOT_FOUND, "User not found.");
+		twoStep.reset(institutionId(), id);
+		sessions.endAll(institutionId(), id, null);
+		log.record(office, "Two-step sign-in reset", t.get(), "they set it up again at their next sign-in");
+		return ResponseEntity.ok(Map.of("ok", true));
+	}
+
 	@PostMapping("/users/{id}/reset-password")
 	ResponseEntity<?> resetPassword(@PathVariable long id, HttpServletRequest req) {
 		Actor office = access.actor(req);

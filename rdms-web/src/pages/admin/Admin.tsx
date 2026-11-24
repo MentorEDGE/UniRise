@@ -12,6 +12,8 @@ import { Conversation, ProgressTracker } from '../../components/workflow';
 import { hasSchools, inUnit, unitFieldLabel, unitOptions } from '../../lib/org';
 
 interface Account {
+  /** Access review (2026-11-24): when they last signed in, and two-step sign-in. */
+  lastSignInAt?: string | null; twoStep?: boolean; twoStepRequired?: boolean;
   id: string; email: string; name: string; title: string; role: 'office' | 'management' | 'faculty'; status: string; institutionId: string | null; facultyId: string | null;
   designation: string; department: string; employeeCode: string; note: string; requestedAt: string; reviewedBy: string | null; reviewedAt: string | null; reviewNote: string; affiliationVerified: boolean;
 }
@@ -332,19 +334,23 @@ function AddUser({ onClose, onDone }: { onClose: () => void; onDone: () => void 
 const ROLE_ORDER: Record<string, number> = { office: 0, management: 1, faculty: 2 };
 /** "Faculty B" before "Faculty AA": placeholder letter codes sort like spreadsheet columns, real names alphabetically. */
 const nameKey = (n: string) => n.split(' ').map((w) => (/^[A-Z]{1,3}$/.test(w) ? `${w.length}${w}` : w)).join(' ');
+/** Active accounts not used for 90 days or more (or never): candidates to suspend in the access review. */
+const UNUSED_DAYS = 90;
+const unused = (a: Account) => a.status === 'active' && (!a.lastSignInAt || Date.now() - Date.parse(a.lastSignInAt) >= UNUSED_DAYS * 86_400_000);
 const byRoleThenName = (a: Account, b: Account) => (ROLE_ORDER[a.role] ?? 9) - (ROLE_ORDER[b.role] ?? 9) || nameKey(a.name).localeCompare(nameKey(b.name), undefined, { numeric: true, sensitivity: 'base' });
 
 export function AdminUsers() {
   const users = useAdmin<Account[]>('/office/users');
   const toast = useToast();
-  const [filter, setFilter] = useState({ role: '', status: '', q: '' });
+  const { user: me } = useStore();
+  const [filter, setFilter] = useState({ role: '', status: '', q: '', unused: false });
   const [open, setOpen] = useState<Account | null>(null);
   const [reason, setReason] = useState('');
   const [error, setError] = useState('');
   const [temp, setTemp] = useState('');
   const [adding, setAdding] = useState(false);
   const all = useMemo(() => [...(users.data ?? [])].sort(byRoleThenName), [users.data]);
-  const rows = all.filter((a) => (!filter.role || a.role === filter.role)
+  const rows = all.filter((a) => (!filter.role || a.role === filter.role) && (!filter.unused || unused(a))
     && (!filter.status || a.status === filter.status) && (!filter.q || `${a.name} ${a.email} ${a.employeeCode}`.toLowerCase().includes(filter.q.toLowerCase())));
   const act = async (path: string, body: unknown, msg: string) => {
     try {
@@ -361,8 +367,11 @@ export function AdminUsers() {
     { key: 'desig', label: 'Designation', value: (a) => a.designation || '—' },
     { key: 'profile', label: 'Emp. code', value: (a) => a.facultyId ?? '—', className: 'nowrap' },
     { key: 'status', label: 'Status', value: (a) => a.status, render: (a) => statusBadge(a.status) },
+    { key: 'last', label: 'Last sign-in', value: (a) => a.lastSignInAt ?? '', render: (a) => (a.lastSignInAt ? fmtDate(a.lastSignInAt) : <span className="muted">Never</span>), className: 'nowrap' },
+    { key: 'twostep', label: 'Two-step', value: (a) => (a.twoStep ? 'On' : a.twoStepRequired ? 'Off (required)' : 'Off'), render: (a) => (a.twoStep ? <span className="badge Approved">On</span> : a.twoStepRequired ? <span className="badge Rework" title="Set up at their next sign-in">Not set up</span> : <span className="muted">Off</span>) },
     { key: 'added', label: 'Added', value: (a) => a.requestedAt, render: (a) => fmtDate(a.requestedAt), className: 'nowrap' },
   ];
+  const unusedCount = all.filter(unused).length;
   return (
     <>
       <PageTitle sub="Create and manage faculty and Top-Level Management accounts for your institution.">User Management</PageTitle>
@@ -377,7 +386,11 @@ export function AdminUsers() {
         <div className="filters" style={{ marginBottom: 10 }}>
           <Field label="Search"><Input value={filter.q} onChange={(v) => setFilter({ ...filter, q: v })} placeholder="Name, email or code" type="search" /></Field>
           <Field label="Status"><Select value={filter.status} onChange={(v) => setFilter({ ...filter, status: v })} options={['active', 'suspended', 'deactivated']} placeholder="All" /></Field>
+          <label className="check-inline" style={{ alignSelf: 'end', marginBottom: 8 }} title={`Access review: active accounts with no sign-in for ${UNUSED_DAYS} days or more`}>
+            <input type="checkbox" checked={filter.unused} onChange={(e) => setFilter({ ...filter, unused: e.target.checked })} /> Not signed in for {UNUSED_DAYS}+ days ({unusedCount})
+          </label>
         </div>
+        {filter.unused && <Alert kind="info">Access review: {unusedCount} active account{unusedCount === 1 ? '' : 's'} not used for {UNUSED_DAYS} days or more. Suspend any that are no longer needed; they can be reactivated later.</Alert>}
         {users.error && <Alert kind="error">{users.error}</Alert>}
         <DataTable rows={rows} columns={cols} rowKey={(a) => a.id} onRowClick={(a) => { setOpen(a); setTemp(''); setError(''); }} exportName="platform_users" pageSize={20} />
         <p className="note">Add faculty and Top-Level Management accounts here; each person is emailed a link to set their own password (or you give them a temporary one). Open a user to suspend, deactivate, reactivate, change role, email them a new password link or create a temporary password. Suspending signs them out at once. Office of Research accounts are provisioned by the UniRise team.</p>
@@ -392,7 +405,14 @@ export function AdminUsers() {
             <dt>Status</dt><dd>{statusBadge(open.status)}</dd>
             {open.facultyId && <><dt>Faculty profile</dt><dd>{open.facultyId}</dd></>}
             <dt>Approved</dt><dd>{open.reviewedBy ?? '—'} {fmtDate(open.reviewedAt ?? '')}</dd>
+            <dt>Last sign-in</dt><dd>{open.lastSignInAt ? fmtDate(open.lastSignInAt) : 'Never'}</dd>
+            <dt>Two-step sign-in</dt><dd>{open.twoStep ? 'On' : open.twoStepRequired ? 'Not set up yet (asked at their next sign-in)' : 'Off'}</dd>
           </dl>
+          {open.twoStep && open.id !== me?.id && (
+            <div className="btn-row left" style={{ marginTop: 10 }}>
+              <button className="btn secondary" onClick={() => confirm(`Reset two-step sign-in for ${open.name}? Use this if they lost their phone. They are signed out and set it up again at their next sign-in.`) && act(`/office/users/${open.id}/reset-2fa`, {}, `Two-step sign-in reset for ${open.name}.`)}>Reset two-step sign-in</button>
+            </div>
+          )}
           {open.role !== 'office' && (
             <div className="panel" style={{ marginTop: 14 }}>
               <Field label="Reason" hint="Needed to suspend or deactivate; recorded in the audit log"><Input value={reason} onChange={setReason} /></Field>

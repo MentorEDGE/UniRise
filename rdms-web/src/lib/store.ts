@@ -143,13 +143,47 @@ export async function bootstrap() {
   set({ ready: true });
 }
 
-async function signInWith(path: string, email: string, password: string): Promise<string | null> {
+type SessionBody = { user: User; institution: Institution | null };
+/** The password was right, and the account uses two-step sign-in: 'verify' asks for a code, 'setup' sets up the app first. */
+export interface TwoStepNeeded { twoStep: 'verify' | 'setup'; email: string }
+
+/** null when signed in; a message when refused; or the second step still to do (2026-11-24). */
+async function signInWith(path: string, email: string, password: string): Promise<string | null | TwoStepNeeded> {
   try {
-    await enter(await api<{ user: User; institution: Institution | null }>('POST', path, { email, password }));
+    const r = await api<SessionBody & Partial<TwoStepNeeded>>('POST', path, { email, password });
+    if (r.twoStep) return { twoStep: r.twoStep, email: r.email ?? email };
+    await enter(r);
     return null;
   } catch (e) { return (e as Error).message; }
 }
 export const login = (email: string, password: string) => signInWith('/login', email, password);
+
+/** The second step of signing in: a code from the authenticator app, or a recovery code. */
+export async function twoStepVerify(code: string): Promise<string | null> {
+  try { await enter(await api<SessionBody>('POST', '/login/2fa', { code })); return null; } catch (e) { return (e as Error).message; }
+}
+/** First sign-in where two-step is required: the app's secret, and the otpauth link for the QR code. */
+export const twoStepSetupAtSignIn = () => api<{ secret: string; uri: string }>('POST', '/login/2fa/setup');
+/** Confirms the app with its first code. The session starts; the recovery codes are shown before entering UniRise. */
+export const twoStepEnableAtSignIn = (code: string) => api<SessionBody & { recoveryCodes: string[] }>('POST', '/login/2fa/enable', { code });
+export const finishSignIn = (s: SessionBody) => enter(s);
+
+/** Two-step sign-in from the Account page. */
+export const accountTwoStep = {
+  state: () => api<{ enabled: boolean; required: boolean; recoveryCodesLeft: number }>('GET', '/account/2fa'),
+  setup: () => api<{ secret: string; uri: string }>('POST', '/account/2fa/setup'),
+  enable: (code: string) => api<{ recoveryCodes: string[] }>('POST', '/account/2fa/enable', { code }),
+  disable: (code: string) => api<{ ok: boolean }>('POST', '/account/2fa/disable', { code }),
+  newRecoveryCodes: (code: string) => api<{ recoveryCodes: string[] }>('POST', '/account/2fa/recovery-codes', { code }),
+};
+
+/** The person's signed-in browsers. */
+export interface SignedInDevice { id: string; signedInAt: string; lastActiveAt: string | null; browser: string | null; ip: string | null; current: boolean }
+export const signedInDevices = {
+  list: () => api<SignedInDevice[]>('GET', '/account/sessions'),
+  endOthers: () => api<{ ok: boolean }>('POST', '/account/sessions/end-others', {}),
+  end: (id: string) => api<{ ok: boolean }>('POST', `/account/sessions/${encodeURIComponent(id)}/end`, {}),
+};
 
 export async function logout() {
   try { await api('POST', '/logout'); } finally { set({ user: null, institution: null, db: EMPTY }); }
@@ -177,7 +211,7 @@ export const checkPasswordLink = (token: string) =>
   api<{ purpose: 'invite' | 'reset'; email: string; name: string; institution: string }>('POST', '/password/check', { token });
 
 /** Sets the password from an emailed link, then signs in with it. Returns an error message, or null. */
-export async function setPasswordFromLink(token: string, password: string): Promise<string | null> {
+export async function setPasswordFromLink(token: string, password: string): Promise<string | null | TwoStepNeeded> {
   try {
     const r = await api<{ email: string }>('POST', '/password/set', { token, password });
     return await login(r.email, password);

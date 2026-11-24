@@ -1,0 +1,27 @@
+# Security checks (2026-11-24, free): every push to dev and every pull request is scanned for secrets accidentally
+# committed (gitleaks, run from its container so no licence is needed), and the website's npm packages are checked for
+# known high-severity vulnerabilities. Also runs weekly, as new vulnerabilities are published.
+name: security
+on:
+  push: { branches: [dev] }
+  pull_request:
+  schedule: [{ cron: "30 3 * * 1" }]
+permissions: { contents: read }
+jobs:
+  secrets:
+    name: No secrets in the code
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with: { fetch-depth: 0 }
+      - name: Scan with gitleaks
+        run: docker run --rm -v "$PWD:/repo" zricethezav/gitleaks:v8.21.2 git /repo --redact --no-banner --exit-code 1
+  website-packages:
+    name: Website packages have no known high-severity vulnerabilities
+    runs-on: ubuntu-latest
+    defaults: { run: { working-directory: rdms-web } }
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with: { node-version: "20" }
+      - run: npm audit --omit=dev --audit-level=high

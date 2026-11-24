@@ -6,6 +6,7 @@ import in.co.mentoredge.unirise.tenancy.TenantInfo;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
 import java.util.LinkedHashMap;
+import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import org.springframework.beans.factory.annotation.Qualifier;
@@ -35,6 +36,7 @@ public class AuthController {
 	private final AdminLog log;
 	private final AccessService access;
 	private final boolean secureCookie;
+	@org.springframework.beans.factory.annotation.Autowired private TwoStep twoStep;
 	@org.springframework.beans.factory.annotation.Autowired private BreachedPasswords breached;
 
 	public AuthController(@Qualifier("tenantJdbc") JdbcClient tenant, @Qualifier("controlJdbc") JdbcClient control, TenantDirectory directory, Sessions sessions,
@@ -98,11 +100,172 @@ public class AuthController {
 			.param("u", found.get().userId()).query(Boolean.class).optional().orElse(false)))) {
 			return error(HttpStatus.FORBIDDEN, "Your faculty profile is inactive. Contact your institution’s Office of Research.");
 		}
+		// Two-step sign-in (2026-11-24): required for the Office and management, optional for faculty. The password alone
+		// only opens a 10-minute half-finished sign-in; the session starts after the authenticator code.
+		long userId = found.get().userId();
+		String createdBy = inTenant(inst.get(), () -> tenant.sql("SELECT coalesce(created_by, '') FROM app_user WHERE id = :u").param("u", userId).query(String.class).single());
+		var two = twoStep.state(found.get().institutionId(), userId);
+		if (two.enabled() || twoStep.required((String) user.get("role"), createdBy)) {
+			sessions.endTwoStep(twoStepCookie(req));
+			setTwoStepCookie(res, sessions.startTwoStep(found.get().institutionId(), userId), 600);
+			return ResponseEntity.ok(Json.of("twoStep", two.enabled() ? "verify" : "setup", "email", email));
+		}
+		return finish(inst.get(), user, userId, req, res);
+	}
+
+	/** Starts the session once every check (and, where used, the authenticator code) has passed. */
+	private ResponseEntity<?> finish(TenantInfo inst, Map<String, Object> user, long userId, HttpServletRequest req, HttpServletResponse res) {
 		sessions.end(ApiKeyFilter.cookie(req)); // a new sign-in replaces any session this browser had
 		boolean office = Actor.OFFICE.equals(user.get("role"));
-		setCookie(res, sessions.start(found.get().institutionId(), found.get().userId(), office), -1);
-		if (office) inTenant(inst.get(), () -> { log.record(new Actor(found.get().userId(), null, false, Actor.OFFICE, (String) user.get("name")), "Office of Research signed in", email, null); return null; });
-		return ResponseEntity.ok(sessionBody(inst.get(), user));
+		setCookie(res, sessions.start(inst.id(), userId, office, req.getHeader("User-Agent"), req.getRemoteAddr()), -1);
+		control.sql("UPDATE account_login SET last_sign_in_at = now() WHERE institution_id = :i AND app_user_id = :u").param("i", inst.id()).param("u", userId).update();
+		String email = (String) user.get("email");
+		if (office) inTenant(inst, () -> { log.record(new Actor(userId, null, false, Actor.OFFICE, (String) user.get("name")), "Office of Research signed in", email, null); return null; });
+		return ResponseEntity.ok(sessionBody(inst, user));
+	}
+
+	// ---------- two-step sign-in during sign-in (the half-finished sign-in cookie) ----------
+
+	static final String TWO_STEP_COOKIE = "unirise_2fa";
+	record Code(String code) {}
+
+	private String twoStepCookie(HttpServletRequest req) {
+		if (req.getCookies() == null) return null;
+		for (var c : req.getCookies()) if (TWO_STEP_COOKIE.equals(c.getName())) return c.getValue();
+		return null;
+	}
+
+	private void setTwoStepCookie(HttpServletResponse res, String value, int maxAge) {
+		res.addHeader("Set-Cookie", TWO_STEP_COOKIE + "=" + value + "; HttpOnly; SameSite=Strict; Path=/api/login" + (secureCookie ? "; Secure" : "") + "; Max-Age=" + maxAge);
+	}
+
+	/** The half-finished sign-in, re-checked (the account or institution may have changed in the 10 minutes). */
+	private record Pending(TenantInfo inst, long userId, Map<String, Object> user, String email) {}
+
+	private Optional<Pending> pending(HttpServletRequest req) {
+		var p = sessions.readTwoStep(twoStepCookie(req));
+		if (p.isEmpty()) return Optional.empty();
+		var inst = directory.byId(p.get()[0]).filter((t) -> t.status().matches("sandbox|pilot|active"));
+		if (inst.isEmpty()) return Optional.empty();
+		Map<String, Object> user = inTenant(inst.get(), () -> userRow(p.get()[1]));
+		if (user == null || !"active".equals(user.get("status"))) return Optional.empty();
+		return Optional.of(new Pending(inst.get(), p.get()[1], user, (String) user.get("email")));
+	}
+
+	private static final String EXPIRED = "Your sign-in has expired. Enter your email and password again.";
+
+	/** The code from the authenticator app (or a recovery code) completes the sign-in. */
+	@PostMapping("/login/2fa")
+	ResponseEntity<?> twoStepVerify(@RequestBody(required = false) Code body, HttpServletRequest req, HttpServletResponse res) {
+		var p = pending(req);
+		if (p.isEmpty()) return error(HttpStatus.UNAUTHORIZED, EXPIRED);
+		String key = "2fa:" + p.get().inst().id() + ":" + p.get().userId();
+		if (throttle.blocked(key, 5)) { sessions.endTwoStep(twoStepCookie(req)); return error(HttpStatus.TOO_MANY_REQUESTS, "Too many wrong codes. Try again in 15 minutes."); }
+		if (!twoStep.verify(p.get().inst().id(), p.get().userId(), body == null ? null : body.code())) {
+			throttle.fail(key);
+			return error(HttpStatus.BAD_REQUEST, "That code is not right. Enter the newest 6-digit code from your authenticator app, or a recovery code.");
+		}
+		throttle.clear(key);
+		sessions.endTwoStep(twoStepCookie(req));
+		setTwoStepCookie(res, "", 0);
+		return finish(p.get().inst(), p.get().user(), p.get().userId(), req, res);
+	}
+
+	/** First sign-in with two-step required: a new secret for the authenticator app (shown as a QR code). */
+	@PostMapping("/login/2fa/setup")
+	ResponseEntity<?> twoStepSetupAtSignIn(HttpServletRequest req) {
+		var p = pending(req);
+		if (p.isEmpty()) return error(HttpStatus.UNAUTHORIZED, EXPIRED);
+		String secret = twoStep.setup(p.get().inst().id(), p.get().userId());
+		return ResponseEntity.ok(Json.of("secret", secret, "uri", TwoStep.uri(p.get().email(), secret)));
+	}
+
+	/** The first code confirms the app: two-step sign-in is on, the recovery codes are shown once, and the session starts. */
+	@PostMapping("/login/2fa/enable")
+	ResponseEntity<?> twoStepEnableAtSignIn(@RequestBody(required = false) Code body, HttpServletRequest req, HttpServletResponse res) {
+		var p = pending(req);
+		if (p.isEmpty()) return error(HttpStatus.UNAUTHORIZED, EXPIRED);
+		var codes = twoStep.enable(p.get().inst().id(), p.get().userId(), body == null ? null : body.code());
+		inTenant(p.get().inst(), () -> { log.record(new Actor(p.get().userId(), null, false, (String) p.get().user().get("role"), (String) p.get().user().get("name")), "Two-step sign-in turned on", p.get().email(), null); return null; });
+		sessions.endTwoStep(twoStepCookie(req));
+		setTwoStepCookie(res, "", 0);
+		@SuppressWarnings("unchecked") var out = (ResponseEntity<Map<String, Object>>) finish(p.get().inst(), p.get().user(), p.get().userId(), req, res);
+		Map<String, Object> body2 = new java.util.LinkedHashMap<>(out.getBody());
+		body2.put("recoveryCodes", codes);
+		return ResponseEntity.status(out.getStatusCode()).headers(out.getHeaders()).body(body2);
+	}
+
+	// ---------- two-step sign-in and signed-in devices, from the Account page ----------
+
+	private long[] me(HttpServletRequest req) {
+		Actor a = access.actor(req);
+		if (a.userId() == null) throw RuleException.invalid("The service key has no account.");
+		return new long[] { (Long) req.getAttribute("institutionId"), a.userId() };
+	}
+
+	@GetMapping("/account/2fa")
+	Map<String, Object> twoStepState(HttpServletRequest req) {
+		long[] m = me(req);
+		var s = twoStep.state(m[0], m[1]);
+		String role = access.actor(req).role();
+		String createdBy = tenant.sql("SELECT coalesce(created_by, '') FROM app_user WHERE id = :u").param("u", m[1]).query(String.class).single();
+		return Json.of("enabled", s.enabled(), "required", twoStep.required(role, createdBy), "recoveryCodesLeft", s.recoveryLeft());
+	}
+
+	@PostMapping("/account/2fa/setup")
+	Map<String, Object> twoStepSetup(HttpServletRequest req) {
+		long[] m = me(req);
+		String secret = twoStep.setup(m[0], m[1]);
+		String email = control.sql("SELECT email FROM account_login WHERE institution_id = :i AND app_user_id = :u").param("i", m[0]).param("u", m[1]).query(String.class).single();
+		return Json.of("secret", secret, "uri", TwoStep.uri(email, secret));
+	}
+
+	@PostMapping("/account/2fa/enable")
+	Map<String, Object> twoStepEnable(@RequestBody(required = false) Code body, HttpServletRequest req) {
+		long[] m = me(req);
+		var codes = twoStep.enable(m[0], m[1], body == null ? null : body.code());
+		log.record(access.actor(req), "Two-step sign-in turned on", access.actor(req).name(), null);
+		return Json.of("recoveryCodes", codes);
+	}
+
+	/** Faculty may turn it off again (with a current code); the Office and management may not. */
+	@PostMapping("/account/2fa/disable")
+	ResponseEntity<?> twoStepDisable(@RequestBody(required = false) Code body, HttpServletRequest req) {
+		long[] m = me(req);
+		Actor a = access.actor(req);
+		String createdBy = tenant.sql("SELECT coalesce(created_by, '') FROM app_user WHERE id = :u").param("u", m[1]).query(String.class).single();
+		if (twoStep.required(a.role(), createdBy)) return error(HttpStatus.FORBIDDEN, "Two-step sign-in is required for your role.");
+		if (!twoStep.verify(m[0], m[1], body == null ? null : body.code())) return error(HttpStatus.BAD_REQUEST, "That code is not right.");
+		twoStep.reset(m[0], m[1]);
+		log.record(a, "Two-step sign-in turned off", a.name(), null);
+		return ResponseEntity.ok(Map.of("ok", true));
+	}
+
+	/** New recovery codes (the old ones stop working); needs a current code. */
+	@PostMapping("/account/2fa/recovery-codes")
+	ResponseEntity<?> recoveryCodes(@RequestBody(required = false) Code body, HttpServletRequest req) {
+		long[] m = me(req);
+		if (!twoStep.verify(m[0], m[1], body == null ? null : body.code())) return error(HttpStatus.BAD_REQUEST, "That code is not right.");
+		return ResponseEntity.ok(Json.of("recoveryCodes", twoStep.newRecoveryCodes(m[0], m[1])));
+	}
+
+	@GetMapping("/account/sessions")
+	List<Map<String, Object>> mySessions(HttpServletRequest req) {
+		long[] m = me(req);
+		return sessions.list(m[0], m[1], (String) req.getAttribute("sessionHash"));
+	}
+
+	@PostMapping("/account/sessions/end-others")
+	Map<String, Object> endOtherSessions(HttpServletRequest req) {
+		long[] m = me(req);
+		sessions.endAll(m[0], m[1], (String) req.getAttribute("sessionHash"));
+		return Map.of("ok", true);
+	}
+
+	@PostMapping("/account/sessions/{id}/end")
+	ResponseEntity<?> endSession(@PathVariable String id, HttpServletRequest req) {
+		long[] m = me(req);
+		return sessions.endOne(m[0], m[1], id) ? ResponseEntity.ok(Map.of("ok", true)) : error(HttpStatus.NOT_FOUND, "That session has already ended.");
 	}
 
 	@PostMapping("/logout")

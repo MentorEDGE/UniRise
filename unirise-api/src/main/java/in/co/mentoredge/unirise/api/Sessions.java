@@ -33,6 +33,56 @@ public class Sessions {
 		return token;
 	}
 
+	/** As {@link #start}, remembering the browser and address so the person can recognise their signed-in devices. */
+	public String start(long institutionId, long userId, boolean office, String userAgent, String ip) {
+		String token = start(institutionId, userId, office);
+		control.sql("UPDATE user_token SET user_agent = :ua, ip = :ip WHERE token_hash = :h")
+			.param("ua", userAgent == null ? null : userAgent.substring(0, Math.min(300, userAgent.length()))).param("ip", ip).param("h", Provisioner.hash(token)).update();
+		return token;
+	}
+
+	/** The half-finished sign-in between the password and the authenticator code: 10 minutes, nothing else allowed. */
+	public String startTwoStep(long institutionId, long userId) {
+		String token = Provisioner.randomHex(32);
+		control.sql("INSERT INTO user_token(token_hash, institution_id, app_user_id, kind, expires_at) VALUES (:h, :i, :u, 'mfa', now() + interval '10 minutes')")
+			.param("h", Provisioner.hash(token)).param("i", institutionId).param("u", userId).update();
+		return token;
+	}
+
+	/** {institutionId, userId} of a live half-finished sign-in. */
+	public Optional<long[]> readTwoStep(String token) {
+		if (token == null || token.isEmpty() || token.length() > 200) return Optional.empty();
+		return control.sql("SELECT institution_id, app_user_id FROM user_token WHERE token_hash = :h AND kind = 'mfa' AND expires_at > now()")
+			.param("h", Provisioner.hash(token)).query((r, n) -> new long[] { r.getLong(1), r.getLong(2) }).optional();
+	}
+
+	public void endTwoStep(String token) {
+		if (token != null && !token.isEmpty() && token.length() <= 200) control.sql("DELETE FROM user_token WHERE token_hash = :h AND kind = 'mfa'").param("h", Provisioner.hash(token)).update();
+	}
+
+	/** The person's signed-in browsers, most recently active first; id is a short prefix of the stored hash. */
+	public java.util.List<java.util.Map<String, Object>> list(long institutionId, long userId, String currentHash) {
+		return control.sql("SELECT token_hash, created_at, last_seen_at, user_agent, ip FROM user_token WHERE kind = 'session' AND institution_id = :i AND app_user_id = :u"
+			+ " AND expires_at > now() AND (idle_seconds IS NULL OR last_seen_at + make_interval(secs => idle_seconds) > now()) ORDER BY last_seen_at DESC")
+			.param("i", institutionId).param("u", userId).query((r, n) -> {
+				java.util.Map<String, Object> m = new java.util.LinkedHashMap<>();
+				m.put("id", r.getString("token_hash").substring(0, 16));
+				m.put("signedInAt", r.getTimestamp("created_at").toInstant().toString());
+				m.put("lastActiveAt", r.getTimestamp("last_seen_at") == null ? null : r.getTimestamp("last_seen_at").toInstant().toString());
+				m.put("browser", r.getString("user_agent"));
+				m.put("ip", r.getString("ip"));
+				m.put("current", r.getString("token_hash").equals(currentHash));
+				return m;
+			}).list();
+	}
+
+	/** Signs out one of the person's own sessions, by its id. */
+	public boolean endOne(long institutionId, long userId, String id) {
+		if (id == null || !id.matches("[0-9a-f]{16}")) return false;
+		return control.sql("DELETE FROM user_token WHERE kind = 'session' AND institution_id = :i AND app_user_id = :u AND left(token_hash, 16) = :id")
+			.param("i", institutionId).param("u", userId).param("id", id).update() > 0;
+	}
+
 	/** A live session for this cookie value, with its idle timeout slid forward; empty when expired or unknown. */
 	public Optional<Session> read(String token) {
 		if (token == null || token.isEmpty() || token.length() > 200) return Optional.empty();

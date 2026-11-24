@@ -98,6 +98,14 @@ public class UploadController {
 				default -> { return page(HttpStatus.FORBIDDEN, "This file could not be checked for viruses (" + scan.toLowerCase().replace('_', ' ') + "). Upload it again, or contact your Office of Research."); }
 			}
 		}
+		if (s3 != null) { // the file's contents must match its type (2026-11-24)
+			byte[] head = head(key);
+			if (head == null) return page(HttpStatus.NOT_FOUND, "This file is no longer stored. Upload it again.");
+			if (!contentMatches(ext(name), head)) {
+				audit.record(a, "File refused: contents do not match its type", name, "entry " + Json.str(found.get("recordId"), 40));
+				return page(HttpStatus.FORBIDDEN, "This file's contents do not match its type (." + ext(name) + "), so it cannot be opened. Upload the original file again.");
+			}
+		}
 		var get = presigner.presignGetObject((p) -> p.signatureDuration(Duration.ofMinutes(5))
 			.getObjectRequest((o) -> o.bucket(props.uploads().bucket()).key(key)
 				.responseContentDisposition(disposition(name))));
@@ -116,6 +124,42 @@ public class UploadController {
 		String plain = n.replaceAll("[^\\x20-\\x7E]", "_").replaceAll("[\"\\\\]", "_");
 		String exact = java.net.URLEncoder.encode(n, java.nio.charset.StandardCharsets.UTF_8).replace("+", "%20").replace("*", "%2A");
 		return (INLINE.contains(ext(n)) ? "inline" : "attachment") + "; filename=\"" + plain + "\"; filename*=UTF-8''" + exact;
+	}
+
+	/**
+	 * Whether a file's first bytes match its extension (2026-11-24): a renamed program or web page is not served as a
+	 * document. Text and CSV have no signature, so they only must not look binary (no NUL bytes) or be a program.
+	 */
+	static boolean contentMatches(String ext, byte[] b) {
+		java.util.function.Predicate<String> starts = (sig) -> {
+			byte[] s = sig.getBytes(java.nio.charset.StandardCharsets.ISO_8859_1);
+			if (b.length < s.length) return false;
+			for (int i = 0; i < s.length; i++) if (b[i] != s[i]) return false;
+			return true;
+		};
+		return switch (ext) {
+			case "pdf" -> starts.test("%PDF-");
+			case "png" -> starts.test("\u0089PNG\r\n\u001a\n");
+			case "jpg", "jpeg" -> starts.test("ÿØÿ");
+			case "gif" -> starts.test("GIF87a") || starts.test("GIF89a");
+			case "webp" -> starts.test("RIFF") && b.length >= 12 && new String(b, 8, 4, java.nio.charset.StandardCharsets.ISO_8859_1).equals("WEBP");
+			case "heic" -> b.length >= 12 && new String(b, 4, 4, java.nio.charset.StandardCharsets.ISO_8859_1).equals("ftyp");
+			case "tif", "tiff" -> starts.test("II*\u0000") || starts.test("MM\u0000*");
+			case "docx", "xlsx", "pptx", "odt", "ods", "odp", "zip" -> starts.test("PK\u0003\u0004") || starts.test("PK\u0005\u0006");
+			case "doc", "xls", "ppt" -> starts.test("ÐÏ\u0011à¡±\u001aá");
+			case "rtf" -> starts.test("{\\rtf");
+			case "txt", "csv" -> { for (byte x : b) if (x == 0) yield false; yield !starts.test("MZ") && !starts.test("\u007fELF"); }
+			default -> false;
+		};
+	}
+
+	/** The first bytes of a stored file (32 at most), or null when it is missing. */
+	byte[] head(String key) {
+		try {
+			return s3.getObjectAsBytes((g) -> g.bucket(props.uploads().bucket()).key(key).range("bytes=0-31")).asByteArray();
+		} catch (software.amazon.awssdk.services.s3.model.NoSuchKeyException e) {
+			return null;
+		}
 	}
 
 	/** A file link opens in a browser tab, so a refusal is a short readable page rather than JSON. */

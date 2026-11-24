@@ -27,7 +27,7 @@ import org.springframework.web.filter.OncePerRequestFilter;
  */
 public class ApiKeyFilter extends OncePerRequestFilter {
 	/** Public: no session yet. The handlers find the tenant from the account. */
-	static final Set<String> PUBLIC = Set.of("/api/login", "/api/admin/login", "/api/logout", "/api/enquiries", "/api/password/forgot", "/api/password/check", "/api/password/set");
+	static final Set<String> PUBLIC = Set.of("/api/login", "/api/login/2fa", "/api/login/2fa/setup", "/api/login/2fa/enable", "/api/admin/login", "/api/logout", "/api/enquiries", "/api/password/forgot", "/api/password/check", "/api/password/set");
 	/** Old-model modules with no screen, parked by decision D3 (2026-11-14): tables kept, endpoints not exposed. */
 	static final List<String> PARKED = List.of("/api/milestones", "/api/meeting-logs", "/api/reminders", "/api/progress-settings", "/api/projects", "/api/periods", "/api/relationships", "/api/role-grants", "/api/auth/");
 

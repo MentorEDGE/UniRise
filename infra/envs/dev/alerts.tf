@@ -115,7 +115,8 @@ resource "aws_cloudwatch_metric_alarm" "db_cpu" {
   ok_actions          = local.alarm_actions
 }
 
-# A database admin job (nightly backup-all, or one started by hand) ended with an error.
+# A database admin job (nightly backup-all, or one started by hand) ended with an error, or could not start at all (for
+# example its image is missing: such a task never runs, so it has no exit code; missed until 2026-11-24).
 resource "aws_cloudwatch_event_rule" "backup_failed" {
   count       = var.alert_email != "" ? 1 : 0
   name        = "${local.name}-db-job-failed"
@@ -127,7 +128,10 @@ resource "aws_cloudwatch_event_rule" "backup_failed" {
       clusterArn = [aws_ecs_cluster.main.arn]
       group      = ["family:${aws_ecs_task_definition.db_admin.family}"]
       lastStatus = ["STOPPED"]
-      containers = { exitCode = [{ "anything-but" = 0 }] }
+      "$or" = [
+        { containers = { exitCode = [{ "anything-but" = 0 }] } },
+        { stopCode = ["TaskFailedToStart"] }
+      ]
     }
   })
 }

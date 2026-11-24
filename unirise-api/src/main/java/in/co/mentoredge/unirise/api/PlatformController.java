@@ -17,6 +17,9 @@ public class PlatformController {
 	private final Migrator migrator;
 	private final TenantLifecycle lifecycle;
 	private final DemoData demo;
+	@org.springframework.beans.factory.annotation.Autowired private TwoStep twoStep;
+	@org.springframework.beans.factory.annotation.Autowired private Sessions sessions;
+	@org.springframework.beans.factory.annotation.Autowired @org.springframework.beans.factory.annotation.Qualifier("controlJdbc") private org.springframework.jdbc.core.simple.JdbcClient control;
 
 	public PlatformController(Provisioner provisioner, Migrator migrator, TenantLifecycle lifecycle, DemoData demo) {
 		this.demo = demo;
@@ -50,6 +53,22 @@ public class PlatformController {
 	List<TenantLifecycle.Summary> tenants(jakarta.servlet.http.HttpServletRequest req) {
 		operatorOnly(req);
 		return lifecycle.list();
+	}
+
+	record ResetTwoStep(String email) {}
+
+	/** Operator only: an Office of Research account lost its phone and no other Office account can reset it (2026-11-24). */
+	@PostMapping("/tenants/{slug}/reset-2fa")
+	java.util.Map<String, Object> resetTwoStep(@PathVariable String slug, @RequestBody ResetTwoStep b, jakarta.servlet.http.HttpServletRequest req) {
+		operatorOnly(req);
+		String email = b == null || b.email() == null ? "" : b.email().trim().toLowerCase();
+		var acc = control.sql("SELECT a.institution_id, a.app_user_id FROM account_login a JOIN institution i ON i.id = a.institution_id WHERE a.email = :e AND i.slug = :s")
+			.param("e", email).param("s", slug).query((r, n) -> new long[] { r.getLong(1), r.getLong(2) }).optional()
+			.orElseThrow(() -> new org.springframework.web.server.ResponseStatusException(org.springframework.http.HttpStatus.NOT_FOUND, "No such account"));
+		twoStep.reset(acc[0], acc[1]);
+		sessions.endAll(acc[0], acc[1], null);
+		control.sql("INSERT INTO platform_access_log(actor, action, institution_id, reason) VALUES ('platform', 'two-step sign-in reset', :i, :e)").param("i", acc[0]).param("e", email).update();
+		return java.util.Map.of("ok", true);
 	}
 
 	@PostMapping("/tenants/{slug}/status")

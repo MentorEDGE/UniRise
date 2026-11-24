@@ -27,6 +27,19 @@ class UploadsTest {
 	static final HttpClient NO_REDIRECT = HttpClient.newBuilder().followRedirects(HttpClient.Redirect.NEVER).build();
 	/** The virus-scan tag of each object, as GuardDuty would set it (A9). */
 	static final java.util.Map<String, String> SCAN = new java.util.concurrent.ConcurrentHashMap<>();
+	/** Stored file contents; by default a genuine header for the file's extension. */
+	static final java.util.Map<String, byte[]> CONTENT = new java.util.concurrent.ConcurrentHashMap<>();
+
+	static byte[] genuine(String key) {
+		String ext = key.substring(key.lastIndexOf('.') + 1).toLowerCase();
+		return switch (ext) {
+			case "pdf" -> "%PDF-1.4\n".getBytes();
+			case "png" -> new byte[] { (byte) 0x89, 'P', 'N', 'G', '\r', '\n', 0x1a, '\n' };
+			case "jpg", "jpeg" -> new byte[] { (byte) 0xff, (byte) 0xd8, (byte) 0xff, (byte) 0xe0 };
+			case "docx", "xlsx", "pptx", "zip", "odt", "ods", "odp" -> new byte[] { 'P', 'K', 3, 4, 20, 0 };
+			default -> "plain text".getBytes();
+		};
+	}
 	/** Keys deleted from the bucket (files no entry uses any more). */
 	static final java.util.Set<String> DELETED = java.util.concurrent.ConcurrentHashMap.newKeySet();
 	/** What the bucket listing returns (key → last modified), for the abandoned-upload sweep. */
@@ -46,6 +59,10 @@ class UploadsTest {
 				@Override public software.amazon.awssdk.services.s3.model.DeleteObjectResponse deleteObject(software.amazon.awssdk.services.s3.model.DeleteObjectRequest r) {
 					DELETED.add(r.key());
 					return software.amazon.awssdk.services.s3.model.DeleteObjectResponse.builder().build();
+				}
+				@Override public software.amazon.awssdk.core.ResponseBytes<software.amazon.awssdk.services.s3.model.GetObjectResponse> getObjectAsBytes(software.amazon.awssdk.services.s3.model.GetObjectRequest r) {
+					byte[] all = CONTENT.getOrDefault(r.key(), genuine(r.key()));
+					return software.amazon.awssdk.core.ResponseBytes.fromByteArray(software.amazon.awssdk.services.s3.model.GetObjectResponse.builder().build(), java.util.Arrays.copyOf(all, Math.min(all.length, 32)));
 				}
 				@Override public software.amazon.awssdk.services.s3.model.GetObjectTaggingResponse getObjectTagging(software.amazon.awssdk.services.s3.model.GetObjectTaggingRequest r) {
 					var tags = SCAN.containsKey(r.key()) ? java.util.List.of(software.amazon.awssdk.services.s3.model.Tag.builder().key("GuardDutyMalwareScanStatus").value(SCAN.get(r.key())).build()) : java.util.List.<software.amazon.awssdk.services.s3.model.Tag>of();
@@ -184,8 +201,18 @@ class UploadsTest {
 		SCAN.put(doc, "NO_THREATS_FOUND");
 		String loc = download(fac, doc).headers().firstValue("Location").orElseThrow();
 		assertTrue(java.net.URLDecoder.decode(loc, "UTF-8").contains("attachment; filename=\"report.docx\""), loc);
+		// A program renamed to .docx is refused when opened, and the refusal is in the audit log.
+		String fake = TestApi.field(upload(api, fac, "renamed.docx", "", 100, 200), "key");
+		String rec3 = rec.replace(doc, fake).replace("report.docx", "renamed.docx").replace("\"title\":\"Docs\"", "\"title\":\"Fake\"");
+		assertEquals(200, api.call("POST", "/api/records/fdps", fac, rec3).statusCode());
+		SCAN.put(fake, "NO_THREATS_FOUND");
+		CONTENT.put(fake, "MZ\u0090\u0000 this is a Windows program".getBytes(java.nio.charset.StandardCharsets.ISO_8859_1));
+		var refusedOpen = download(fac, fake);
+		assertEquals(403, refusedOpen.statusCode());
+		assertTrue(refusedOpen.body().contains("do not match its type"), refusedOpen.body());
 		String audit = api.call("GET", "/api/office/audit", office, null).body();
 		assertTrue(audit.contains("File opened") && audit.contains("report.docx") && audit.contains("Lata Menon"), "who opened which file is in the audit log");
+		assertTrue(audit.contains("File refused: contents do not match its type") && audit.contains("renamed.docx"), audit);
 		// A name with non-Latin letters: a plain fallback plus the exact name encoded as UTF-8 (it used to fail to download).
 		String ru = TestApi.field(upload(api, fac, "спец & (1).pdf", "", 100, 200), "key");
 		String rec2 = "{\"record\":{\"role\":\"Attended\",\"programmeType\":\"FDP\",\"title\":\"Names\",\"organiser\":\"O\",\"fromDate\":\"2026-01-01\",\"toDate\":\"2026-01-02\",\"hours\":8,"
