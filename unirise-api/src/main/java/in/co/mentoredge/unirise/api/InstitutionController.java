@@ -112,7 +112,6 @@ public class InstitutionController {
 	@PutMapping("/faculty/{id}")
 	Map<String, Object> saveFaculty(@PathVariable String id, @RequestBody(required = false) Map<String, Object> b, HttpServletRequest req) {
 		Actor a = access.actor(req);
-		if (a.isAdmin()) access.requireRecentPassword(req); // official details, leaving or returning
 		Map<String, Object> before = profiles.facultyById(id).orElse(null);
 		profiles.saveFaculty(a, id, b == null ? Map.of() : b);
 		if (b != null && Boolean.FALSE.equals(b.get("active"))) { // former faculty: their sessions end at once (they also can no longer act, see AccessService)

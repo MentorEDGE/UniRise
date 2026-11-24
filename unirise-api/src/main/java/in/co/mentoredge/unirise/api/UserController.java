@@ -86,7 +86,6 @@ public class UserController {
 	ResponseEntity<?> create(@RequestBody(required = false) NewUser b, HttpServletRequest req) {
 		Actor office = access.actor(req);
 		access.requireAdmin(office);
-		access.requireRecentPassword(req);
 		if (b == null) return AuthController.error(HttpStatus.BAD_REQUEST, "Choose Faculty or Top-Level Management.");
 		String role = Actor.MANAGEMENT.equals(b.role()) ? Actor.MANAGEMENT : Actor.FACULTY.equals(b.role()) ? Actor.FACULTY : "";
 		String name = s(b.name(), 200), email = s(b.email(), 200).toLowerCase(), designation = s(b.designation(), 100), department = s(b.department(), 200), title = s(b.title(), 10);
@@ -145,7 +144,6 @@ public class UserController {
 	ResponseEntity<?> sendInvite(@PathVariable long id, HttpServletRequest req) {
 		Actor office = access.actor(req);
 		access.requireAdmin(office);
-		access.requireRecentPassword(req);
 		target(id, office);
 		String why = invite(id, office, null);
 		return why == null ? ResponseEntity.ok(Map.of("ok", true)) : AuthController.error(HttpStatus.CONFLICT, why);
@@ -173,7 +171,6 @@ public class UserController {
 	ResponseEntity<?> status(@PathVariable long id, @RequestBody(required = false) StatusChange c, HttpServletRequest req) {
 		Actor office = access.actor(req);
 		access.requireAdmin(office);
-		access.requireRecentPassword(req);
 		Target t = target(id, office);
 		String status = c == null ? "" : s(c.status(), 20), reason = c == null ? "" : s(c.reason(), 500);
 		if (!List.of("active", "suspended", "deactivated").contains(status)) return AuthController.error(HttpStatus.BAD_REQUEST, "Unknown status.");
@@ -193,7 +190,6 @@ public class UserController {
 	ResponseEntity<?> role(@PathVariable long id, @RequestBody(required = false) RoleChange c, HttpServletRequest req) {
 		Actor office = access.actor(req);
 		access.requireAdmin(office);
-		access.requireRecentPassword(req);
 		Target t = target(id, office);
 		String role = c == null ? "" : Actor.MANAGEMENT.equals(c.role()) ? Actor.MANAGEMENT : Actor.FACULTY.equals(c.role()) ? Actor.FACULTY : "";
 		if (role.isEmpty()) return AuthController.error(HttpStatus.BAD_REQUEST, "Unknown role.");
@@ -209,7 +205,6 @@ public class UserController {
 	ResponseEntity<?> resetPassword(@PathVariable long id, HttpServletRequest req) {
 		Actor office = access.actor(req);
 		access.requireAdmin(office);
-		access.requireRecentPassword(req);
 		Target t = target(id, office);
 		String temp = Passwords.randomPassword();
 		control.sql("UPDATE account_login SET password_hash = :h, password_set_at = now(), must_change_password = true WHERE institution_id = :i AND app_user_id = :u")

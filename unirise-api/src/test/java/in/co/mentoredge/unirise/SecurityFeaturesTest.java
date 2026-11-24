@@ -11,7 +11,7 @@ import org.springframework.test.context.DynamicPropertyRegistry;
 import org.springframework.test.context.DynamicPropertySource;
 import org.testcontainers.containers.PostgreSQLContainer;
 
-/** Security features added on 2026-11-24: password confirmation for sensitive actions, stronger passwords, append-only audit. */
+/** Security features added on 2026-11-24: stronger passwords and an append-only audit log. */
 @SpringBootTest(webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT, properties = { "app.admin-key=test-admin", "app.session.secure-cookie=false",
 	"app.security.breached-passwords-url=" })
 class SecurityFeaturesTest {
@@ -28,39 +28,6 @@ class SecurityFeaturesTest {
 	}
 
 	@Value("${local.server.port}") int port;
-
-	/** A raw call without the helper's automatic confirmation. */
-	java.net.http.HttpResponse<String> raw(TestApi api, String method, String path, Caller c, String body) throws Exception {
-		String pw = TestApi.PASSWORDS.remove(c.cookie());
-		try { return api.call(method, path, c, body); } finally { if (pw != null) TestApi.PASSWORDS.put(c.cookie(), pw); }
-	}
-
-	@Test
-	void sensitiveActionsNeedThePasswordAgain() throws Exception {
-		TestApi api = new TestApi(port);
-		var inst = api.provision("sec", "office@sec.example");
-		Caller office = api.signIn(inst.officeEmail(), inst.officePassword());
-		String body = "{\"role\":\"management\",\"name\":\"Dean Q\",\"email\":\"dean@sec.example\",\"designation\":\"Dean\"}";
-		var refused = raw(api, "POST", "/api/office/users", office, body);
-		assertEquals(403, refused.statusCode());
-		assertTrue(refused.body().contains("\"code\":\"confirm-password\""), refused.body());
-		assertEquals(400, raw(api, "POST", "/api/account/confirm", office, "{\"password\":\"WrongPass99\"}").statusCode());
-		assertEquals(200, raw(api, "POST", "/api/account/confirm", office, "{\"password\":\"" + inst.officePassword() + "\"}").statusCode());
-		var created = raw(api, "POST", "/api/office/users", office, body);
-		assertEquals(200, created.statusCode(), created.body());
-		String id = field(created.body(), "id");
-		assertEquals(200, raw(api, "POST", "/api/office/users/" + id + "/reset-password", office, "{}").statusCode(), "within 5 minutes: no second prompt");
-		// Five wrong passwords sign the account out everywhere.
-		for (int i = 0; i < 4; i++) assertEquals(400, raw(api, "POST", "/api/account/confirm", office, "{\"password\":\"WrongPass9" + i + "\"}").statusCode());
-		assertEquals(401, raw(api, "POST", "/api/account/confirm", office, "{\"password\":\"WrongPass95\"}").statusCode());
-		assertEquals(401, api.call("GET", "/api/session", office, null).statusCode());
-		// The service key has no password and is not asked.
-		assertEquals(200, api.call("POST", "/api/office/users/" + id + "/reset-password", TestApi.key(inst), "{}").statusCode());
-		// Faculty changing their own profile are not asked.
-		Caller office2 = api.signIn(inst.officeEmail(), inst.officePassword());
-		String log = api.call("GET", "/api/office/audit", office2, null).body();
-		assertTrue(log.contains("Signed out after wrong passwords"), log);
-	}
 
 	@Test
 	void newPasswordsMustBeHardToGuess() throws Exception {

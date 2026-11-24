@@ -76,7 +76,6 @@ class SignInAndUserManagementTest {
 		String cookie = r.headers().allValues("Set-Cookie").stream().filter(h -> h.startsWith("unirise_sid=")).findFirst().orElseThrow();
 		assertTrue(cookie.contains("HttpOnly") && cookie.contains("SameSite=Strict") && cookie.contains("Path=/"), cookie);
 		Caller office = new Caller(null, TestApi.sessionCookie(r));
-		TestApi.PASSWORDS.put(office.cookie(), abc.officePassword()); // lets the helper confirm it for sensitive actions
 		assertTrue(api.call("GET", "/api/session", office, null).body().contains("office@abc.example"));
 		assertEquals(401, api.call("GET", "/api/session", Caller.NOBODY, null).statusCode());
 		assertEquals(401, api.login("office@abc.example", "wrong-password1").statusCode());

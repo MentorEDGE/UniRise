@@ -40,20 +40,6 @@ public class AccessService {
 			.orElseThrow(() -> new ResponseStatusException(HttpStatus.UNAUTHORIZED)); // suspended, deactivated or unknown
 	}
 
-	/** How long a confirmed password unlocks sensitive actions. */
-	static final int CONFIRM_SECONDS = 5 * 60;
-	@org.springframework.beans.factory.annotation.Autowired private Sessions sessions;
-
-	/**
-	 * Sensitive actions (accounts, roles, temporary passwords, official details, the email sender) need the password
-	 * entered in this session within the last 5 minutes (2026-11-24), so an unattended signed-in browser cannot be misused.
-	 * The service key is exempt (it has no password).
-	 */
-	public void requireRecentPassword(HttpServletRequest req) {
-		if (req.getAttribute("service") != null) return;
-		if (!sessions.confirmedWithin((String) req.getAttribute("sessionHash"), CONFIRM_SECONDS)) throw RuleException.confirmPassword();
-	}
-
 	/** Office of Research only (or the service key). */
 	public void requireAdmin(Actor a) {
 		if (!a.isAdmin()) throw new ResponseStatusException(HttpStatus.FORBIDDEN);

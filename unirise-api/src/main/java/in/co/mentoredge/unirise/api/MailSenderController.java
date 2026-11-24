@@ -42,7 +42,6 @@ public class MailSenderController {
 	@PutMapping
 	Map<String, Object> set(@RequestBody(required = false) Map<String, Object> b, HttpServletRequest req) {
 		Actor a = office(req);
-		access.requireRecentPassword(req);
 		long id = id();
 		var out = sender.setup(id, Json.str(b == null ? null : b.get("address"), 200), Json.str(b == null ? null : b.get("name"), 200), directory.name(id));
 		log.record(a, "Email sender set", String.valueOf(out.get("address")), "status " + out.get("status"));
@@ -55,7 +54,6 @@ public class MailSenderController {
 	@DeleteMapping
 	Map<String, Object> remove(HttpServletRequest req) {
 		Actor a = office(req);
-		access.requireRecentPassword(req);
 		sender.remove(id());
 		log.record(a, "Email sender removed", "", "no email is sent until a new address is verified");
 		return Map.of("ok", true);

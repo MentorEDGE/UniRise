@@ -141,35 +141,6 @@ public class AuthController {
 		return ResponseEntity.ok(Map.of("ok", true));
 	}
 
-	record Confirm(String password) {}
-
-	/**
-	 * Confirms the password in this session, unlocking sensitive actions for 5 minutes (2026-11-24). Five wrong
-	 * passwords within 15 minutes sign the account out everywhere: a borrowed browser cannot keep guessing.
-	 */
-	@PostMapping("/account/confirm")
-	ResponseEntity<?> confirm(@RequestBody(required = false) Confirm body, HttpServletRequest req) {
-		Actor a = access.actor(req);
-		if (a.userId() == null) return ResponseEntity.ok(Map.of("ok", true));
-		long institutionId = (Long) req.getAttribute("institutionId");
-		String key = "confirm:" + institutionId + ":" + a.userId();
-		String hash = control.sql("SELECT password_hash FROM account_login WHERE institution_id = :i AND app_user_id = :u").param("i", institutionId).param("u", a.userId())
-			.query(String.class).optional().orElse(null);
-		if (body == null || !Passwords.matches(body.password(), hash)) {
-			throttle.fail(key);
-			if (throttle.blocked(key, 5)) {
-				sessions.endAll(institutionId, a.userId(), null);
-				throttle.clear(key);
-				log.record(a, "Signed out after wrong passwords", a.name(), "5 wrong passwords when confirming a sensitive action");
-				return error(HttpStatus.UNAUTHORIZED, "Too many wrong passwords. You have been signed out.");
-			}
-			return error(HttpStatus.BAD_REQUEST, "That password is incorrect.");
-		}
-		throttle.clear(key);
-		sessions.confirm((String) req.getAttribute("sessionHash"));
-		return ResponseEntity.ok(Map.of("ok", true));
-	}
-
 	// ---------- shared with UserController ----------
 
 	/** The account as the frontend's User type describes it. */
